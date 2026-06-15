@@ -254,6 +254,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   );
   const [autoSkipRemaining, setAutoSkipRemaining] = useState(AUTO_SKIP_SECONDS);
   const [autoSkipCancelled, setAutoSkipCancelled] = useState(false);
+  const hasSubtitles = subtitles.length > 0;
 
   // Auto-skip countdown when video ends
   const autoSkipFiredRef = useRef(false);
@@ -642,7 +643,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   }, []);
 
   const cycleSubtitles = useCallback(() => {
-    if (subtitles.length === 0) return;
+    if (!hasSubtitles) return;
     setActiveSubtitleIdx((prev) => {
       const options = [
         -1,
@@ -654,7 +655,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       preferredSubLangRef.current = getPreferredSubtitleKey(next, subtitles);
       return next;
     });
-  }, [subtitles]);
+  }, [hasSubtitles, subtitles]);
 
   const selectSubtitle = useCallback(
     (idx: number) => {
@@ -1251,8 +1252,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
             )}
           </div>
 
-          {subtitles.length > 0 && (
-            <div className="relative">
+          <div className="relative">
               <ControlButton
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1265,11 +1265,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                 }}
                 tooltip={`${t.subtitles} (C)`}
                 active={activeSubtitleIdx !== -1}
+                muted={!hasSubtitles}
               >
                 <Subtitles className="size-4" />
               </ControlButton>
               {showSubtitleMenu && (
-                <PopupMenu wide={subMenuView === "settings"}>
+                <PopupMenu wide={subMenuView === "settings" || !hasSubtitles}>
                   {subMenuView === "tracks" ? (
                     <>
                       <div className="mb-1 flex items-center justify-between px-2">
@@ -1286,6 +1287,13 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                           <GearSix className="size-3.5" />
                         </button>
                       </div>
+                      {!hasSubtitles && (
+                        <p className="max-w-40 px-2 py-1.5 font-sans text-xs leading-snug text-white/45">
+                          {t.noSubtitles}
+                        </p>
+                      )}
+                      {hasSubtitles && (
+                        <>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1333,6 +1341,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                           {getSubtitleDisplayLabel(sub, t.subtitles)}
                         </button>
                       ))}
+                        </>
+                      )}
                     </>
                   ) : (
                     <>
@@ -1417,7 +1427,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                 </PopupMenu>
               )}
             </div>
-          )}
 
           <ControlButton onClick={togglePiP} tooltip={`${t.pictureInPicture} (P)`}>
             <PictureInPicture className="size-4" />
@@ -1456,11 +1465,13 @@ function ControlButton({
   onClick,
   tooltip,
   active,
+  muted,
   children,
 }: {
   onClick?: (e: ReactMouseEvent<HTMLButtonElement>) => void;
   tooltip?: string;
   active?: boolean;
+  muted?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -1469,7 +1480,11 @@ function ControlButton({
       title={tooltip}
       className={cn(
         "group/btn relative rounded-md p-1.5 transition-colors hover:bg-white/10",
-        active ? "text-primary" : "text-white/80 hover:text-white",
+        active
+          ? "text-primary"
+          : muted
+            ? "text-white/35 hover:text-white/60"
+            : "text-white/80 hover:text-white",
       )}
     >
       {children}

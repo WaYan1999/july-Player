@@ -1425,7 +1425,7 @@ pub fn find_bundled_bin(bin: &str) -> Option<PathBuf> {
     }
 }
 
-fn probe_embedded_subtitles(path: &Path, ffprobe_bin: &str) -> Vec<ParsedSubtitle> {
+pub fn probe_embedded_subtitles(path: &Path, ffprobe_bin: &str) -> Vec<ParsedSubtitle> {
     let mut cmd = std::process::Command::new(ffprobe_bin);
     cmd.args([
         "-v",

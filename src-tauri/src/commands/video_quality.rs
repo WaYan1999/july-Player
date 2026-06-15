@@ -8,6 +8,8 @@ use std::process::Command;
 use std::time::UNIX_EPOCH;
 use tauri::Manager;
 
+const VIDEO_QUALITY_CACHE_VERSION: u8 = 2;
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreparedVideoQuality {
@@ -22,6 +24,12 @@ pub struct PreparedVideoQuality {
 struct VideoResolution {
     width: u32,
     height: u32,
+}
+
+#[derive(Debug, Clone)]
+struct SubtitleStream {
+    index: u64,
+    language: Option<String>,
 }
 
 #[tauri::command]
@@ -118,6 +126,7 @@ fn quality_label(target_height: u32) -> &'static str {
 
 fn cache_key(input: &Path, target_height: u32) -> String {
     let mut hasher = DefaultHasher::new();
+    VIDEO_QUALITY_CACHE_VERSION.hash(&mut hasher);
     input.to_string_lossy().hash(&mut hasher);
     target_height.hash(&mut hasher);
 
@@ -187,34 +196,47 @@ fn transcode_video(input: &Path, output: &Path, target_height: u32) -> Result<()
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_else(|| "ffmpeg".to_string());
     let scale_filter = format!("scale=-2:{target_height}:flags=lanczos,setsar=1");
+    let subtitle_streams = probe_text_subtitle_streams(input)?;
 
     let mut cmd = Command::new(ffmpeg_bin);
     cmd.args(["-hide_banner", "-loglevel", "error", "-y", "-i"])
         .arg(input)
-        .args([
-            "-map",
-            "0:v:0",
-            "-map",
-            "0:a?",
-            "-vf",
-            &scale_filter,
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-crf",
-            "18",
-            "-pix_fmt",
-            "yuv420p",
-            "-c:a",
-            "aac",
-            "-b:a",
-            "160k",
-            "-movflags",
-            "+faststart",
-            "-max_muxing_queue_size",
-            "1024",
-        ])
+        .args(["-map", "0:v:0", "-map", "0:a?"]);
+
+    for stream in &subtitle_streams {
+        cmd.args(["-map", &format!("0:{}", stream.index)]);
+    }
+
+    cmd.args([
+        "-vf",
+        &scale_filter,
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "18",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "160k",
+    ]);
+
+    if !subtitle_streams.is_empty() {
+        cmd.args(["-c:s", "mov_text"]);
+        for (idx, stream) in subtitle_streams.iter().enumerate() {
+            if let Some(language) = stream.language.as_deref() {
+                cmd.args([
+                    format!("-metadata:s:s:{idx}"),
+                    format!("language={language}"),
+                ]);
+            }
+        }
+    }
+
+    cmd.args(["-movflags", "+faststart", "-max_muxing_queue_size", "1024"])
         .arg(output);
 
     hide_console_window(&mut cmd);
@@ -229,6 +251,70 @@ fn transcode_video(input: &Path, output: &Path, target_height: u32) -> Result<()
     }
 
     Ok(())
+}
+
+fn probe_text_subtitle_streams(path: &Path) -> Result<Vec<SubtitleStream>, String> {
+    let ffprobe_bin = find_bundled_bin("ffprobe")
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "ffprobe".to_string());
+
+    let mut cmd = Command::new(ffprobe_bin);
+    cmd.args([
+        "-v",
+        "quiet",
+        "-print_format",
+        "json",
+        "-show_streams",
+        "-select_streams",
+        "s",
+    ])
+    .arg(path);
+
+    hide_console_window(&mut cmd);
+
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Could not run ffprobe: {e}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("ffprobe failed: {stderr}"));
+    }
+
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("Could not parse ffprobe subtitle output: {e}"))?;
+    let streams = json
+        .get("streams")
+        .and_then(|streams| streams.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let mut result = Vec::new();
+    for stream in streams {
+        let codec = stream
+            .get("codec_name")
+            .and_then(|codec| codec.as_str())
+            .unwrap_or("");
+        if matches!(
+            codec,
+            "dvd_subtitle" | "hdmv_pgs_subtitle" | "dvbsub" | "pgssub"
+        ) {
+            continue;
+        }
+
+        let Some(index) = stream.get("index").and_then(|index| index.as_u64()) else {
+            continue;
+        };
+        let language = stream
+            .get("tags")
+            .and_then(|tags| tags.get("language"))
+            .and_then(|language| language.as_str())
+            .filter(|language| !language.eq_ignore_ascii_case("und"))
+            .map(|language| language.to_string());
+
+        result.push(SubtitleStream { index, language });
+    }
+
+    Ok(result)
 }
 
 #[cfg(target_os = "windows")]
