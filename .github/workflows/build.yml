@@ -77,3 +77,68 @@ jobs:
         run: |
           VERSION="$(node -p "require('./package.json').version")"
           gh release edit "v${VERSION}" --draft=false --prerelease=false
+
+      - name: Upload updater manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          node <<'NODE'
+          const fs = require("node:fs");
+          const { execFileSync } = require("node:child_process");
+
+          const version = require("./package.json").version;
+          const tag = `v${version}`;
+          const release = JSON.parse(execFileSync("gh", [
+            "release",
+            "view",
+            tag,
+            "--json",
+            "assets,publishedAt",
+          ], { encoding: "utf8" }));
+
+          const assets = new Map(release.assets.map((asset) => [asset.name, asset.url]));
+          const download = (name) => {
+            const url = assets.get(name);
+            if (!url) throw new Error(`Missing release asset: ${name}`);
+            return url;
+          };
+          fs.rmSync("release-signatures", { recursive: true, force: true });
+          fs.mkdirSync("release-signatures");
+          const signature = (name) => {
+            execFileSync("gh", [
+              "release",
+              "download",
+              tag,
+              "--pattern",
+              name,
+              "--dir",
+              "release-signatures",
+            ], { stdio: "inherit" });
+            return fs.readFileSync(`release-signatures/${name}`, "utf8").trim();
+          };
+
+          const macUrl = download("_universal.app.tar.gz");
+          const macSig = signature("_universal.app.tar.gz.sig");
+          const winMsiUrl = download(`_${version}_x64_zh-CN.msi`);
+          const winMsiSig = signature(`_${version}_x64_zh-CN.msi.sig`);
+          const winNsisUrl = download(`_${version}_x64-setup.exe`);
+          const winNsisSig = signature(`_${version}_x64-setup.exe.sig`);
+
+          const latest = {
+            version,
+            notes: "七月播放器远程更新包。安装后可在播放器内检查并安装新版本。",
+            pub_date: release.publishedAt,
+            platforms: {
+              "darwin-aarch64": { signature: macSig, url: macUrl },
+              "darwin-x86_64": { signature: macSig, url: macUrl },
+              "darwin-aarch64-app": { signature: macSig, url: macUrl },
+              "darwin-x86_64-app": { signature: macSig, url: macUrl },
+              "windows-x86_64": { signature: winMsiSig, url: winMsiUrl },
+              "windows-x86_64-msi": { signature: winMsiSig, url: winMsiUrl },
+              "windows-x86_64-nsis": { signature: winNsisSig, url: winNsisUrl },
+            },
+          };
+          fs.writeFileSync("latest.json", JSON.stringify(latest, null, 2));
+          NODE
+          gh release upload "v${VERSION}" latest.json --clobber
