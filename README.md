@@ -1,173 +1,98 @@
-# Ckourse
+# 七月播放器
 
-> Your local course player — with progress that actually sticks.
+七月播放器是一款本地课程视频播放器，用于管理、观看和学习已经下载到电脑里的课程内容。它支持课程目录导入、播放进度记录、字幕识别、多语言界面以及中英双语字幕显示。
 
-Ckourse is an open-source desktop application for watching and organizing downloaded courses. No subscriptions, no cloud, no chaos — just your files, beautifully organized with full progress tracking.
+## 主要功能
 
----
+- 课程目录导入：选择本地课程文件夹后，自动识别章节、视频、字幕和附件。
+- 内置视频播放器：支持本地视频播放、播放进度保存、断点续播和字幕切换。
+- 中文字幕识别：文件名包含 `zh`、`zh-CN` 等标识时，会自动识别为中文字幕。
+- 默认中文字幕：存在中文字幕时，播放器默认优先显示中文字幕。
+- 双语字幕：支持 `中英双语字幕`，可同时显示中文和英文字幕。
+- 多语言界面：设置页可切换中文、英文和法语。
+- 学习进度：记录每节课完成状态，并展示课程整体进度。
+- 笔记和书签：可记录带时间点的学习笔记，并收藏常用课程小节。
+- 主题模式：支持浅色、深色和跟随系统。
 
-## The Problem
+## 技术栈
 
-You download a course from the internet. You get a folder with 80 videos, inconsistently named, nested in subfolders, with PDFs and subtitles scattered around. You watch a few lessons, close your laptop, and come back three days later with no idea where you left off.
+| 层级 | 技术 |
+| --- | --- |
+| 桌面框架 | Tauri 2 |
+| 前端 | React 19 + TypeScript |
+| 路由 | React Router 7 |
+| 样式 | Tailwind CSS v4 + shadcn/ui + Radix UI |
+| 后端 | Rust |
+| 数据库 | SQLite |
+| 构建工具 | Vite |
 
-Your media player doesn't know what "Section 4 - Lesson 12" means. Your file manager doesn't track progress. Nothing ties it all together.
+## 本地开发
 
-**Ckourse does.**
+### 环境要求
 
----
+- Node.js 20 或更高版本
+- Rust 稳定版
+- 当前系统对应的 Tauri 构建环境
 
-## Features
-
-### ✅ v1 — Core
-- 📁 **Smart folder import** — point Ckourse at any course folder and it parses the structure automatically, detecting sections, lessons, subtitles, and attachments
-- ▶️ **Built-in video player** — native HTML5 player with subtitle support, autoplay, and timestamp navigation
-- 📊 **Progress tracking** — per-lesson completion, per-course progress bar, resume from exactly where you stopped
-- 📝 **Timestamped notes** — add notes tied to specific timestamps and navigate back to them instantly, even across lessons
-- 🔖 **Bookmarks** — bookmark lessons for quick access from a dedicated page
-- 🗂️ **Course library** — a clean dashboard of all your imported courses with progress at a glance
-- 🎉 **Completion celebration** — canvas particle animation when you finish a course
-- 🌙 **Themes** — light, dark, and system-sync
-
-### 🚧 v2 — Planned
-- 📄 **PDF/resource viewer** — read course attachments without leaving the app
-- 🔍 **Search** — search across all courses, lessons, and your personal notes
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Desktop Framework | [Tauri 2](https://tauri.app/) |
-| Frontend | [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) |
-| Routing | [React Router 7](https://reactrouter.com/) |
-| Styling | [Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) + [Radix UI](https://www.radix-ui.com/) |
-| Icons | [Phosphor Icons](https://phosphoricons.com/) |
-| Charts | [Recharts](https://recharts.org/) |
-| Analytics | [PostHog](https://posthog.com/) (optional, env-configured) |
-| Backend | [Rust](https://www.rust-lang.org/) |
-| Database | SQLite via [rusqlite](https://github.com/rusqlite/rusqlite) (bundled) |
-| Build Tool | [Vite](https://vite.dev/) |
-
----
-
-## Download
-
-Pre-built installers for macOS and Windows are available on the [Releases page](https://github.com/redaantar/ckourse/releases).
-
----
-
-## Building from Source
-
-### Prerequisites
-
-- [Rust](https://rustup.rs/) (latest stable)
-- [Node.js](https://nodejs.org/) (v20+)
-- Platform toolchain for Tauri — see [Tauri prerequisites](https://tauri.app/start/prerequisites/)
-
-### Development
+### 安装依赖
 
 ```bash
-# Clone the repository
-git clone https://github.com/redaantar/ckourse.git
-cd ckourse
-
-# Install frontend dependencies
 npm install
+```
 
-# Run in development mode (macOS / Windows / Linux)
+### 启动开发模式
+
+```bash
 npm run tauri dev
-
-# Build for production (produces installers for the current OS)
-npm run tauri build
 ```
 
-#### Platform-specific build targets
-
-**macOS** — build a universal binary (Apple Silicon + Intel):
-
-```bash
-rustup target add x86_64-apple-darwin  # one-time setup
-npm run tauri build -- --target universal-apple-darwin
-```
-
-Output: `.dmg` and `.app` under `src-tauri/target/universal-apple-darwin/release/bundle/`.
-
-**Windows** — build an MSI and NSIS installer:
-
-```powershell
-npm run tauri build
-```
-
-Output: `.msi` and `.exe` under `src-tauri\target\release\bundle\`.
-
-**Linux** — build `.deb` / `.AppImage`:
+### 打包当前系统安装包
 
 ```bash
 npm run tauri build
 ```
 
-Output: `.deb` and `.AppImage` under `src-tauri/target/release/bundle/`.
+Windows 打包产物通常位于：
 
-### Environment variables (optional)
-
-PostHog analytics is disabled unless you set the following in a `.env` file at the project root. Leave them unset to run the app with analytics off.
-
-```bash
-VITE_PUBLIC_POSTHOG_PROJECT_TOKEN=your_token
-VITE_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
+```text
+src-tauri\target\release\bundle\
 ```
 
-### CI
+macOS 打包产物通常位于：
 
-CI builds macOS (universal) and Windows installers on tag push — see [`.github/workflows/build.yml`](.github/workflows/build.yml).
-
----
-
-## Project Structure
-
+```text
+src-tauri/target/release/bundle/
 ```
+
+## macOS 打包说明
+
+macOS 安装包需要在 macOS 系统或 GitHub Actions 的 macOS runner 上构建。Windows 本机不能直接生成 `.dmg`。
+
+项目已有 GitHub Actions 构建配置，可在 GitHub 仓库的 Actions 页面触发 macOS 构建。
+
+## 项目结构
+
+```text
 ckourse/
-├── src/                      # React frontend
-│   ├── components/
-│   │   ├── app-shell/        # Layout, sidebar, navigation
-│   │   ├── course-detail/    # Video player, notes, sections
-│   │   ├── dashboard/        # Course cards, stats, empty state
-│   │   └── ui/               # Shared UI primitives
-│   ├── pages/                # Route pages (Dashboard, CourseDetail, Notes,
-│   │                         #   Bookmarks, Progress, ImportCourse, Settings)
-│   ├── hooks/                # Custom React hooks
-│   ├── lib/                  # Store, utilities, constants
-│   ├── assets/               # Lottie animations, icons
-│   └── types/                # TypeScript type definitions
-├── src-tauri/                # Rust backend
-│   ├── src/
-│   │   ├── main.rs           # Tauri entry point
-│   │   ├── lib.rs            # Tauri app setup
-│   │   ├── db.rs             # SQLite schema and queries
-│   │   ├── parser.rs         # Course folder parser
-│   │   ├── subtitle.rs       # Subtitle file handling
-│   │   └── commands/         # courses.rs, lessons.rs, notes.rs, settings.rs
-│   └── tauri.conf.json       # Tauri configuration
-└── public/                   # Static assets
+├─ src/                 # React 前端代码
+│  ├─ components/        # 页面组件和播放器组件
+│  ├─ pages/             # 页面路由
+│  ├─ hooks/             # React hooks
+│  ├─ lib/               # 状态、工具和常量
+│  ├─ assets/            # 图标和静态资源
+│  └─ types/             # TypeScript 类型
+├─ src-tauri/            # Tauri / Rust 后端代码
+│  ├─ src/               # Rust 命令、数据库和解析逻辑
+│  └─ tauri.conf.json    # Tauri 配置
+└─ public/               # 公共静态资源
 ```
 
----
+## 仓库
 
-## Contributing
+当前维护仓库：
 
-Ckourse is in early development. Contributions, issues, and feature requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow, code conventions, and commit style, and the [Code of Conduct](CODE_OF_CONDUCT.md) for community expectations.
+[https://github.com/ShowSnowBlood/july-Player](https://github.com/ShowSnowBlood/july-Player)
 
-To report a security vulnerability, see [SECURITY.md](SECURITY.md).
+## 许可证
 
----
-
-## License
-
-MIT — free to use, modify, and distribute.
-
----
-
-## Links
-
-- 🐛 Issues: [github.com/redaantar/ckourse/issues](https://github.com/redaantar/ckourse/issues)
+MIT
