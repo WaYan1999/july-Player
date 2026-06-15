@@ -151,6 +151,13 @@ export async function prepareVideoQuality(
   return invoke<PreparedVideoQuality>("prepare_video_quality", { videoPath, quality });
 }
 
+export async function translateWithDeepSeek(
+  text: string,
+  targetLanguage: string,
+): Promise<string> {
+  return invoke<string>("translate_with_deepseek", { text, targetLanguage });
+}
+
 export async function getAllSettings(): Promise<Record<string, string>> {
   const pairs = await invoke<[string, string][]>("get_all_settings");
   return Object.fromEntries(pairs);

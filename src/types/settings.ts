@@ -6,4 +6,7 @@ export interface AppSettings {
   default_volume: number;
   skip_forward_secs: number;
   skip_backward_secs: number;
+  ai_deepseek_api_key: string;
+  ai_deepseek_model: string;
+  ai_translation_target: "en" | "zh" | "fr";
 }
