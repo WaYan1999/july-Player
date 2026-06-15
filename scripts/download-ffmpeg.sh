@@ -46,9 +46,47 @@ if [[ "$(uname)" == "Darwin" ]]; then
     echo "✓ $f  ($(ls -lh "$f" | awk '{print $5}'), $(file "$f" | grep -o 'arm64\|x86_64'))"
   done
 
-elif [[ "$(uname)" == "MINGW"* ]] || [[ "$(uname)" == "MSYS"* ]]; then
-  cp "$NM/ffprobe-static/bin/win32/x64/ffprobe.exe" "$DEST/ffprobe-x86_64-pc-windows-msvc.exe"
-  cp "$NM/ffmpeg-static/ffmpeg.exe"                  "$DEST/ffmpeg-x86_64-pc-windows-msvc.exe"
+elif [[ "$(uname)" == "MINGW"* ]] || [[ "$(uname)" == "MSYS"* ]] || [[ "$(uname)" == *"NT"* ]]; then
+  FFMPEG_SRC="${FFMPEG_BIN:-}"
+  FFPROBE_SRC="${FFPROBE_BIN:-}"
+
+  if [[ -z "$FFMPEG_SRC" ]]; then
+    for CANDIDATE in /c/ProgramData/chocolatey/lib/ffmpeg/tools/ffmpeg/bin/ffmpeg.exe \
+                     /c/ProgramData/chocolatey/lib/ffmpeg*/tools/ffmpeg/bin/ffmpeg.exe; do
+      if [[ -f "$CANDIDATE" ]]; then
+        FFMPEG_SRC="$CANDIDATE"
+        break
+      fi
+    done
+  fi
+  if [[ -z "$FFPROBE_SRC" ]]; then
+    for CANDIDATE in /c/ProgramData/chocolatey/lib/ffmpeg/tools/ffmpeg/bin/ffprobe.exe \
+                     /c/ProgramData/chocolatey/lib/ffmpeg*/tools/ffmpeg/bin/ffprobe.exe; do
+      if [[ -f "$CANDIDATE" ]]; then
+        FFPROBE_SRC="$CANDIDATE"
+        break
+      fi
+    done
+  fi
+
+  if [[ -z "$FFMPEG_SRC" ]] && command -v ffmpeg.exe >/dev/null 2>&1; then
+    FFMPEG_SRC="$(command -v ffmpeg.exe)"
+  fi
+  if [[ -z "$FFPROBE_SRC" ]] && command -v ffprobe.exe >/dev/null 2>&1; then
+    FFPROBE_SRC="$(command -v ffprobe.exe)"
+  fi
+
+  if [[ -z "$FFMPEG_SRC" ]]; then
+    FFMPEG_SRC="$NM/ffmpeg-static/ffmpeg.exe"
+  fi
+  if [[ -z "$FFPROBE_SRC" ]]; then
+    FFPROBE_SRC="$NM/ffprobe-static/bin/win32/x64/ffprobe.exe"
+  fi
+
+  cp "$FFPROBE_SRC" "$DEST/ffprobe-x86_64-pc-windows-msvc.exe"
+  cp "$FFMPEG_SRC"  "$DEST/ffmpeg-x86_64-pc-windows-msvc.exe"
+  "$DEST/ffprobe-x86_64-pc-windows-msvc.exe" -version >/dev/null
+  "$DEST/ffmpeg-x86_64-pc-windows-msvc.exe" -version >/dev/null
   echo "✓ $DEST/ffprobe-x86_64-pc-windows-msvc.exe"
   echo "✓ $DEST/ffmpeg-x86_64-pc-windows-msvc.exe"
 fi
