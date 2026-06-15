@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import type { NavItem } from "@/types";
 import { spring } from "./constants";
 import { sectionMemory } from "@/hooks/useSectionMemory";
+import { useI18n } from "@/hooks/useI18n";
 
 export function SidebarButton({
   item,
@@ -15,6 +16,7 @@ export function SidebarButton({
 }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useI18n();
   const searchParams = new URLSearchParams(location.search);
   const from = searchParams.get("from");
   const fromPathname = from ? from.split("?")[0] : null;
@@ -27,6 +29,7 @@ export function SidebarButton({
         ? isCourseRoute
         : location.pathname.startsWith(item.path);
   const Icon = item.icon;
+  const label = t.nav[item.key as keyof typeof t.nav] ?? item.label;
   const delay = `${index * 25}ms`;
 
   const handleClick = (e: React.MouseEvent) => {
@@ -71,12 +74,12 @@ export function SidebarButton({
           transition: `opacity ${spring()} ${delay}, max-width ${spring()}, transform ${spring()} ${delay}`,
         }}
       >
-        {item.label}
+        {label}
       </span>
 
       {collapsed && (
         <span className="squircle pointer-events-none absolute left-full z-50 ml-3 whitespace-nowrap bg-popover px-3 py-1.5 font-sans text-xs font-medium text-popover-foreground opacity-0 shadow-lg transition-all duration-200 ease-out group-hover:opacity-100 group-hover:translate-x-0 -translate-x-1">
-          {item.label}
+          {label}
         </span>
       )}
     </a>

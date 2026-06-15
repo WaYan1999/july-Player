@@ -30,6 +30,8 @@ import { formatVideoTime } from "@/lib/format";
 import type { Lesson, Subtitle, VideoPlayerHandle } from "@/types";
 import { getSubtitleVtt } from "@/lib/store";
 import { EASE_OUT } from "@/lib/constants";
+import type { PlayerTranslationKey } from "@/lib/i18n";
+import { useI18n } from "@/hooks/useI18n";
 
 interface VideoPlayerProps {
   lesson: Lesson | undefined;
@@ -52,32 +54,32 @@ interface VideoPlayerProps {
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 const AUTO_SKIP_SECONDS = 5;
 
-const SUB_SIZE_OPTIONS = [
-  { label: "Small", value: 14 },
-  { label: "Medium", value: 18 },
-  { label: "Large", value: 24 },
-  { label: "XL", value: 32 },
+const SUB_SIZE_OPTIONS: { labelKey: PlayerTranslationKey; value: number }[] = [
+  { labelKey: "small", value: 14 },
+  { labelKey: "medium", value: 18 },
+  { labelKey: "large", value: 24 },
+  { labelKey: "extraLarge", value: 32 },
 ] as const;
 
-const SUB_COLOR_OPTIONS = [
-  { label: "White", value: "#FFFFFF" },
-  { label: "Yellow", value: "#FFFF00" },
-  { label: "Cyan", value: "#00FFFF" },
-  { label: "Lime", value: "#C8F135" },
+const SUB_COLOR_OPTIONS: { labelKey: PlayerTranslationKey; value: string }[] = [
+  { labelKey: "white", value: "#FFFFFF" },
+  { labelKey: "yellow", value: "#FFFF00" },
+  { labelKey: "cyan", value: "#00FFFF" },
+  { labelKey: "lime", value: "#C8F135" },
 ] as const;
 
-const SUB_BG_OPTIONS = [
+const SUB_BG_OPTIONS: { labelKey?: PlayerTranslationKey; label?: string; value: number }[] = [
   { label: "75%", value: 0.75 },
   { label: "50%", value: 0.5 },
   { label: "25%", value: 0.25 },
-  { label: "None", value: 0 },
+  { labelKey: "none", value: 0 },
 ] as const;
 
-const SUB_BOTTOM_OPTIONS = [
-  { label: "Low", value: 8 },
-  { label: "Default", value: 14 },
-  { label: "Mid", value: 22 },
-  { label: "High", value: 32 },
+const SUB_BOTTOM_OPTIONS: { labelKey: PlayerTranslationKey; value: number }[] = [
+  { labelKey: "low", value: 8 },
+  { labelKey: "default", value: 14 },
+  { labelKey: "mid", value: 22 },
+  { labelKey: "high", value: 32 },
 ] as const;
 
 interface SubtitleStyle {
@@ -88,6 +90,11 @@ interface SubtitleStyle {
 }
 
 const SUB_STYLE_KEY = "ckourse:subtitle-style";
+const SUBTITLE_OFF_KEY = "__off__";
+const BILINGUAL_SUBTITLE_KEY = "bilingual";
+const BILINGUAL_SUBTITLE_IDX = -2;
+const CHINESE_SUBTITLE_LABEL = "中文字幕";
+const BILINGUAL_SUBTITLE_LABEL = "中英双语字幕";
 
 const DEFAULT_SUB_STYLE: SubtitleStyle = {
   fontSize: 18,
@@ -104,6 +111,74 @@ function loadSubStyle(): SubtitleStyle {
     // ignore
   }
   return DEFAULT_SUB_STYLE;
+}
+
+function getSubtitleFileName(path: string): string {
+  return path.split(/[\\/]/).pop() ?? path;
+}
+
+function getSubtitleSearchText(sub: Subtitle): string {
+  return [sub.language, getSubtitleFileName(sub.path)]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function getSubtitleTokens(sub: Subtitle): string[] {
+  return getSubtitleSearchText(sub)
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+function getSubtitleLanguageKey(sub: Subtitle): string {
+  const tokens = getSubtitleTokens(sub);
+
+  if (
+    tokens.some((token) => token.startsWith("zh")) ||
+    tokens.some((token) =>
+      ["chinese", "china", "chi", "zho", "cmn"].includes(token),
+    )
+  ) {
+    return "zh";
+  }
+
+  if (tokens.some((token) => ["en", "eng", "english"].includes(token))) {
+    return "en";
+  }
+
+  if (
+    tokens.some((token) =>
+      ["fr", "fra", "fre", "french", "francais", "français"].includes(token),
+    )
+  ) {
+    return "fr";
+  }
+
+  return sub.language?.trim().toLowerCase() || getSubtitleFileName(sub.path).toLowerCase();
+}
+
+function getSubtitleDisplayLabel(sub: Subtitle, fallback: string): string {
+  const key = getSubtitleLanguageKey(sub);
+  if (key === "zh") return CHINESE_SUBTITLE_LABEL;
+  if (key === "en") return "English";
+  if (key === "fr") return "Français";
+  return sub.language?.trim() || getSubtitleFileName(sub.path) || fallback;
+}
+
+function getDefaultSubtitleIndex(subtitles: Subtitle[]): number {
+  return subtitles.findIndex((sub) => getSubtitleLanguageKey(sub) === "zh");
+}
+
+function getBilingualSubtitleIndexes(subtitles: Subtitle[]): [number, number] | null {
+  const englishIdx = subtitles.findIndex((sub) => getSubtitleLanguageKey(sub) === "en");
+  const chineseIdx = subtitles.findIndex((sub) => getSubtitleLanguageKey(sub) === "zh");
+  return englishIdx >= 0 && chineseIdx >= 0 ? [englishIdx, chineseIdx] : null;
+}
+
+function getPreferredSubtitleKey(idx: number, subtitles: Subtitle[]): string {
+  if (idx === BILINGUAL_SUBTITLE_IDX) return BILINGUAL_SUBTITLE_KEY;
+  if (idx < 0) return SUBTITLE_OFF_KEY;
+  return subtitles[idx] ? getSubtitleLanguageKey(subtitles[idx]) : SUBTITLE_OFF_KEY;
 }
 
 export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function VideoPlayer({
@@ -123,6 +198,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   onEnded,
   onNext,
 }, ref) {
+  const { t: ui } = useI18n();
+  const t = ui.player;
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
@@ -220,12 +297,33 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
 
   // Restore subtitle selection by language when lesson changes
   useEffect(() => {
-    if (preferredSubLangRef.current && subtitles.length > 0) {
-      const idx = subtitles.findIndex(
-        (s) => s.language === preferredSubLangRef.current,
-      );
-      setActiveSubtitleIdx(idx >= 0 ? idx : -1);
+    if (subtitles.length === 0) {
+      setActiveSubtitleIdx(-1);
+      return;
     }
+
+    const preferredKey = preferredSubLangRef.current;
+    if (preferredKey === SUBTITLE_OFF_KEY) {
+      setActiveSubtitleIdx(-1);
+      return;
+    }
+
+    if (preferredKey === BILINGUAL_SUBTITLE_KEY) {
+      setActiveSubtitleIdx(
+        getBilingualSubtitleIndexes(subtitles) ? BILINGUAL_SUBTITLE_IDX : getDefaultSubtitleIndex(subtitles),
+      );
+      return;
+    }
+
+    if (preferredKey) {
+      const idx = subtitles.findIndex(
+        (s) => getSubtitleLanguageKey(s) === preferredKey,
+      );
+      setActiveSubtitleIdx(idx >= 0 ? idx : getDefaultSubtitleIndex(subtitles));
+      return;
+    }
+
+    setActiveSubtitleIdx(getDefaultSubtitleIndex(subtitles));
   }, [lesson?.id, subtitles]);
 
   // Track whether we've applied initial setup for the current lesson
@@ -294,6 +392,19 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     activeSubtitleIdx >= 0
       ? getActiveCue(parsedTracks.get(activeSubtitleIdx), videoTime)
       : null;
+  const bilingualSubtitleIndexes = getBilingualSubtitleIndexes(subtitles);
+  const bilingualCueTexts =
+    activeSubtitleIdx === BILINGUAL_SUBTITLE_IDX && bilingualSubtitleIndexes
+      ? bilingualSubtitleIndexes
+          .map((idx) => getActiveCue(parsedTracks.get(idx), videoTime))
+          .filter((text): text is string => Boolean(text))
+      : [];
+  const subtitleCueTexts =
+    activeSubtitleIdx === BILINGUAL_SUBTITLE_IDX
+      ? bilingualCueTexts
+      : activeCueText
+        ? [activeCueText]
+        : [];
 
   // Auto-hide controls
   const resetHideTimer = useCallback(() => {
@@ -469,9 +580,14 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const cycleSubtitles = useCallback(() => {
     if (subtitles.length === 0) return;
     setActiveSubtitleIdx((prev) => {
-      const next = prev + 1 >= subtitles.length ? -1 : prev + 1;
-      preferredSubLangRef.current =
-        next >= 0 ? (subtitles[next].language ?? null) : null;
+      const options = [
+        -1,
+        ...(getBilingualSubtitleIndexes(subtitles) ? [BILINGUAL_SUBTITLE_IDX] : []),
+        ...subtitles.map((_, idx) => idx),
+      ];
+      const current = options.includes(prev) ? options.indexOf(prev) : 0;
+      const next = options[(current + 1) % options.length];
+      preferredSubLangRef.current = getPreferredSubtitleKey(next, subtitles);
       return next;
     });
   }, [subtitles]);
@@ -479,8 +595,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const selectSubtitle = useCallback(
     (idx: number) => {
       setActiveSubtitleIdx(idx);
-      preferredSubLangRef.current =
-        idx >= 0 ? (subtitles[idx]?.language ?? null) : null;
+      preferredSubLangRef.current = getPreferredSubtitleKey(idx, subtitles);
       setShowSubtitleMenu(false);
     },
     [subtitles],
@@ -726,26 +841,29 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         }}
       />
 
-      {activeCueText && (
+      {subtitleCueTexts.length > 0 && (
         <div
-          className="pointer-events-none absolute inset-x-0 flex justify-center px-8"
+          className="pointer-events-none absolute inset-x-0 flex flex-col items-center gap-1.5 px-8"
           style={{ bottom: `${subStyle.bottomPct}%` }}
         >
-          <span
-            className="inline-block max-w-[80%] rounded px-3 py-1.5 text-center font-sans leading-relaxed"
-            style={{
-              fontSize: isFullscreen
-                ? subStyle.fontSize * 1.5
-                : subStyle.fontSize,
-              color: subStyle.color,
-              backgroundColor: `rgba(0, 0, 0, ${subStyle.bgOpacity})`,
-              textShadow:
-                subStyle.bgOpacity < 0.25
-                  ? "0 1px 4px rgba(0,0,0,0.8), 0 0 2px rgba(0,0,0,0.6)"
-                  : "none",
-            }}
-            dangerouslySetInnerHTML={{ __html: activeCueText }}
-          />
+          {subtitleCueTexts.map((cueText, idx) => (
+            <span
+              key={`${idx}-${cueText}`}
+              className="inline-block max-w-[80%] rounded px-3 py-1.5 text-center font-sans leading-relaxed"
+              style={{
+                fontSize: isFullscreen
+                  ? subStyle.fontSize * 1.5
+                  : subStyle.fontSize,
+                color: subStyle.color,
+                backgroundColor: `rgba(0, 0, 0, ${subStyle.bgOpacity})`,
+                textShadow:
+                  subStyle.bgOpacity < 0.25
+                    ? "0 1px 4px rgba(0,0,0,0.8), 0 0 2px rgba(0,0,0,0.6)"
+                    : "none",
+              }}
+              dangerouslySetInnerHTML={{ __html: cueText }}
+            />
+          ))}
         </div>
       )}
 
@@ -758,7 +876,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
             }}
           >
             <p className="font-heading text-base font-semibold text-white">
-              Lesson Complete
+              {t.lessonComplete}
             </p>
             <div className="flex items-center gap-3">
               <button
@@ -766,7 +884,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                 className="flex items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 py-2.5 font-sans text-sm font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/20"
               >
                 <CounterClockwise className="size-4" />
-                Replay
+                {t.replay}
               </button>
               {hasNext && (
                 <div className="relative">
@@ -807,7 +925,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                     onClick={onNext}
                     className="relative flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-sans text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
                   >
-                    Next Lesson
+                    {t.nextLesson}
                     {autoSkipEnabled && !autoSkipCancelled && (
                       <span className="font-mono text-xs font-normal opacity-70">
                         {Math.ceil(autoSkipRemaining)}
@@ -822,9 +940,9 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                         setAutoSkipCancelled(true);
                       }}
                       className="absolute -right-2 -top-2 flex size-5 items-center justify-center rounded-full bg-white/20 font-sans text-[10px] text-white backdrop-blur-sm transition-colors hover:bg-white/30"
-                      title="Cancel auto-skip"
+                      title={t.cancelAutoSkip}
                     >
-                      ✕
+                      x
                     </button>
                   )}
                 </div>
@@ -893,7 +1011,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         </div>
 
         <div className="flex items-center gap-1">
-          <ControlButton onClick={togglePlay} tooltip={isPlaying ? "Pause (K)" : "Play (K)"}>
+          <ControlButton onClick={togglePlay} tooltip={`${isPlaying ? t.pause : t.play} (K)`}>
             {isPlaying ? (
               <Pause className="size-5" weight="fill" />
             ) : (
@@ -901,16 +1019,22 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
             )}
           </ControlButton>
 
-          <ControlButton onClick={skipBackward} tooltip="Back 10s (J)">
+          <ControlButton
+            onClick={skipBackward}
+            tooltip={`${t.backSeconds.replace("{seconds}", String(skipSeconds))} (J)`}
+          >
             <CounterClockwise className="size-4" weight="bold" />
           </ControlButton>
 
-          <ControlButton onClick={skipForward} tooltip="Forward 10s (L)">
+          <ControlButton
+            onClick={skipForward}
+            tooltip={`${t.forwardSeconds.replace("{seconds}", String(skipSeconds))} (L)`}
+          >
             <Clockwise className="size-4" weight="bold" />
           </ControlButton>
 
           {hasNext && (
-            <ControlButton onClick={onNext} tooltip="Next lesson">
+            <ControlButton onClick={onNext} tooltip={t.nextLessonTooltip}>
               <SkipForward className="size-4" weight="fill" />
             </ControlButton>
           )}
@@ -920,7 +1044,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
             onMouseEnter={() => setShowVolumeSlider(true)}
             onMouseLeave={() => setShowVolumeSlider(false)}
           >
-            <ControlButton onClick={toggleMute} tooltip={isMuted ? "Unmute (M)" : "Mute (M)"}>
+            <ControlButton onClick={toggleMute} tooltip={`${isMuted ? t.unmute : t.mute} (M)`}>
               <VolumeIcon className="size-4" />
             </ControlButton>
             <div
@@ -960,7 +1084,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                 setShowSpeedMenu((s) => !s);
                 setShowSubtitleMenu(false);
               }}
-              tooltip="Playback speed"
+              tooltip={t.playbackSpeed}
               active={playbackSpeed !== 1}
             >
               {playbackSpeed !== 1 ? (
@@ -972,7 +1096,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
             {showSpeedMenu && (
               <PopupMenu>
                 <p className="mb-1 px-2 font-sans text-[10px] font-semibold uppercase tracking-wider text-white/40">
-                  Speed
+                  {t.speed}
                 </p>
                 {SPEED_OPTIONS.map((s) => (
                   <button
@@ -990,7 +1114,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                   >
                     {s}x
                     {s === 1 && (
-                      <span className="text-[10px] text-white/30">Normal</span>
+                      <span className="text-[10px] text-white/30">{t.normal}</span>
                     )}
                   </button>
                 ))}
@@ -1009,8 +1133,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                   });
                   setShowSpeedMenu(false);
                 }}
-                tooltip="Subtitles (C)"
-                active={activeSubtitleIdx >= 0}
+                tooltip={`${t.subtitles} (C)`}
+                active={activeSubtitleIdx !== -1}
               >
                 <Subtitles className="size-4" />
               </ControlButton>
@@ -1020,7 +1144,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                     <>
                       <div className="mb-1 flex items-center justify-between px-2">
                         <p className="font-sans text-[10px] font-semibold uppercase tracking-wider text-white/40">
-                          Subtitles
+                          {t.subtitles}
                         </p>
                         <button
                           onClick={(e) => {
@@ -1044,8 +1168,24 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                             : "text-white/80",
                         )}
                       >
-                        Off
+                        {t.subtitlesOff}
                       </button>
+                      {bilingualSubtitleIndexes && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            selectSubtitle(BILINGUAL_SUBTITLE_IDX);
+                          }}
+                          className={cn(
+                            "w-full rounded px-2 py-1 text-left font-sans text-xs transition-colors hover:bg-white/10",
+                            activeSubtitleIdx === BILINGUAL_SUBTITLE_IDX
+                              ? "text-primary font-semibold"
+                              : "text-white/80",
+                          )}
+                        >
+                          {BILINGUAL_SUBTITLE_LABEL}
+                        </button>
+                      )}
                       {subtitles.map((sub, i) => (
                         <button
                           key={sub.id}
@@ -1060,7 +1200,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                               : "text-white/80",
                           )}
                         >
-                          {sub.language ?? "Subtitles"}
+                          {getSubtitleDisplayLabel(sub, t.subtitles)}
                         </button>
                       ))}
                     </>
@@ -1077,15 +1217,15 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                           &larr;
                         </button>
                         <p className="font-sans text-[10px] font-semibold uppercase tracking-wider text-white/50">
-                          Subtitle Style
+                          {t.subtitleStyle}
                         </p>
                       </div>
 
-                      <SubSettingRow label="Size">
+                      <SubSettingRow label={t.size}>
                         {SUB_SIZE_OPTIONS.map((opt) => (
                           <SubSettingChip
                             key={opt.value}
-                            label={opt.label}
+                            label={t[opt.labelKey]}
                             active={subStyle.fontSize === opt.value}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1095,7 +1235,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                         ))}
                       </SubSettingRow>
 
-                      <SubSettingRow label="Color">
+                      <SubSettingRow label={t.color}>
                         {SUB_COLOR_OPTIONS.map((opt) => (
                           <button
                             key={opt.value}
@@ -1110,16 +1250,16 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                                 : "border-white/20 hover:border-white/40",
                             )}
                             style={{ backgroundColor: opt.value }}
-                            title={opt.label}
+                            title={t[opt.labelKey]}
                           />
                         ))}
                       </SubSettingRow>
 
-                      <SubSettingRow label="Background">
+                      <SubSettingRow label={t.background}>
                         {SUB_BG_OPTIONS.map((opt) => (
                           <SubSettingChip
                             key={opt.value}
-                            label={opt.label}
+                            label={opt.labelKey ? t[opt.labelKey] : opt.label ?? ""}
                             active={subStyle.bgOpacity === opt.value}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1129,11 +1269,11 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                         ))}
                       </SubSettingRow>
 
-                      <SubSettingRow label="Position" last>
+                      <SubSettingRow label={t.position} last>
                         {SUB_BOTTOM_OPTIONS.map((opt) => (
                           <SubSettingChip
                             key={opt.value}
-                            label={opt.label}
+                            label={t[opt.labelKey]}
                             active={subStyle.bottomPct === opt.value}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1149,11 +1289,14 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
             </div>
           )}
 
-          <ControlButton onClick={togglePiP} tooltip="Picture-in-Picture (P)">
+          <ControlButton onClick={togglePiP} tooltip={`${t.pictureInPicture} (P)`}>
             <PictureInPicture className="size-4" />
           </ControlButton>
 
-          <ControlButton onClick={toggleFullscreen} tooltip={isFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen (F)"}>
+          <ControlButton
+            onClick={toggleFullscreen}
+            tooltip={isFullscreen ? `${t.exitFullscreen} (Esc)` : `${t.fullscreen} (F)`}
+          >
             {isFullscreen ? (
               <CornersIn className="size-4" />
             ) : (

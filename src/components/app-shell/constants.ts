@@ -14,14 +14,14 @@ export const spring = (extra = "") =>
   `${extra ? extra + " " : ""}${DUR} ${EASE}`.trim();
 
 export const navigationItems: NavItem[] = [
-  { icon: SquaresFour, label: "Dashboard", path: "/" },
-  { icon: BookmarkSimple, label: "Bookmarks", path: "/bookmarks" },
-  { icon: ChartBar, label: "Progress", path: "/progress" },
-  { icon: Notepad, label: "Notes", path: "/notes" },
+  { icon: SquaresFour, key: "dashboard", label: "Dashboard", path: "/" },
+  { icon: BookmarkSimple, key: "bookmarks", label: "Bookmarks", path: "/bookmarks" },
+  { icon: ChartBar, key: "progress", label: "Progress", path: "/progress" },
+  { icon: Notepad, key: "notes", label: "Notes", path: "/notes" },
 ];
 
 export const appItems: NavItem[] = [
-  { icon: GearSix, label: "Settings", path: "/settings" },
+  { icon: GearSix, key: "settings", label: "Settings", path: "/settings" },
 ];
 
 export const routeTitles: Record<string, string> = {

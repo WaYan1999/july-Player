@@ -1,5 +1,6 @@
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/hooks/useI18n";
 
 interface SquircleSearchProps {
   value: string;
@@ -14,6 +15,7 @@ export function SquircleSearch({
   placeholder = "Search...",
   className,
 }: SquircleSearchProps) {
+  const { t } = useI18n();
   return (
     <div className={cn("group/search relative", className)}>
       <div className="squircle absolute inset-0 bg-border/50 transition-colors group-focus-within/search:bg-primary" />
@@ -32,7 +34,7 @@ export function SquircleSearch({
             onClick={() => onChange("")}
             className="shrink-0 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
-            Clear
+            {t.common.clear}
           </button>
         )}
       </div>

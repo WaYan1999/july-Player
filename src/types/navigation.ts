@@ -1,5 +1,6 @@
 export interface NavItem {
   icon: React.ElementType;
+  key: string;
   label: string;
   path: string;
 }

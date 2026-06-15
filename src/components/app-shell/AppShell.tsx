@@ -7,16 +7,15 @@ import {
   CaretRightIcon as CaretRight,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
-import { useTheme } from "@/hooks/useTheme";
 import { AnimatedThemeToggler } from "@/components/ui/animatedThemeToggle";
-import logoDark from "@/assets/icons/logo-dark.svg";
-import logoLight from "@/assets/icons/logo-light.svg";
+import logo from "@/assets/icons/july-player.png";
 import { spring, navigationItems, appItems } from "./constants";
 import { SquircleClipDefs } from "./SquircleClipDefs";
 import { useBreadcrumbs } from "./useBreadcrumbs";
 import { CourseTitleProvider } from "./CourseTitleContext";
 import { NavSection } from "./NavSection";
 import { SidebarSearch } from "./SidebarSearch";
+import { useI18n } from "@/hooks/useI18n";
 
 interface AppShellProps {
   children: ReactNode;
@@ -31,9 +30,8 @@ export function AppShell({ children }: AppShellProps) {
 }
 
 function AppShellInner({ children }: AppShellProps) {
-  const { theme } = useTheme();
   const breadcrumbs = useBreadcrumbs();
-  const logo = theme === "light" ? logoLight : logoDark;
+  const { t } = useI18n();
   const [collapsed, setCollapsed] = useState(false);
   const [isSmallScreen, setIsSmallScreen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -82,7 +80,7 @@ function AppShellInner({ children }: AppShellProps) {
         >
           {isSmallScreen ? (
             <div className="flex w-full items-center justify-center">
-              <img src={logo} alt="Ckourse logo" className="h-7" />
+              <img src={logo} alt="七月播放器 logo" className="h-7" />
             </div>
           ) : (
             <div className={cn(
@@ -97,9 +95,9 @@ function AppShellInner({ children }: AppShellProps) {
                   transition: `opacity ${spring()}, width ${spring()}`,
                 }}
               >
-                <img src={logo} alt="Ckourse logo" className="h-7 shrink-0" />
-                <span className="shrink-0 font-heading text-lg font-bold tracking-wider text-sidebar-foreground">
-                  <span className="text-sidebar-primary">CK</span>OURSE
+                <img src={logo} alt="七月播放器 logo" className="h-7 shrink-0" />
+                <span className="shrink-0 font-heading text-lg font-bold text-sidebar-foreground">
+                  <span className="text-sidebar-primary">七月</span>播放器
                 </span>
               </div>
               {effectiveCollapsed ? (
@@ -109,7 +107,7 @@ function AppShellInner({ children }: AppShellProps) {
                 >
                   <img
                     src={logo}
-                    alt="Ckourse logo"
+                    alt="七月播放器 logo"
                     className="h-7 transition-opacity duration-200 group-hover:opacity-0"
                   />
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
@@ -196,9 +194,9 @@ function AppShellInner({ children }: AppShellProps) {
           </div>
 
           <nav className="flex flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden px-3 pt-4">
-            <NavSection label="Navigation" collapsed={effectiveCollapsed} items={navigationItems} />
+            <NavSection label={t.nav.navigation} collapsed={effectiveCollapsed} items={navigationItems} />
             <div className="mx-3 my-3 border-t border-sidebar-border/50" />
-            <NavSection label="App" collapsed={effectiveCollapsed} items={appItems} />
+            <NavSection label={t.nav.app} collapsed={effectiveCollapsed} items={appItems} />
           </nav>
 
           <div className="mx-3 mb-4 mt-auto h-px bg-linear-to-r from-transparent via-primary/20 to-transparent" />

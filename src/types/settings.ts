@@ -1,4 +1,5 @@
 export interface AppSettings {
+  language: "en" | "zh" | "fr";
   autoplay_next: boolean;
   resume_position: boolean;
   default_speed: number;

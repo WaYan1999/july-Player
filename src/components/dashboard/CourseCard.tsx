@@ -7,46 +7,49 @@ import { useState, useCallback, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import type { Course } from "@/types";
 import { toggleBookmark } from "@/lib/store";
+import { useI18n } from "@/hooks/useI18n";
+import type { AppTranslations } from "@/lib/i18n";
 
-function getStatusBadge(status: Course["status"]) {
+function getStatusBadge(status: Course["status"], t: AppTranslations) {
   switch (status) {
     case "completed":
       return (
         <Badge variant="default">
-          Completed
+          {t.status.completed}
         </Badge>
       );
     case "in-progress":
       return (
         <Badge variant="info">
-          In Progress
+          {t.status.inProgress}
         </Badge>
       );
     case "not-started":
       return (
         <Badge variant="secondary">
-          Not Started
+          {t.status.notStarted}
         </Badge>
       );
   }
 }
 
-function formatLastWatched(dateStr: string | null): string {
-  if (!dateStr) return "Never";
+function formatLastWatched(dateStr: string | null, t: AppTranslations, formatMessage: (template: string, values: Record<string, string | number>) => string): string {
+  if (!dateStr) return t.common.never;
   const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays}d ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  if (diffDays === 0) return t.common.today;
+  if (diffDays === 1) return t.common.yesterday;
+  if (diffDays < 7) return formatMessage(t.courseCard.daysAgo, { count: diffDays });
+  if (diffDays < 30) return formatMessage(t.courseCard.weeksAgo, { count: Math.floor(diffDays / 7) });
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 export function CourseCard({ course, onBookmarkChange }: { course: Course; onBookmarkChange?: () => void }) {
   const location = useLocation();
+  const { t, formatMessage } = useI18n();
   const percentage = Math.round(
     (course.completedLessons / course.totalLessons) * 100
   );
@@ -85,23 +88,26 @@ export function CourseCard({ course, onBookmarkChange }: { course: Course; onBoo
               <h3 className="line-clamp-2 min-h-[2.5em] font-sans text-sm font-semibold leading-tight text-foreground">
                 {course.title}
               </h3>
-              {getStatusBadge(course.status)}
+              {getStatusBadge(course.status, t)}
             </div>
 
             <div className="flex items-center justify-between">
               <p className="font-sans text-xs text-muted-foreground">
-                {course.author || "Unknown author"}
+                {course.author || t.common.unknownAuthor}
               </p>
               <span className="flex items-center gap-1 font-mono text-[11px] text-muted-foreground">
                 <Clock className="size-3" />
-                {formatLastWatched(course.lastWatched)}
+                {formatLastWatched(course.lastWatched, t, formatMessage)}
               </span>
             </div>
 
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <span className="font-mono text-xs font-medium text-muted-foreground">
-                  {course.completedLessons}/{course.totalLessons} lessons
+                  {formatMessage(t.courseCard.lessons, {
+                    completed: course.completedLessons,
+                    total: course.totalLessons,
+                  })}
                 </span>
                 <span className="font-mono text-xs font-medium text-muted-foreground">
                   {percentage}%
@@ -116,7 +122,11 @@ export function CourseCard({ course, onBookmarkChange }: { course: Course; onBoo
                 <div className="absolute inset-0 bg-linear-to-r from-transparent via-primary/50 to-transparent opacity-0 transition-opacity duration-150 group-hover:opacity-100" style={{ transitionTimingFunction: "cubic-bezier(0.2, 0, 0, 1)" }} />
               </div>
               <div className="flex items-center justify-center gap-1.5 font-sans text-xs font-semibold text-primary">
-                {course.status === "not-started" ? "Start Course" : course.status === "completed" ? "Review Course" : "Continue"}
+                {course.status === "not-started"
+                  ? t.courseCard.startCourse
+                  : course.status === "completed"
+                    ? t.courseCard.reviewCourse
+                    : t.courseCard.continue}
                 <ArrowRight
                   className="size-3.5 transition-transform duration-150 group-hover:translate-x-1"
                   style={{ transitionTimingFunction: "cubic-bezier(0.2, 0, 0, 1)" }}

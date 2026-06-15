@@ -17,6 +17,7 @@ import {
   FastForwardIcon as FastForward,
   SpeakerHighIcon as SpeakerHigh,
   SkipForwardIcon as SkipForward,
+  TranslateIcon as Translate,
   TrashIcon as Trash,
   WarningCircleIcon as WarningCircle,
   XIcon as X,
@@ -27,6 +28,8 @@ import { getLibraryStats, deleteAllData } from "@/lib/store";
 import { EASE_OUT } from "@/lib/constants";
 import { useUpdater } from "@/hooks/useUpdater";
 import { getVersion } from "@tauri-apps/api/app";
+import { LANGUAGE_OPTIONS } from "@/lib/i18n";
+import { useI18n } from "@/hooks/useI18n";
 
 interface ToggleProps {
   checked: boolean;
@@ -175,6 +178,7 @@ function DeleteConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const { t } = useI18n();
   const [input, setInput] = useState("");
   const matches = input.toLowerCase().trim() === CONFIRM_PHRASE;
 
@@ -201,22 +205,23 @@ function DeleteConfirmDialog({
           </div>
           <div>
             <h3 className="font-heading text-base font-bold text-foreground">
-              Delete all data
+              {t.settings.deleteAllData}
             </h3>
             <p className="font-sans text-xs text-muted-foreground">
-              This action cannot be undone
+              {t.settings.cannotBeUndone}
             </p>
           </div>
         </div>
 
         <p className="mb-4 font-sans text-sm text-muted-foreground">
-          This will permanently delete all your courses, progress, notes, bookmarks,
-          favorites, and settings. Your original course files on disk will not be affected.
+          {t.settings.deleteAllWarning}
         </p>
 
         <div className="mb-4">
           <label className="mb-1.5 block font-sans text-xs font-medium text-muted-foreground">
-            Type <span className="font-mono font-bold text-foreground">{CONFIRM_PHRASE}</span> to confirm
+            {t.settings.typeToConfirmPrefix}{" "}
+            <span className="font-mono font-bold text-foreground">{CONFIRM_PHRASE}</span>
+            {" "}{t.settings.typeToConfirmSuffix}
           </label>
           <input
             type="text"
@@ -242,7 +247,7 @@ function DeleteConfirmDialog({
             onClick={onCancel}
             className="rounded-lg px-4 py-2 font-sans text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
-            Cancel
+            {t.common.cancel}
           </button>
           <button
             onClick={onConfirm}
@@ -254,7 +259,7 @@ function DeleteConfirmDialog({
                 : "cursor-not-allowed bg-secondary text-muted-foreground/40",
             )}
           >
-            Delete everything
+            {t.settings.deleteEverything}
           </button>
         </div>
       </div>
@@ -285,6 +290,7 @@ interface SettingsProps {
 
 function UpdatesSection({ index }: { index: number }) {
   const updater = useUpdater();
+  const { t, formatMessage } = useI18n();
   const [appVersion, setAppVersion] = useState<string>("");
 
   useEffect(() => {
@@ -297,31 +303,39 @@ function UpdatesSection({ index }: { index: number }) {
   const hasUpdate = updater.status === "available" || isDownloading || isReady;
   const percent = Math.round(updater.progress * 100);
 
-  let buttonLabel = "Check for updates";
-  if (isChecking) buttonLabel = "Checking…";
-  else if (isReady) buttonLabel = "Restart to update";
-  else if (isDownloading) buttonLabel = `Downloading ${percent}%`;
-  else if (updater.status === "available") buttonLabel = `Install v${updater.version}`;
+  let buttonLabel = t.settings.checkForUpdates;
+  if (isChecking) buttonLabel = t.settings.checking;
+  else if (isReady) buttonLabel = t.settings.restartToUpdate;
+  else if (isDownloading) buttonLabel = formatMessage(t.settings.downloading, { percent });
+  else if (updater.status === "available") {
+    buttonLabel = formatMessage(t.settings.installVersion, { version: updater.version ?? "" });
+  }
 
   const onClick = () => {
     if (hasUpdate) updater.install();
     else updater.check();
   };
 
-  let description = appVersion ? `Current version v${appVersion}` : "Check for new versions";
-  if (updater.status === "up-to-date") description = `You're on the latest version (v${appVersion})`;
-  else if (updater.status === "available") description = `Version ${updater.version} is available`;
-  else if (updater.status === "error") description = updater.error ?? "Update check failed";
+  let description = appVersion
+    ? formatMessage(t.settings.currentVersion, { version: appVersion })
+    : t.settings.checkForNewVersions;
+  if (updater.status === "up-to-date") {
+    description = formatMessage(t.settings.latestVersion, { version: appVersion });
+  } else if (updater.status === "available") {
+    description = formatMessage(t.settings.versionAvailable, { version: updater.version ?? "" });
+  } else if (updater.status === "error") {
+    description = updater.error ?? t.settings.updateCheckFailed;
+  }
 
   return (
     <SectionCard
-      title="Updates"
+      title={t.settings.updates}
       icon={<ArrowsClockwise className="size-4 text-info" weight="bold" />}
       index={index}
     >
       <SettingRow
         icon={<ArrowsClockwise className={cn("size-4", isChecking && "animate-spin")} />}
-        label="App updates"
+        label={t.settings.appUpdates}
         description={description}
       >
         <button
@@ -360,6 +374,7 @@ function UpdatesSection({ index }: { index: number }) {
 
 export function Settings({ className }: SettingsProps) {
   const { settings, update } = useSettings();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [stats, setStats] = useState<LibraryStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -400,23 +415,34 @@ export function Settings({ className }: SettingsProps) {
           <GearSix className="size-5 text-primary" weight="bold" />
         </div>
         <div>
-          <h2 className="font-heading text-2xl font-bold text-foreground">Settings</h2>
+          <h2 className="font-heading text-2xl font-bold text-foreground">{t.settings.title}</h2>
           <p className="font-sans text-sm text-muted-foreground">
-            Configure your learning experience
+            {t.settings.subtitle}
           </p>
         </div>
       </div>
 
       <div className="flex flex-col gap-4">
         <SectionCard
-          title="Playback"
+          title={t.settings.playback}
           icon={<Play className="size-4 text-primary" weight="bold" />}
           index={0}
         >
           <SettingRow
+            icon={<Translate className="size-4" />}
+            label={t.settings.interfaceLanguage}
+            description={t.settings.interfaceLanguageDescription}
+          >
+            <Select
+              value={settings.language}
+              onChange={(v) => update("language", v)}
+              options={LANGUAGE_OPTIONS}
+            />
+          </SettingRow>
+          <SettingRow
             icon={<SkipForward className="size-4" />}
-            label="Autoplay next lesson"
-            description="Automatically play the next lesson when one finishes"
+            label={t.settings.autoplayNext}
+            description={t.settings.autoplayNextDescription}
           >
             <Toggle
               checked={settings.autoplay_next}
@@ -425,8 +451,8 @@ export function Settings({ className }: SettingsProps) {
           </SettingRow>
           <SettingRow
             icon={<ArrowsClockwise className="size-4" />}
-            label="Resume from last position"
-            description="Continue videos from where you left off"
+            label={t.settings.resumePosition}
+            description={t.settings.resumePositionDescription}
           >
             <Toggle
               checked={settings.resume_position}
@@ -435,7 +461,7 @@ export function Settings({ className }: SettingsProps) {
           </SettingRow>
           <SettingRow
             icon={<FastForward className="size-4" />}
-            label="Default playback speed"
+            label={t.settings.defaultPlaybackSpeed}
           >
             <Select
               value={String(settings.default_speed)}
@@ -445,7 +471,7 @@ export function Settings({ className }: SettingsProps) {
           </SettingRow>
           <SettingRow
             icon={<SpeakerHigh className="size-4" />}
-            label="Default volume"
+            label={t.settings.defaultVolume}
           >
             <div className="flex items-center gap-2.5">
               <input
@@ -463,7 +489,7 @@ export function Settings({ className }: SettingsProps) {
           </SettingRow>
           <SettingRow
             icon={<MonitorPlay className="size-4" />}
-            label="Skip forward / backward"
+            label={t.settings.skipForwardBackward}
           >
             <Select
               value={String(settings.skip_forward_secs)}
@@ -477,7 +503,7 @@ export function Settings({ className }: SettingsProps) {
         </SectionCard>
 
         <SectionCard
-          title="Library"
+          title={t.settings.library}
           icon={<Database className="size-4 text-info" weight="bold" />}
           index={1}
         >
@@ -485,38 +511,38 @@ export function Settings({ className }: SettingsProps) {
             <div className="grid grid-cols-3 gap-2.5">
               <StatChip
                 icon={<Stack className="size-3.5" />}
-                label="Courses"
+                label={t.settings.courses}
                 value={stats.totalCourses}
               />
               <StatChip
                 icon={<MonitorPlay className="size-3.5" />}
-                label="Lessons"
+                label={t.settings.lessons}
                 value={stats.totalLessons}
               />
               <StatChip
                 icon={<Notepad className="size-3.5" />}
-                label="Notes"
+                label={t.settings.notes}
                 value={stats.totalNotes}
               />
               <StatChip
                 icon={<BookmarkSimple className="size-3.5" />}
-                label="Bookmarks"
+                label={t.settings.bookmarks}
                 value={stats.totalBookmarks}
               />
               <StatChip
                 icon={<Heart className="size-3.5" />}
-                label="Favorites"
+                label={t.settings.favorites}
                 value={stats.totalFavorites}
               />
               <StatChip
                 icon={<Folder className="size-3.5" />}
-                label="Sections"
+                label={t.settings.sections}
                 value={stats.totalSections}
               />
             </div>
           )}
           <div className="mt-3 rounded-lg bg-secondary/50 px-3 py-2.5">
-            <div className="font-sans text-xs text-muted-foreground">Database location</div>
+            <div className="font-sans text-xs text-muted-foreground">{t.settings.databaseLocation}</div>
             <div className="mt-0.5 truncate font-mono text-xs text-foreground/70">
               {stats?.dbPath}
             </div>
@@ -526,7 +552,7 @@ export function Settings({ className }: SettingsProps) {
         <UpdatesSection index={2} />
 
         <SectionCard
-          title="Danger Zone"
+          title={t.settings.dangerZone}
           icon={<WarningCircle className="size-4 text-destructive" weight="bold" />}
           index={3}
         >
@@ -537,10 +563,10 @@ export function Settings({ className }: SettingsProps) {
               </div>
               <div>
                 <div className="font-sans text-sm font-medium text-foreground">
-                  Delete all data
+                  {t.settings.deleteAllData}
                 </div>
                 <div className="font-sans text-xs text-muted-foreground">
-                  Permanently remove all courses, progress, notes, and settings
+                  {t.settings.deleteAllDataDescription}
                 </div>
               </div>
             </div>
@@ -552,7 +578,7 @@ export function Settings({ className }: SettingsProps) {
                 "transition-colors hover:bg-destructive/10",
               )}
             >
-              Delete all
+              {t.settings.deleteAll}
             </button>
           </div>
         </SectionCard>

@@ -19,6 +19,7 @@ import type { NoteWithCourse } from "@/types";
 import { getAllNotes, updateNote, deleteNote } from "@/lib/store";
 import { NoteEditor } from "@/components/course-detail/NoteEditor";
 import { EASE_OUT, SNAPPY } from "@/lib/constants";
+import { useI18n } from "@/hooks/useI18n";
 
 type SortField = "updated" | "created" | "course";
 type SortDir = "desc" | "asc";
@@ -28,6 +29,7 @@ interface NotesProps {
 }
 
 export function Notes({ className }: NotesProps) {
+  const { t, formatMessage } = useI18n();
   const [notes, setNotes] = useState<NoteWithCourse[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -145,10 +147,10 @@ export function Notes({ className }: NotesProps) {
             <Notepad className="size-6 text-muted-foreground" />
           </div>
           <h2 className="font-heading text-lg font-bold text-foreground">
-            No notes yet
+            {t.notesPage.noNotesYet}
           </h2>
           <p className="max-w-xs font-sans text-sm text-muted-foreground">
-            Start taking notes while watching your courses. Use @ to tag timestamps.
+            {t.notesPage.emptyDescription}
           </p>
         </div>
       </div>
@@ -166,10 +168,15 @@ export function Notes({ className }: NotesProps) {
         <div className="flex items-baseline justify-between">
           <div>
             <h2 className="font-heading text-2xl font-bold text-foreground">
-              Notes
+              {t.notesPage.title}
             </h2>
             <p className="mt-1 font-sans text-sm text-muted-foreground">
-              {notes.length} {notes.length === 1 ? "note" : "notes"} across {courses.length} {courses.length === 1 ? "course" : "courses"}
+              {formatMessage(t.notesPage.summary, {
+                notes: notes.length,
+                noteLabel: notes.length === 1 ? t.common.note : t.common.notes,
+                courses: courses.length,
+                courseLabel: courses.length === 1 ? t.common.course : t.common.courses,
+              })}
             </p>
           </div>
         </div>
@@ -182,7 +189,7 @@ export function Notes({ className }: NotesProps) {
         <SquircleSearch
           value={search}
           onChange={setSearch}
-          placeholder="Search notes..."
+          placeholder={t.notesPage.searchNotes}
           className="flex-1"
         />
         <div className="flex items-center gap-1">
@@ -197,7 +204,11 @@ export function Notes({ className }: NotesProps) {
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              {field === "updated" ? "Modified" : field === "created" ? "Created" : "Course"}
+              {field === "updated"
+                ? t.notesPage.modified
+                : field === "created"
+                  ? t.notesPage.created
+                  : t.notesPage.course}
               {sortField === field && <SortIcon className="size-3" />}
             </button>
           ))}
@@ -219,7 +230,7 @@ export function Notes({ className }: NotesProps) {
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            All
+            {t.notesPage.all}
             <span className="font-mono text-[9px] text-muted-foreground/60">
               {notes.length}
             </span>
@@ -254,9 +265,9 @@ export function Notes({ className }: NotesProps) {
           style={{ animation: `card-in 350ms ${EASE_OUT} both` }}
         >
           <MagnifyingGlass className="size-8 text-muted-foreground/40" />
-          <p className="font-sans text-sm font-medium text-muted-foreground">No matching notes</p>
+          <p className="font-sans text-sm font-medium text-muted-foreground">{t.notesPage.noMatchingNotes}</p>
           <p className="font-sans text-xs text-muted-foreground/60">
-            Try a different search or filter.
+            {t.notesPage.tryDifferentSearch}
           </p>
         </div>
       ) : (
@@ -299,6 +310,7 @@ function NoteItem({
   onStartEdit: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useI18n();
   const updated = new Date(note.updatedAt);
   const formatted = updated.toLocaleDateString("en-US", {
     month: "short",
@@ -344,21 +356,21 @@ function NoteItem({
           <Link
             to={`/course/${note.courseId}?lesson=${note.lessonId}&from=/notes`}
             className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            title="Go to lesson"
+            title={t.notesPage.goToLesson}
           >
             <CaretRight className="size-3.5" />
           </Link>
           <button
             onClick={onStartEdit}
             className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            title="Edit note"
+            title={t.notesPage.editNote}
           >
             <PencilSimple className="size-3.5" />
           </button>
           <button
             onClick={onDelete}
             className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
-            title="Delete note"
+            title={t.notesPage.deleteNote}
           >
             <Trash className="size-3.5" />
           </button>

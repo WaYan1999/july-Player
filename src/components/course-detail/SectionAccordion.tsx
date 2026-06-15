@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { EASE } from "@/lib/constants";
 import { formatDuration } from "@/lib/format";
 import type { Section, Lesson } from "@/types";
+import { useI18n } from "@/hooks/useI18n";
 
 interface SectionAccordionProps {
   section: Section;
@@ -25,6 +26,7 @@ export function SectionAccordion({
   onToggleComplete,
   onToggleFavorite,
 }: SectionAccordionProps) {
+  const { t } = useI18n();
   const completedCount = section.lessons.filter((l) => l.completed).length;
   const allComplete =
     completedCount === section.lessons.length && section.lessons.length > 0;
@@ -63,7 +65,7 @@ export function SectionAccordion({
             )}
           </div>
           <span className="font-mono text-[10px] text-muted-foreground/60">
-            {section.lessons.length} {section.lessons.length === 1 ? "lesson" : "lessons"}
+            {section.lessons.length} {section.lessons.length === 1 ? t.common.lesson : t.common.lessons}
             {sectionDuration > 0 && <> · {formatDuration(sectionDuration)}</>}
           </span>
         </div>

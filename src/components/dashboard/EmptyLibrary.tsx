@@ -4,6 +4,7 @@ import { SquircleButton } from "@/components/ui/SquircleButton";
 import emptyAnimation from "@/assets/lotties/empty.json";
 import { EASE_OUT } from "@/lib/constants";
 import LottieLib from "lottie-react";
+import { useI18n } from "@/hooks/useI18n";
 
 // Handle CJS/ESM default export interop: in some Vite/Rollup build modes
 // lottie-react resolves to the module namespace object rather than the component
@@ -16,6 +17,7 @@ interface EmptyLibraryProps {
 }
 
 export function EmptyLibrary({ onImport, className }: EmptyLibraryProps) {
+  const { t } = useI18n();
   return (
     <div
       className={cn(
@@ -31,17 +33,16 @@ export function EmptyLibrary({ onImport, className }: EmptyLibraryProps) {
       </div>
 
       <h3 className="font-heading text-xl font-bold text-foreground">
-        No courses yet
+        {t.dashboard.noCoursesYet}
       </h3>
       <p className="mt-2 max-w-xs font-sans text-sm text-muted-foreground">
-        Import a course folder to start tracking your progress and pick up right
-        where you left off.
+        {t.dashboard.emptyDescription}
       </p>
 
       <div className="mt-6">
         <SquircleButton variant="primary" onClick={onImport}>
           <Plus className="size-4" weight="bold" />
-          Import Course
+          {t.dashboard.importCourse}
         </SquircleButton>
       </div>
     </div>

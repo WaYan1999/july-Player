@@ -31,6 +31,8 @@ import { EASE_OUT, SNAPPY } from "@/lib/constants";
 import { formatDuration } from "@/lib/format";
 import type { Note, Course, CourseDetail as CourseDetailData, Lesson, Subtitle } from "@/types";
 import { useSettings } from "@/hooks/useSettings";
+import { useI18n } from "@/hooks/useI18n";
+import type { AppTranslations } from "@/lib/i18n";
 import { useCourseTitles } from "@/components/app-shell/CourseTitleContext";
 import {
   getCourse,
@@ -55,24 +57,24 @@ interface CourseDetailProps {
   className?: string;
 }
 
-function getStatusBadge(status: string) {
+function getStatusBadge(status: string, t: AppTranslations) {
   switch (status) {
     case "completed":
       return (
         <Badge variant="default">
-          Completed
+          {t.status.completed}
         </Badge>
       );
     case "in-progress":
       return (
         <Badge variant="info">
-          In Progress
+          {t.status.inProgress}
         </Badge>
       );
     case "not-started":
       return (
         <Badge variant="secondary">
-          Not Started
+          {t.status.notStarted}
         </Badge>
       );
   }
@@ -91,6 +93,7 @@ const resourceIcons: Record<string, React.ElementType> = {
 };
 
 export function CourseDetail({ className }: CourseDetailProps) {
+  const { t } = useI18n();
   const { courseId } = useParams<{ courseId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -148,7 +151,7 @@ export function CourseDetail({ className }: CourseDetailProps) {
     return (
       <div className={cn("mx-auto max-w-4xl", className)}>
         <p className="font-sans text-sm text-muted-foreground">
-          {!isValidId ? "Invalid course." : "Course not found."}
+          {!isValidId ? t.courseDetail.invalidCourse : t.courseDetail.courseNotFound}
         </p>
       </div>
     );
@@ -216,6 +219,7 @@ function CourseDetailInner({
   className?: string;
 }) {
   const { settings, loaded: settingsLoaded } = useSettings();
+  const { t, formatMessage } = useI18n();
   const { setTitle: setBreadcrumbTitle } = useCourseTitles();
   const allLessons = courseData.sections.flatMap((s) => s.lessons);
 
@@ -378,8 +382,8 @@ function CourseDetailInner({
         await onDataChange();
       } catch (err) {
         console.error("toggleLessonCompleted failed", err);
-        toast.error("Couldn't update lesson", {
-          description: "Try again in a moment.",
+        toast.error(t.courseDetail.updateLessonFailed, {
+          description: t.courseDetail.tryAgainMoment,
         });
       }
     },
@@ -393,8 +397,8 @@ function CourseDetailInner({
         await onDataChange();
       } catch (err) {
         console.error("toggleFavorite failed", err);
-        toast.error("Couldn't update favorite", {
-          description: "Try again in a moment.",
+        toast.error(t.courseDetail.updateFavoriteFailed, {
+          description: t.courseDetail.tryAgainMoment,
         });
       }
     },
@@ -439,8 +443,8 @@ function CourseDetailInner({
     } catch (err) {
       // Keep editor open so the user doesn't lose their content.
       console.error("addNote failed", err);
-      toast.error("Couldn't save note", {
-        description: "Your content is still in the editor.",
+      toast.error(t.courseDetail.saveNoteFailed, {
+        description: t.courseDetail.contentStillEditor,
       });
     }
   }
@@ -459,8 +463,8 @@ function CourseDetailInner({
     } catch (err) {
       // Keep edit mode open so the user can retry.
       console.error("updateNote failed", err);
-      toast.error("Couldn't update note", {
-        description: "Your changes weren't saved.",
+      toast.error(t.courseDetail.updateNoteFailed, {
+        description: t.courseDetail.changesNotSaved,
       });
     }
   }
@@ -471,8 +475,8 @@ function CourseDetailInner({
       setNotes((prev) => prev.filter((n) => n.id !== noteId));
     } catch (err) {
       console.error("deleteNote failed", err);
-      toast.error("Couldn't delete note", {
-        description: "Try again in a moment.",
+      toast.error(t.courseDetail.deleteNoteFailed, {
+        description: t.courseDetail.tryAgainMoment,
       });
     }
   }
@@ -488,7 +492,7 @@ function CourseDetailInner({
         setPendingTimestampNav({
           seconds,
           lessonId,
-          lessonTitle: targetLesson?.title ?? "another lesson",
+        lessonTitle: targetLesson?.title ?? t.courseDetail.anotherLesson,
         });
       }
     },
@@ -528,8 +532,8 @@ function CourseDetailInner({
     } catch (err) {
       // Expected when the file was moved/deleted outside the app.
       console.debug("openPath failed", err);
-      toast.error("Couldn't open resource", {
-        description: "The file may have been moved or deleted.",
+      toast.error(t.courseDetail.openResourceFailed, {
+        description: t.courseDetail.resourceMoved,
       });
     }
   };
@@ -554,7 +558,7 @@ function CourseDetailInner({
           className="inline-flex items-center gap-1.5 font-sans text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="size-3.5" />
-          Back
+          {t.common.back}
         </Link>
 
         <div className="flex items-center gap-2">
@@ -573,7 +577,7 @@ function CourseDetailInner({
                 transitionTimingFunction: SNAPPY,
               }}
             />
-            {curriculumOpen ? "Hide" : "Show Curriculum"}
+            {curriculumOpen ? t.courseDetail.hide : t.courseDetail.showCurriculum}
           </button>
           <button
             onClick={onToggleBookmark}
@@ -584,7 +588,7 @@ function CourseDetailInner({
             style={{ transitionTimingFunction: SNAPPY }}
           >
             <BookmarkSimple className="size-3.5" weight={course.bookmarked ? "fill" : "regular"} />
-            {course.bookmarked ? "Bookmarked" : "Bookmark"}
+            {course.bookmarked ? t.courseDetail.bookmarked : t.courseDetail.bookmark}
           </button>
           <button
             onClick={onEdit}
@@ -592,7 +596,7 @@ function CourseDetailInner({
             style={{ transitionTimingFunction: SNAPPY }}
           >
             <PencilSimple className="size-3.5" />
-            Edit
+            {t.common.edit}
           </button>
         </div>
       </div>
@@ -663,7 +667,7 @@ function CourseDetailInner({
                   className="size-3.5"
                   weight={activeLesson.completed ? "fill" : "regular"}
                 />
-                {activeLesson.completed ? "Completed" : "Mark complete"}
+                {activeLesson.completed ? t.courseDetail.completed : t.courseDetail.markComplete}
               </button>
             </div>
           )}
@@ -671,9 +675,9 @@ function CourseDetailInner({
           <div>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <p className="font-sans text-sm text-muted-foreground">
-                by {course.author}
+                {t.common.by} {course.author}
               </p>
-              {getStatusBadge(course.status)}
+              {getStatusBadge(course.status, t)}
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-3 sm:gap-5">
@@ -684,7 +688,10 @@ function CourseDetailInner({
                 </span>
               </div>
               <span className="font-mono text-xs font-medium text-muted-foreground">
-                {course.completedLessons}/{course.totalLessons} lessons
+                {formatMessage(t.courseDetail.lessonsCount, {
+                  completed: course.completedLessons,
+                  total: course.totalLessons,
+                })}
               </span>
               <span className="font-mono text-xs font-medium text-muted-foreground">
                 {percentage}%
@@ -711,7 +718,7 @@ function CourseDetailInner({
                 >
                   <span className="flex items-center gap-1.5">
                     <FolderOpen className="size-3.5" />
-                    Resources
+                    {t.courseDetail.resources}
                   </span>
                 </button>
               )}
@@ -727,7 +734,7 @@ function CourseDetailInner({
               >
                 <span className="flex items-center gap-1.5">
                   <NotePencil className="size-3.5" />
-                  Notes
+                  {t.courseDetail.notes}
                   {lessonNotes.length > 0 && (
                     <span className="font-mono text-[10px] text-muted-foreground">
                       {lessonNotes.length}
@@ -789,7 +796,7 @@ function CourseDetailInner({
           >
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <h2 className="font-heading text-sm font-bold text-foreground">
-                Curriculum
+                {t.courseDetail.curriculum}
               </h2>
               <span className="font-mono text-[11px] text-muted-foreground">
                 {course.completedLessons}/{course.totalLessons}
@@ -825,14 +832,12 @@ function CourseDetailInner({
             }}
           >
             <h3 className="font-heading text-sm font-bold text-foreground">
-              Switch lesson?
+              {t.courseDetail.switchLesson}
             </h3>
             <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
-              This timestamp is from{" "}
-              <span className="font-medium text-foreground">
-                {pendingTimestampNav.lessonTitle}
-              </span>
-              . Switching will save your current position.
+              {formatMessage(t.courseDetail.timestampFrom, {
+                lessonTitle: pendingTimestampNav.lessonTitle,
+              })}
             </p>
             <div className="mt-4 flex items-center justify-end gap-2">
               <button
@@ -840,14 +845,14 @@ function CourseDetailInner({
                 className="rounded-lg px-3 py-1.5 font-sans text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                 style={{ transitionTimingFunction: SNAPPY }}
               >
-                Cancel
+                {t.common.cancel}
               </button>
               <button
                 onClick={confirmTimestampNav}
                 className="rounded-lg bg-primary px-3 py-1.5 font-sans text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                 style={{ transitionTimingFunction: SNAPPY }}
               >
-                Switch & Jump
+                {t.courseDetail.switchJump}
               </button>
             </div>
           </div>

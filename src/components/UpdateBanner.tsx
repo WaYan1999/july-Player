@@ -6,9 +6,11 @@ import {
 import { cn } from "@/lib/utils";
 import { useUpdater } from "@/hooks/useUpdater";
 import { EASE_OUT } from "@/lib/constants";
+import { useI18n } from "@/hooks/useI18n";
 
 export function UpdateBanner() {
   const updater = useUpdater();
+  const { t, formatMessage } = useI18n();
 
   const showBanner =
     !updater.dismissed &&
@@ -34,17 +36,17 @@ export function UpdateBanner() {
         <div className="min-w-0 flex-1">
           <div className="font-sans text-sm font-semibold text-foreground">
             {isReady
-              ? "Update ready"
+              ? t.updateBanner.updateReady
               : isDownloading
-                ? `Downloading ${percent}%`
-                : `Update available`}
+                ? formatMessage(t.updateBanner.downloading, { percent })
+                : t.updateBanner.updateAvailable}
           </div>
           <div className="truncate font-sans text-xs text-muted-foreground">
             {isReady
-              ? "Restart to finish installing"
+              ? t.updateBanner.restartFinish
               : isDownloading
-                ? `Version ${updater.version}`
-                : `Version ${updater.version} is ready to install`}
+                ? formatMessage(t.updateBanner.version, { version: updater.version ?? "" })
+                : formatMessage(t.updateBanner.versionReady, { version: updater.version ?? "" })}
           </div>
           {isDownloading && (
             <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-secondary">
@@ -66,7 +68,7 @@ export function UpdateBanner() {
             )}
           >
             <DownloadSimple className="size-3.5" weight="bold" />
-            {isReady ? "Restart" : "Install"}
+            {isReady ? t.updateBanner.restart : t.updateBanner.install}
           </button>
         )}
         <button
@@ -76,7 +78,7 @@ export function UpdateBanner() {
             "shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
             isDownloading && "cursor-not-allowed opacity-40",
           )}
-          aria-label="Dismiss"
+          aria-label={t.updateBanner.dismiss}
         >
           <X className="size-3.5" />
         </button>

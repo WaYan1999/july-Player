@@ -44,6 +44,7 @@ import type { CourseCategory, ParsedCourse, ParsedSection, ParsedLesson } from "
 import { selectCourseFolder, parseCourseFolder } from "@/lib/courseParser";
 import { importCourse, getCustomCategories, addCustomCategory, deleteCustomCategory } from "@/lib/store";
 import { EASE_OUT } from "@/lib/constants";
+import { useI18n } from "@/hooks/useI18n";
 
 function makeId() {
   return Math.random().toString(36).slice(2, 11);
@@ -83,6 +84,7 @@ interface ImportCourseProps {
 }
 
 export function ImportCourse({ className }: ImportCourseProps) {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [step, setStep] = useState<"select" | "configure">("select");
   const [isDragOver, setIsDragOver] = useState(false);
@@ -116,7 +118,7 @@ export function ImportCourse({ className }: ImportCourseProps) {
       setTitle(result.title);
       setStep("configure");
     } catch (err) {
-      setParseError(typeof err === "string" ? err : "Failed to parse course folder");
+      setParseError(typeof err === "string" ? err : t.importCourse.failedParse);
     } finally {
       setIsLoading(false);
     }
@@ -129,7 +131,7 @@ export function ImportCourse({ className }: ImportCourseProps) {
         await handleParseCourse(folderPath);
       }
     } catch (err) {
-      setParseError("Failed to open folder picker");
+      setParseError(t.importCourse.failedOpenPicker);
     }
   };
 
@@ -149,7 +151,7 @@ export function ImportCourse({ className }: ImportCourseProps) {
           if (path) {
             await handleParseCourse(path);
           } else {
-            setParseError("Could not read the dropped folder path. Try using Browse instead.");
+            setParseError(t.importCourse.couldNotReadDropped);
           }
         }
       }
@@ -221,7 +223,7 @@ export function ImportCourse({ className }: ImportCourseProps) {
       });
       navigate(`/course/${courseId}`);
     } catch (err) {
-      setParseError(typeof err === "string" ? err : "Failed to import course");
+      setParseError(typeof err === "string" ? err : t.importCourse.failedParse);
     } finally {
       setIsImporting(false);
     }
@@ -236,10 +238,10 @@ export function ImportCourse({ className }: ImportCourseProps) {
           className="size-40"
         />
         <p className="mt-2 font-sans text-sm font-semibold text-foreground">
-          Importing course...
+          {t.importCourse.importingCourse}
         </p>
         <p className="mt-1.5 font-sans text-xs text-muted-foreground">
-          Setting up your library
+          {t.importCourse.settingUpLibrary}
         </p>
       </div>
     );
@@ -252,7 +254,7 @@ export function ImportCourse({ className }: ImportCourseProps) {
         className="mb-6 flex items-center gap-1.5 font-sans text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <CaretLeft className="size-4" />
-        {step === "configure" ? "Change folder" : "Back to library"}
+        {step === "configure" ? t.importCourse.changeFolder : t.importCourse.backToLibrary}
       </button>
 
       <div
@@ -260,12 +262,12 @@ export function ImportCourse({ className }: ImportCourseProps) {
         style={{ animation: `card-in 350ms ${EASE_OUT} both` }}
       >
         <h2 className="font-heading text-2xl font-bold text-foreground">
-          Import Course
+          {t.importCourse.title}
         </h2>
         <p className="mt-2 font-sans text-sm text-muted-foreground">
           {step === "select"
-            ? "Select a folder containing your course videos to get started."
-            : "Review the detected structure and configure your course details."}
+            ? t.importCourse.selectDescription
+            : t.importCourse.configureDescription}
         </p>
       </div>
 
@@ -324,6 +326,7 @@ function FolderSelectStep({
   onDrop: (e: React.DragEvent) => void;
   onBrowse: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div style={{ animation: `card-in 350ms ${EASE_OUT} 50ms both` }}>
       <div
@@ -356,10 +359,10 @@ function FolderSelectStep({
               />
               <div className="text-center">
                 <p className="font-sans text-sm font-semibold text-foreground">
-                  Scanning folder...
+                  {t.importCourse.scanningFolder}
                 </p>
                 <p className="mt-1.5 font-sans text-xs text-muted-foreground">
-                  Detecting videos, subtitles, and resources
+                  {t.importCourse.detecting}
                 </p>
               </div>
             </>
@@ -380,17 +383,17 @@ function FolderSelectStep({
 
               <div className="text-center">
                 <p className="font-sans text-sm font-semibold text-foreground">
-                  {isDragOver ? "Drop folder here" : "Drag & drop a course folder"}
+                  {isDragOver ? t.importCourse.dropFolderHere : t.importCourse.dragDropFolder}
                 </p>
                 <p className="mt-1.5 font-sans text-xs text-muted-foreground">
-                  or click to browse your files
+                  {t.importCourse.browseHint}
                 </p>
               </div>
 
               <div className="flex items-center gap-2 rounded-full border border-border/50 bg-secondary px-4 py-2">
                 <FolderOpen className="size-4 text-muted-foreground" />
                 <span className="font-sans text-xs font-medium text-muted-foreground">
-                  Browse Folder
+                  {t.importCourse.browseFolder}
                 </span>
               </div>
             </>
@@ -408,7 +411,7 @@ function FolderSelectStep({
       <div className="mt-4 flex items-center justify-center gap-2">
         <FileVideo className="size-3.5 text-muted-foreground/50" />
         <p className="font-sans text-xs text-muted-foreground/50">
-          Supports .mp4, .mkv, .avi, .mov and other video formats
+          {t.importCourse.supportsFormats}
         </p>
       </div>
     </div>
@@ -452,6 +455,7 @@ function ConfigureStep({
   onAccentColorChange: (v: string) => void;
   onImport: () => void;
 }) {
+  const { t, formatMessage } = useI18n();
   const totalLessons = course.sections.reduce((sum, s) => sum + s.lessons.length, 0);
 
   const sectionSensors = useSensors(
@@ -495,8 +499,8 @@ function ConfigureStep({
               )}
             >
               {course.confidence === "low"
-                ? "Low confidence parse — review carefully"
-                : "Some structure was inferred"}
+                ? t.importCourse.lowConfidence
+                : t.importCourse.inferredStructure}
             </p>
             <ul className="mt-1 space-y-0.5">
               {course.confidenceReasons.map((reason, i) => (
@@ -524,8 +528,12 @@ function ConfigureStep({
             <div className="ml-auto flex items-center gap-1.5">
               <CheckCircle className="size-4 text-primary" weight="fill" />
               <span className="font-sans text-xs font-medium text-primary">
-                {totalLessons} lessons in {course.sections.length}{" "}
-                {course.sections.length === 1 ? "section" : "sections"}
+                {formatMessage(t.importCourse.detectedSummary, {
+                  lessons: totalLessons,
+                  lessonLabel: totalLessons === 1 ? t.common.lesson : t.common.lessons,
+                  sections: course.sections.length,
+                  sectionLabel: course.sections.length === 1 ? "section" : t.settings.sections,
+                })}
               </span>
             </div>
           </div>
@@ -537,26 +545,26 @@ function ConfigureStep({
         style={{ animation: `card-in 350ms ${EASE_OUT} 100ms both` }}
       >
         <h3 className="font-heading text-base font-bold text-foreground">
-          Course Details
+          {t.importCourse.courseDetails}
         </h3>
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <FieldGroup label="Title">
+            <FieldGroup label={t.importCourse.titleLabel}>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => onTitleChange(e.target.value)}
-                placeholder="Course title"
+                placeholder={t.importCourse.titlePlaceholder}
                 className="w-full bg-transparent font-sans text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none"
               />
             </FieldGroup>
 
-            <FieldGroup label="Author">
+            <FieldGroup label={t.importCourse.authorLabel}>
               <input
                 type="text"
                 value={author}
                 onChange={(e) => onAuthorChange(e.target.value)}
-                placeholder="Instructor name"
+                placeholder={t.importCourse.authorPlaceholder}
                 className="w-full bg-transparent font-sans text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none"
               />
             </FieldGroup>
@@ -573,7 +581,7 @@ function ConfigureStep({
             <div className="flex flex-col gap-2">
               <label className="flex items-center gap-1.5 font-sans text-xs font-medium text-muted-foreground">
                 <Palette className="size-3.5" />
-                Accent Color
+                {t.importCourse.accentColor}
               </label>
               <div className="flex flex-wrap gap-2">
                 {accentColors.map((color) => (
@@ -596,7 +604,7 @@ function ConfigureStep({
           {course.description && (
             <div className="flex flex-col gap-2">
               <label className="font-sans text-xs font-medium text-muted-foreground">
-                Description (from README)
+                {t.importCourse.descriptionFromReadme}
               </label>
               <p className="line-clamp-4 font-sans text-xs leading-relaxed text-muted-foreground">
                 {course.description}
@@ -607,7 +615,7 @@ function ConfigureStep({
         {course.resources.length > 0 && (
           <div className="flex flex-col gap-2">
             <label className="font-sans text-xs font-medium text-muted-foreground">
-              Course Resources
+              {t.importCourse.courseResources}
             </label>
             <div className="flex flex-wrap gap-1.5">
               {course.resources.map((r, i) => (
@@ -629,7 +637,7 @@ function ConfigureStep({
         style={{ animation: `card-in 350ms ${EASE_OUT} 150ms both` }}
       >
         <h3 className="font-heading text-base font-bold text-foreground">
-          Course Structure
+          {t.importCourse.courseStructure}
         </h3>
 
         <div className="h-90 overflow-y-scroll rounded-xl border border-border bg-card px-3 py-2">
@@ -665,7 +673,7 @@ function ConfigureStep({
         style={{ animation: `card-in 350ms ${EASE_OUT} 200ms both` }}
       >
         <span className="font-sans text-xs text-muted-foreground">
-          {totalLessons} lessons will be imported
+          {formatMessage(t.importCourse.lessonsWillImport, { count: totalLessons })}
         </span>
         <SquircleButton
           variant="primary"
@@ -673,7 +681,7 @@ function ConfigureStep({
           disabled={!title.trim()}
         >
           <UploadSimple className="size-4" weight="bold" />
-          Import Course
+          {t.importCourse.title}
         </SquircleButton>
       </div>
     </div>
@@ -691,6 +699,7 @@ function CategoryPicker({
   customCategories: string[];
   onCustomCategoriesChange: (v: string[]) => void;
 }) {
+  const { t } = useI18n();
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -725,7 +734,7 @@ function CategoryPicker({
   return (
     <div className="flex flex-col gap-2">
       <label className="font-sans text-xs font-medium text-muted-foreground">
-        Category
+        {t.categories.category}
       </label>
       <div className="flex flex-wrap gap-1.5">
         {builtinCategories.map((cat) => (
@@ -773,7 +782,7 @@ function CategoryPicker({
                 if (e.key === "Enter") handleAdd();
                 if (e.key === "Escape") { setAdding(false); setNewName(""); }
               }}
-              placeholder="Category name"
+              placeholder={t.categories.categoryName}
               className="w-24 bg-transparent font-sans text-xs text-primary placeholder:text-primary/50 focus:outline-none"
             />
             <button
@@ -800,7 +809,7 @@ function CategoryPicker({
             onClick={() => setAdding(true)}
             className="rounded-full border border-dashed border-border/50 px-3 py-1.5 font-sans text-xs font-medium text-muted-foreground transition-colors duration-150 hover:border-primary/25 hover:text-primary"
           >
-            + Custom
+            {t.categories.custom}
           </button>
         )}
       </div>
@@ -827,6 +836,7 @@ function SortableSection({
   onRenameLesson: (lessonIdx: number, newTitle: string) => void;
   onReorderLessons: (from: number, to: number) => void;
 }) {
+  const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id });
@@ -874,7 +884,7 @@ function SortableSection({
             type="button"
             {...listeners}
             onClick={(e) => e.stopPropagation()}
-            aria-label="Drag to reorder section"
+            aria-label={t.importCourse.dragSection}
             className="flex size-5 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/40 transition-colors hover:text-foreground active:cursor-grabbing"
           >
             <DotsSixVertical className="size-4" weight="bold" />
@@ -887,7 +897,8 @@ function SortableSection({
           <EditableTitle
             value={section.title}
             onSave={onRenameSection}
-            ariaLabel="Edit section title"
+            ariaLabel={t.importCourse.editSectionTitle}
+            title={t.importCourse.doubleClickEdit}
             className="flex-1 truncate text-left font-sans text-sm font-medium text-foreground"
             inputClassName="w-full min-w-0 flex-1 bg-transparent font-sans text-sm font-medium text-foreground focus:outline-none"
           />
@@ -933,6 +944,7 @@ function SortableLesson({
   index: number;
   onRename: (newTitle: string) => void;
 }) {
+  const { t } = useI18n();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id });
 
@@ -954,7 +966,7 @@ function SortableLesson({
       <button
         type="button"
         {...listeners}
-        aria-label="Drag to reorder lesson"
+        aria-label={t.importCourse.dragLesson}
         className="flex size-5 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/40 transition-colors hover:text-foreground active:cursor-grabbing"
       >
         <DotsSixVertical className="size-4" weight="bold" />
@@ -966,7 +978,8 @@ function SortableLesson({
         <EditableTitle
           value={lesson.title}
           onSave={onRename}
-          ariaLabel="Edit lesson title"
+          ariaLabel={t.importCourse.editLessonTitle}
+          title={t.importCourse.doubleClickEdit}
           className="min-w-0 flex-1 truncate font-sans text-xs text-foreground"
           inputClassName="w-full min-w-0 flex-1 bg-transparent font-sans text-xs text-foreground focus:outline-none"
         />
@@ -984,12 +997,14 @@ function EditableTitle({
   value,
   onSave,
   ariaLabel,
+  title,
   className,
   inputClassName,
 }: {
   value: string;
   onSave: (newValue: string) => void;
   ariaLabel: string;
+  title: string;
   className?: string;
   inputClassName?: string;
 }) {
@@ -1055,7 +1070,7 @@ function EditableTitle({
       <span
         onDoubleClick={startEditing}
         className={className}
-        title="Double-click to edit"
+        title={title}
       >
         {value}
       </span>

@@ -1,9 +1,10 @@
-use rusqlite::{params, Connection, Result as SqlResult};
+use rusqlite::{params, Connection, OptionalExtension, Result as SqlResult};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use crate::parser::ParsedCourse;
+use crate::parser::{normalize_language, ParsedCourse};
 
 // --- Database state ---
 
@@ -237,9 +238,8 @@ pub fn init_db(app_data_dir: &Path) -> SqlResult<Connection> {
     )?;
 
     // Migrations for existing databases
-    let _ = conn.execute_batch(
-        "ALTER TABLE lessons ADD COLUMN last_position REAL NOT NULL DEFAULT 0;",
-    );
+    let _ =
+        conn.execute_batch("ALTER TABLE lessons ADD COLUMN last_position REAL NOT NULL DEFAULT 0;");
 
     // Bookmarks table migration for existing databases
     let _ = conn.execute_batch(
@@ -251,9 +251,7 @@ pub fn init_db(app_data_dir: &Path) -> SqlResult<Connection> {
     );
 
     // Activity log table migration for existing databases
-    let _ = conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS activity_log (date TEXT PRIMARY KEY);",
-    );
+    let _ = conn.execute_batch("CREATE TABLE IF NOT EXISTS activity_log (date TEXT PRIMARY KEY);");
 
     // Seed activity_log from existing last_watched dates
     let _ = conn.execute_batch(
@@ -431,9 +429,8 @@ pub fn get_course_detail(conn: &Connection, course_id: i64) -> SqlResult<Option<
     }
 
     // Get sections
-    let mut section_stmt = conn.prepare(
-        "SELECT id, title FROM sections WHERE course_id = ?1 ORDER BY sort_order",
-    )?;
+    let mut section_stmt =
+        conn.prepare("SELECT id, title FROM sections WHERE course_id = ?1 ORDER BY sort_order")?;
 
     let mut lesson_stmt = conn.prepare(
         "SELECT l.id, l.title, l.video_path, l.duration, l.completed, l.is_last_watched, l.last_position,
@@ -878,11 +875,10 @@ pub fn toggle_favorite(conn: &Connection, lesson_id: i64) -> SqlResult<bool> {
 // --- Subtitles ---
 
 pub fn get_lesson_subtitles(conn: &Connection, lesson_id: i64) -> SqlResult<Vec<Subtitle>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, lesson_id, path, language FROM subtitles WHERE lesson_id = ?1",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT id, lesson_id, path, language FROM subtitles WHERE lesson_id = ?1")?;
 
-    let subs = stmt
+    let mut subs = stmt
         .query_map(params![lesson_id], |row| {
             Ok(Subtitle {
                 id: row.get(0)?,
@@ -893,7 +889,210 @@ pub fn get_lesson_subtitles(conn: &Connection, lesson_id: i64) -> SqlResult<Vec<
         })?
         .collect::<SqlResult<Vec<_>>>()?;
 
+    add_discovered_subtitles(conn, lesson_id, &mut subs)?;
+
     Ok(subs)
+}
+
+fn add_discovered_subtitles(
+    conn: &Connection,
+    lesson_id: i64,
+    subs: &mut Vec<Subtitle>,
+) -> SqlResult<()> {
+    let video_path: Option<String> = conn
+        .query_row(
+            "SELECT video_path FROM lessons WHERE id = ?1",
+            params![lesson_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+
+    let Some(video_path) = video_path else {
+        return Ok(());
+    };
+
+    let video_path = PathBuf::from(video_path);
+    let Some(video_stem) = video_path.file_stem().and_then(|s| s.to_str()) else {
+        return Ok(());
+    };
+    let Some(video_dir) = video_path.parent() else {
+        return Ok(());
+    };
+
+    let mut existing_paths: std::collections::HashSet<String> = subs
+        .iter()
+        .map(|sub| normalize_path_for_compare(&sub.path))
+        .collect();
+
+    for dir in subtitle_search_dirs(video_dir) {
+        let Ok(entries) = fs::read_dir(dir) else {
+            continue;
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() || !is_supported_subtitle_path(&path) {
+                continue;
+            }
+
+            let Some(file_name) = path.file_name().and_then(|s| s.to_str()) else {
+                continue;
+            };
+
+            if subtitle_base_name(file_name).to_lowercase() != video_stem.to_lowercase() {
+                continue;
+            }
+
+            let path_str = path.to_string_lossy().to_string();
+            let compare_path = normalize_path_for_compare(&path_str);
+            if !existing_paths.insert(compare_path) {
+                continue;
+            }
+
+            subs.push(Subtitle {
+                id: -((subs.len() as i64) + 1),
+                lesson_id,
+                path: path_str,
+                language: extract_subtitle_language(file_name, video_stem),
+            });
+        }
+    }
+
+    Ok(())
+}
+
+fn subtitle_search_dirs(video_dir: &Path) -> Vec<PathBuf> {
+    let mut dirs = vec![video_dir.to_path_buf()];
+    for name in [
+        "Subs",
+        "Subtitles",
+        "Subtitle",
+        "Captions",
+        "subs",
+        "subtitles",
+        "captions",
+    ] {
+        dirs.push(video_dir.join(name));
+    }
+    dirs
+}
+
+fn normalize_path_for_compare(path: &str) -> String {
+    path.replace('\\', "/").to_lowercase()
+}
+
+fn is_supported_subtitle_path(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase()
+            .as_str(),
+        "srt" | "vtt" | "ass" | "ssa" | "sub"
+    )
+}
+
+fn subtitle_base_name(filename: &str) -> String {
+    let mut name = filename.to_string();
+    for ext in ["srt", "vtt", "ass", "ssa", "sub"] {
+        let suffix = format!(".{}", ext);
+        if name.to_lowercase().ends_with(&suffix) {
+            name = name[..name.len() - suffix.len()].to_string();
+            break;
+        }
+    }
+
+    if let Some((base, lang_part)) = name.rsplit_once('.') {
+        if is_subtitle_language_suffix(lang_part) && !base.is_empty() {
+            return base.to_string();
+        }
+    }
+
+    name
+}
+
+fn extract_subtitle_language(subtitle_name: &str, video_base: &str) -> Option<String> {
+    let mut name = subtitle_name.to_string();
+    for ext in ["srt", "vtt", "ass", "ssa", "sub"] {
+        let suffix = format!(".{}", ext);
+        if name.to_lowercase().ends_with(&suffix) {
+            name = name[..name.len() - suffix.len()].to_string();
+            break;
+        }
+    }
+
+    if name.len() > video_base.len() && name.to_lowercase().starts_with(&video_base.to_lowercase())
+    {
+        let remainder = name.get(video_base.len()..).unwrap_or("");
+        let lang = remainder
+            .trim()
+            .trim_start_matches(|c| c == '.' || c == '_' || c == '-')
+            .trim();
+        if !lang.is_empty() {
+            return Some(normalize_language(lang));
+        }
+    }
+
+    None
+}
+
+fn is_subtitle_language_suffix(suffix: &str) -> bool {
+    let normalized = suffix.trim().to_lowercase().replace('_', "-");
+    if normalized.len() <= 3 && normalized.chars().all(|c| c.is_ascii_alphabetic()) {
+        return true;
+    }
+
+    if matches!(
+        normalized.as_str(),
+        "english"
+            | "french"
+            | "spanish"
+            | "german"
+            | "japanese"
+            | "chinese"
+            | "korean"
+            | "portuguese"
+            | "italian"
+            | "russian"
+            | "arabic"
+            | "hindi"
+            | "dutch"
+            | "swedish"
+            | "norwegian"
+            | "danish"
+            | "finnish"
+            | "polish"
+            | "turkish"
+            | "thai"
+            | "vietnamese"
+            | "indonesian"
+            | "czech"
+            | "hungarian"
+            | "romanian"
+            | "greek"
+            | "hebrew"
+            | "brazilian"
+    ) {
+        return true;
+    }
+
+    let mut parts = normalized.split('-');
+    let Some(language) = parts.next() else {
+        return false;
+    };
+    if !(2..=3).contains(&language.len()) || !language.chars().all(|c| c.is_ascii_alphabetic()) {
+        return false;
+    }
+
+    let mut has_region = false;
+    for part in parts {
+        has_region = true;
+        if !(2..=8).contains(&part.len()) || !part.chars().all(|c| c.is_ascii_alphanumeric()) {
+            return false;
+        }
+    }
+
+    has_region
 }
 
 // --- Activity & Stats ---
@@ -967,9 +1166,7 @@ pub fn get_dashboard_stats(conn: &Connection) -> SqlResult<DashboardStats> {
     let mut streak: i64 = 0;
 
     // Get all activity dates in descending order
-    let mut stmt = conn.prepare(
-        "SELECT date FROM activity_log ORDER BY date DESC",
-    )?;
+    let mut stmt = conn.prepare("SELECT date FROM activity_log ORDER BY date DESC")?;
     let dates: Vec<String> = stmt
         .query_map([], |row| row.get(0))?
         .filter_map(|r| r.ok())
@@ -994,9 +1191,8 @@ pub fn get_dashboard_stats(conn: &Connection) -> SqlResult<DashboardStats> {
     // Week activity: fetch all active dates in the last 7 days in one query
     let today_days = date_to_days(today);
     let week_start = days_to_date(today_days - 6);
-    let mut week_stmt = conn.prepare(
-        "SELECT date FROM activity_log WHERE date >= ?1 AND date <= ?2",
-    )?;
+    let mut week_stmt =
+        conn.prepare("SELECT date FROM activity_log WHERE date >= ?1 AND date <= ?2")?;
     let active_dates: std::collections::HashSet<String> = week_stmt
         .query_map(params![week_start, today], |row| row.get(0))?
         .filter_map(|r| r.ok())
@@ -1093,9 +1289,7 @@ pub fn get_progress_data(conn: &Connection) -> SqlResult<ProgressData> {
     // Activity history (all dates)
     let mut stmt = conn.prepare("SELECT date FROM activity_log ORDER BY date")?;
     let activity_days: Vec<ActivityDay> = stmt
-        .query_map([], |row| {
-            Ok(ActivityDay { date: row.get(0)? })
-        })?
+        .query_map([], |row| Ok(ActivityDay { date: row.get(0)? }))?
         .collect::<SqlResult<Vec<_>>>()?;
 
     // Category breakdown — single query using GROUP BY
@@ -1111,7 +1305,9 @@ pub fn get_progress_data(conn: &Connection) -> SqlResult<ProgressData> {
          ORDER BY COUNT(DISTINCT c.id) DESC",
     )?;
     let cat_rows: Vec<(String, i64, i64, i64)> = cat_stmt
-        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))?
+        .query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })?
         .collect::<SqlResult<Vec<_>>>()?;
 
     // Count completed courses per category in one additional query
@@ -1122,7 +1318,9 @@ pub fn get_progress_data(conn: &Connection) -> SqlResult<ProgressData> {
          GROUP BY c.category",
     )?;
     let completed_per_cat: std::collections::HashMap<String, i64> = comp_stmt
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -1362,18 +1560,33 @@ pub struct LibraryStats {
 }
 
 pub fn get_library_stats(conn: &Connection, db_path: &str) -> SqlResult<LibraryStats> {
-    let (total_courses, total_sections, total_lessons, total_notes, total_bookmarks, total_favorites): (i64, i64, i64, i64, i64, i64) =
-        conn.query_row(
-            "SELECT
+    let (
+        total_courses,
+        total_sections,
+        total_lessons,
+        total_notes,
+        total_bookmarks,
+        total_favorites,
+    ): (i64, i64, i64, i64, i64, i64) = conn.query_row(
+        "SELECT
                 (SELECT COUNT(*) FROM courses),
                 (SELECT COUNT(*) FROM sections),
                 (SELECT COUNT(*) FROM lessons),
                 (SELECT COUNT(*) FROM notes),
                 (SELECT COUNT(*) FROM bookmarks),
                 (SELECT COUNT(*) FROM favorites)",
-            [],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
-        )?;
+        [],
+        |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+            ))
+        },
+    )?;
     Ok(LibraryStats {
         total_courses,
         total_sections,

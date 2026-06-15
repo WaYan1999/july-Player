@@ -25,13 +25,14 @@ import { ProgressBar } from "@/components/ui/ProgressBar";
 import type { ProgressData, CourseProgress } from "@/types";
 import { getProgressData } from "@/lib/store";
 import { EASE_OUT } from "@/lib/constants";
+import { useI18n } from "@/hooks/useI18n";
+import type { AppTranslations } from "@/lib/i18n";
 import level1 from "@/assets/icons/level_1.svg";
 import level2 from "@/assets/icons/level_2.svg";
 import level3 from "@/assets/icons/level_3.svg";
 import level4 from "@/assets/icons/level_4.svg";
 
 const LEVEL_ICONS: Record<number, string> = { 1: level1, 2: level2, 3: level3, 4: level4 };
-const LEVEL_NAMES: Record<number, string> = { 1: "Beginner", 2: "Explorer", 3: "Achiever", 4: "Master" };
 const LEVEL_THRESHOLDS = [0, 5, 20, 50];
 
 const CHART_COLORS = [
@@ -42,20 +43,21 @@ const CHART_COLORS = [
   "var(--chart-5)",
 ];
 
-const CATEGORY_LABELS: Record<string, string> = {
-  frontend: "Frontend",
-  backend: "Backend",
-  devops: "DevOps",
-  database: "Database",
-  design: "Design",
-  other: "Other",
-};
-
 function formatMins(mins: number): string {
   if (mins < 60) return `${mins}m`;
   const h = Math.floor(mins / 60);
   const m = mins % 60;
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+function getLevelName(level: number, t: AppTranslations): string {
+  const names: Record<number, string> = {
+    1: t.levels.beginner,
+    2: t.levels.explorer,
+    3: t.levels.achiever,
+    4: t.levels.master,
+  };
+  return names[level] ?? names[1];
 }
 
 interface SectionProps {
@@ -113,6 +115,7 @@ function StatPill({ label, value, sub, icon }: StatPillProps) {
 }
 
 function ActivityCalendar({ activityDates }: { activityDates: Set<string> }) {
+  const { t, formatMessage } = useI18n();
   const days = useMemo(() => {
     const result: { date: string; active: boolean; dayOfWeek: number }[] = [];
     const today = new Date();
@@ -159,9 +162,12 @@ function ActivityCalendar({ activityDates }: { activityDates: Set<string> }) {
   return (
     <div>
       <div className="mb-3 flex items-baseline justify-between">
-        <span className="font-sans text-xs text-muted-foreground">Last 6 months</span>
+        <span className="font-sans text-xs text-muted-foreground">{t.progressPage.lastSixMonths}</span>
         <span className="font-mono text-xs font-medium text-muted-foreground">
-          {activeDayCount} active {activeDayCount === 1 ? "day" : "days"}
+          {formatMessage(t.progressPage.activeDays, {
+            count: activeDayCount,
+            label: activeDayCount === 1 ? t.common.day : t.common.days,
+          })}
         </span>
       </div>
       <div className="flex w-full gap-0.5">
@@ -255,6 +261,7 @@ interface ProgressProps {
 }
 
 export function Progress({ className }: ProgressProps) {
+  const { t, formatMessage } = useI18n();
   const [data, setData] = useState<ProgressData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -277,14 +284,22 @@ export function Progress({ className }: ProgressProps) {
 
   const categoryChartData = useMemo(() => {
     if (!data) return [];
+    const categoryLabels: Record<string, string> = {
+      frontend: t.categories.frontend,
+      backend: t.categories.backend,
+      devops: t.categories.devops,
+      database: t.categories.database,
+      design: t.categories.design,
+      other: t.categories.other,
+    };
     return data.categories.map((c, i) => ({
-      name: CATEGORY_LABELS[c.category] ?? c.category,
+      name: categoryLabels[c.category] ?? c.category,
       courses: c.count,
       lessons: c.totalLessons,
       completed: c.completedLessons,
       fill: CHART_COLORS[i % CHART_COLORS.length],
     }));
-  }, [data]);
+  }, [data, t]);
 
   const courseBarData = useMemo(() => {
     if (!data) return [];
@@ -325,10 +340,10 @@ export function Progress({ className }: ProgressProps) {
         style={{ animation: `card-in 350ms ${EASE_OUT} both` }}
       >
         <h2 className="font-heading text-2xl font-bold text-foreground">
-          Progress
+          {t.progressPage.title}
         </h2>
         <p className="mt-1 font-sans text-sm text-muted-foreground">
-          Your learning journey at a glance
+          {t.progressPage.subtitle}
         </p>
       </div>
 
@@ -348,23 +363,23 @@ export function Progress({ className }: ProgressProps) {
             <div>
               <div className="flex items-baseline gap-2">
                 <span className="font-mono text-2xl font-bold text-foreground">
-                  Level {data.stats.userLevel}
+                  {t.levels.level} {data.stats.userLevel}
                 </span>
                 <span className="font-sans text-sm font-medium text-primary/70">
-                  {LEVEL_NAMES[data.stats.userLevel] ?? "Beginner"}
+                  {getLevelName(data.stats.userLevel, t)}
                 </span>
               </div>
               {data.stats.lessonsToNextLevel > 0 ? (
                 <p className="mt-0.5 font-sans text-xs text-muted-foreground">
-                  <span className="font-mono font-medium text-primary">{data.stats.lessonsToNextLevel}</span>
-                  {" "}more {data.stats.lessonsToNextLevel === 1 ? "lesson" : "lessons"} to{" "}
-                  <span className="font-medium text-foreground">
-                    {LEVEL_NAMES[data.stats.userLevel + 1]}
-                  </span>
+                  {formatMessage(t.levels.moreTo, {
+                    count: data.stats.lessonsToNextLevel,
+                    lessonLabel: data.stats.lessonsToNextLevel === 1 ? t.common.lesson : t.common.lessons,
+                    level: getLevelName(data.stats.userLevel + 1, t),
+                  })}
                 </p>
               ) : (
                 <p className="mt-0.5 font-sans text-xs text-muted-foreground">
-                  Highest rank achieved
+                  {t.levels.highestRank}
                 </p>
               )}
             </div>
@@ -435,7 +450,7 @@ export function Progress({ className }: ProgressProps) {
                         "font-sans text-[9px]",
                         isCurrent ? "text-primary/70" : "text-muted-foreground/30",
                       )}>
-                        {LEVEL_NAMES[lv]}
+                        {getLevelName(lv, t)}
                       </div>
                     </div>
                   </div>
@@ -454,24 +469,24 @@ export function Progress({ className }: ProgressProps) {
         <div className="relative grid grid-cols-2 gap-6 p-5 lg:grid-cols-4">
           <StatPill
             icon={<Fire className="size-5 text-orange-400" weight="fill" />}
-            label="Current streak"
+            label={t.progressPage.currentStreak}
             value={data.stats.currentStreak}
-            sub={data.stats.currentStreak === 1 ? "day" : "days"}
+            sub={data.stats.currentStreak === 1 ? t.common.day : t.common.days}
           />
           <StatPill
             icon={<Trophy className="size-5 text-primary" weight="fill" />}
-            label="Longest streak"
+            label={t.progressPage.longestStreak}
             value={data.longestStreak}
-            sub={data.longestStreak === 1 ? "day" : "days"}
+            sub={data.longestStreak === 1 ? t.common.day : t.common.days}
           />
           <StatPill
             icon={<Clock className="size-5 text-info" weight="fill" />}
-            label="Total watch time"
+            label={t.progressPage.totalWatchTime}
             value={formatMins(data.stats.totalWatchTimeMins)}
           />
           <StatPill
             icon={<TrendUp className="size-5 text-primary" weight="fill" />}
-            label="Overall progress"
+            label={t.progressPage.overallProgress}
             value={`${overallPct}%`}
           />
         </div>
@@ -479,7 +494,7 @@ export function Progress({ className }: ProgressProps) {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
         <Section
-          title="Activity"
+          title={t.progressPage.activity}
           icon={<CalendarBlank className="size-4 text-muted-foreground" />}
           index={2}
           className="lg:col-span-2"
@@ -488,7 +503,7 @@ export function Progress({ className }: ProgressProps) {
         </Section>
 
         <Section
-          title="Categories"
+          title={t.progressPage.categories}
           icon={<BookOpen className="size-4 text-info" weight="fill" />}
           index={3}
         >
@@ -528,18 +543,18 @@ export function Progress({ className }: ProgressProps) {
               </div>
             </div>
           ) : (
-            <p className="font-sans text-xs text-muted-foreground">No courses yet.</p>
+            <p className="font-sans text-xs text-muted-foreground">{t.progressPage.noCoursesYet}</p>
           )}
         </Section>
 
         <Section
-          title="Overview"
+          title={t.progressPage.overview}
           icon={<BookOpen className="size-4 text-muted-foreground" />}
           index={4}
         >
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
-              <span className="font-sans text-xs text-muted-foreground">Courses completed</span>
+              <span className="font-sans text-xs text-muted-foreground">{t.progressPage.coursesCompleted}</span>
               <span className="font-mono text-xs font-medium text-foreground">
                 {data.stats.completedCourses}
                 <span className="text-muted-foreground/50"> / {data.stats.totalCourses}</span>
@@ -550,7 +565,7 @@ export function Progress({ className }: ProgressProps) {
             />
 
             <div className="flex items-center justify-between">
-              <span className="font-sans text-xs text-muted-foreground">Lessons completed</span>
+              <span className="font-sans text-xs text-muted-foreground">{t.progressPage.lessonsCompleted}</span>
               <span className="font-mono text-xs font-medium text-foreground">
                 {data.stats.completedLessons}
                 <span className="text-muted-foreground/50"> / {data.stats.totalLessons}</span>
@@ -559,13 +574,13 @@ export function Progress({ className }: ProgressProps) {
             <ProgressBar value={overallPct} />
 
             <div className="mt-2 flex items-center justify-between">
-              <span className="font-sans text-xs text-muted-foreground">In progress</span>
+              <span className="font-sans text-xs text-muted-foreground">{t.progressPage.inProgress}</span>
               <span className="font-mono text-xs font-medium text-info">
                 {data.stats.inProgressCourses}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="font-sans text-xs text-muted-foreground">Notes written</span>
+              <span className="font-sans text-xs text-muted-foreground">{t.progressPage.notesWritten}</span>
               <span className="font-mono text-xs font-medium text-foreground">
                 {data.stats.totalNotes}
               </span>
@@ -574,7 +589,7 @@ export function Progress({ className }: ProgressProps) {
         </Section>
 
         <Section
-          title="Course Progress"
+          title={t.progressPage.courseProgress}
           icon={<CheckCircle className="size-4 text-primary" weight="fill" />}
           index={5}
           className="lg:col-span-2"
@@ -582,13 +597,13 @@ export function Progress({ className }: ProgressProps) {
           {data.courses.length > 0 ? (
             <CourseProgressList courses={data.courses} />
           ) : (
-            <p className="font-sans text-xs text-muted-foreground">No courses yet.</p>
+            <p className="font-sans text-xs text-muted-foreground">{t.progressPage.noCoursesYet}</p>
           )}
         </Section>
 
         {courseBarData.length > 0 && (
           <Section
-            title="Completion by Course"
+            title={t.progressPage.completionByCourse}
             icon={<TrendUp className="size-4 text-primary" weight="fill" />}
             index={6}
             className="lg:col-span-2"

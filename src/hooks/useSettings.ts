@@ -1,8 +1,10 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { getAllSettings, setSetting } from "@/lib/store";
 import type { AppSettings } from "@/types";
+import { isAppLanguage } from "@/lib/i18n";
 
 const DEFAULTS: AppSettings = {
+  language: "en",
   autoplay_next: true,
   resume_position: true,
   default_speed: 1,
@@ -13,6 +15,7 @@ const DEFAULTS: AppSettings = {
 
 function parse(raw: Record<string, string>): AppSettings {
   return {
+    language: isAppLanguage(raw.language) ? raw.language : "en",
     autoplay_next: raw.autoplay_next !== "false",
     resume_position: raw.resume_position !== "false",
     default_speed: Number(raw.default_speed) || 1,

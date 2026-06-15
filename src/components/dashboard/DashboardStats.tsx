@@ -8,6 +8,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { DashboardStats } from "@/types";
 import { EASE_OUT } from "@/lib/constants";
+import { useI18n } from "@/hooks/useI18n";
 import level1 from "@/assets/icons/level_1.svg";
 import level2 from "@/assets/icons/level_2.svg";
 import level3 from "@/assets/icons/level_3.svg";
@@ -18,13 +19,6 @@ const LEVEL_ICONS: Record<number, string> = {
   2: level2,
   3: level3,
   4: level4,
-};
-
-const LEVEL_NAMES: Record<number, string> = {
-  1: "Beginner",
-  2: "Explorer",
-  3: "Achiever",
-  4: "Master",
 };
 
 function formatWatchTime(mins: number): string {
@@ -90,6 +84,7 @@ interface WeekActivityProps {
 
 function WeekActivity({ activity, index }: WeekActivityProps) {
   const labels = getWeekdayLabels();
+  const { t } = useI18n();
 
   return (
     <div
@@ -106,7 +101,7 @@ function WeekActivity({ activity, index }: WeekActivityProps) {
         </div>
         <div className="min-w-0">
           <div className="mb-1 font-sans text-[11px] text-muted-foreground">
-            This week
+            {t.stats.thisWeek}
           </div>
           <div className="flex items-center gap-1.5">
             {activity.map((active, i) => (
@@ -147,8 +142,15 @@ function getLevelProgress(level: number, lessonsToNext: number): number {
 }
 
 function LevelCard({ level, lessonsToNext, index }: LevelCardProps) {
+  const { t } = useI18n();
   const icon = LEVEL_ICONS[level] ?? LEVEL_ICONS[1];
-  const name = LEVEL_NAMES[level] ?? LEVEL_NAMES[1];
+  const levelNames: Record<number, string> = {
+    1: t.levels.beginner,
+    2: t.levels.explorer,
+    3: t.levels.achiever,
+    4: t.levels.master,
+  };
+  const name = levelNames[level] ?? levelNames[1];
   const progress = getLevelProgress(level, lessonsToNext);
 
   return (
@@ -184,7 +186,7 @@ function LevelCard({ level, lessonsToNext, index }: LevelCardProps) {
             </div>
             {lessonsToNext > 0 && (
               <span className="shrink-0 font-mono text-[9px] text-muted-foreground/50">
-                {lessonsToNext} left
+                {lessonsToNext} {t.common.left}
               </span>
             )}
           </div>
@@ -200,6 +202,7 @@ interface DashboardStatsBarProps {
 }
 
 export function DashboardStatsBar({ stats, className }: DashboardStatsBarProps) {
+  const { t } = useI18n();
   return (
     <div className={cn("grid grid-cols-2 gap-3 lg:grid-cols-6", className)}>
       <LevelCard
@@ -209,27 +212,27 @@ export function DashboardStatsBar({ stats, className }: DashboardStatsBarProps) 
       />
       <StatCard
         icon={<Fire className="size-4 text-orange-400" weight="fill" />}
-        label="Day streak"
+        label={t.stats.dayStreak}
         value={stats.currentStreak}
         index={1}
       />
       <StatCard
         icon={<CheckCircle className="size-4 text-primary" weight="fill" />}
-        label="Lessons done"
+        label={t.stats.lessonsDone}
         value={stats.completedLessons}
         sub={`/ ${stats.totalLessons}`}
         index={2}
       />
       <StatCard
         icon={<GraduationCap className="size-4 text-info" weight="fill" />}
-        label="Courses done"
+        label={t.stats.coursesDone}
         value={stats.completedCourses}
         sub={`/ ${stats.totalCourses}`}
         index={3}
       />
       <StatCard
         icon={<Clock className="size-4 text-muted-foreground" />}
-        label="Watch time"
+        label={t.stats.watchTime}
         value={formatWatchTime(stats.totalWatchTimeMins)}
         index={4}
       />
