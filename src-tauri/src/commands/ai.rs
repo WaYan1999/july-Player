@@ -3,11 +3,13 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::Command,
+    sync::Mutex,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
+use url::Url;
 
 use crate::db::{self, DbState};
 use crate::parser::find_bundled_bin;
@@ -16,8 +18,11 @@ const DEEPSEEK_CHAT_COMPLETIONS_URL: &str = "https://api.deepseek.com/chat/compl
 const DEEPSEEK_MODELS_URL: &str = "https://api.deepseek.com/models";
 const DEFAULT_DEEPSEEK_MODEL: &str = "deepseek-v4-flash";
 const MAX_TRANSLATION_INPUT_CHARS: usize = 4_000;
+const MAX_LIVE_TRANSLATION_INPUT_CHARS: usize = 700;
 const MAX_PET_PROMPT_CHARS: usize = 1_200;
 const MAX_AUDIO_SECONDS: f64 = 8.0;
+const MAX_LIVE_AUDIO_SECONDS: f64 = 3.0;
+static ASR_RUNTIME_CACHE: Mutex<Option<AsrRuntime>> = Mutex::new(None);
 
 #[derive(Debug, Deserialize)]
 struct ChatMessage {
@@ -54,6 +59,12 @@ struct ApiError {
     message: Option<String>,
 }
 
+#[derive(Clone, Copy)]
+enum TranslationMode {
+    Standard,
+    LiveSubtitle,
+}
+
 #[derive(Debug, Serialize)]
 struct RequestMessage<'a> {
     role: &'a str,
@@ -65,6 +76,14 @@ struct RequestMessage<'a> {
 pub struct AiAudioTranslation {
     pub transcript: String,
     pub translation: String,
+    pub start_seconds: f64,
+    pub duration_seconds: f64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiAudioTranscript {
+    pub transcript: String,
     pub start_seconds: f64,
     pub duration_seconds: f64,
 }
@@ -89,7 +108,7 @@ pub async fn get_ai_models(
         .map_err(|e| format!("Could not create model list client: {e}"))?;
 
     let response = client
-        .get(deepseek_models_endpoint(&settings))
+        .get(deepseek_models_endpoint(&settings)?)
         .bearer_auth(bearer_token)
         .send()
         .await
@@ -185,7 +204,7 @@ pub async fn translate_with_deepseek(
         .map_err(|e| format!("Could not create DeepSeek client: {e}"))?;
 
     let response = client
-        .post(deepseek_endpoint(&settings))
+        .post(deepseek_endpoint(&settings)?)
         .bearer_auth(bearer_token)
         .json(&body)
         .send()
@@ -241,8 +260,13 @@ pub async fn translate_audio_segment(
         });
     }
 
-    let translation =
-        translate_text_with_settings(&settings, &transcript, &target_language).await?;
+    let translation = translate_text_with_settings(
+        &settings,
+        &transcript,
+        &target_language,
+        TranslationMode::Standard,
+    )
+    .await?;
 
     Ok(AiAudioTranslation {
         transcript,
@@ -250,6 +274,41 @@ pub async fn translate_audio_segment(
         start_seconds,
         duration_seconds,
     })
+}
+
+#[tauri::command]
+pub async fn transcribe_audio_segment_only(
+    app: tauri::AppHandle,
+    video_path: String,
+    start_seconds: f64,
+    duration_seconds: f64,
+) -> Result<AiAudioTranscript, String> {
+    let start_seconds = start_seconds.max(0.0);
+    let duration_seconds = duration_seconds.clamp(0.8, MAX_LIVE_AUDIO_SECONDS);
+    let transcript = transcribe_audio_segment(&app, &video_path, start_seconds, duration_seconds)
+        .await?;
+
+    Ok(AiAudioTranscript {
+        transcript,
+        start_seconds,
+        duration_seconds,
+    })
+}
+
+#[tauri::command]
+pub async fn translate_live_subtitle_text(
+    state: tauri::State<'_, DbState>,
+    text: String,
+    target_language: String,
+) -> Result<String, String> {
+    let settings = load_settings(&state)?;
+    translate_text_with_settings(
+        &settings,
+        &text,
+        &target_language,
+        TranslationMode::LiveSubtitle,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -302,7 +361,7 @@ pub async fn ask_pet_ai(
         .map_err(|e| format!("Could not create pet AI client: {e}"))?;
 
     let response = client
-        .post(deepseek_endpoint(&settings))
+        .post(deepseek_endpoint(&settings)?)
         .bearer_auth(bearer_token)
         .json(&body)
         .send()
@@ -360,12 +419,34 @@ async fn transcribe_audio_segment(
     Ok(transcript)
 }
 
+#[derive(Clone)]
 struct AsrRuntime {
     whisper_bin: PathBuf,
     model_path: PathBuf,
 }
 
 fn prepare_asr_runtime(app: &tauri::AppHandle) -> Result<AsrRuntime, String> {
+    {
+        let cache = ASR_RUNTIME_CACHE
+            .lock()
+            .map_err(|e| format!("Could not read ASR runtime cache: {e}"))?;
+        if let Some(runtime) = cache.as_ref() {
+            if runtime.whisper_bin.is_file() && runtime.model_path.is_file() {
+                return Ok(runtime.clone());
+            }
+        }
+    }
+
+    let runtime = stage_asr_runtime(app)?;
+    let mut cache = ASR_RUNTIME_CACHE
+        .lock()
+        .map_err(|e| format!("Could not update ASR runtime cache: {e}"))?;
+    *cache = Some(runtime.clone());
+
+    Ok(runtime)
+}
+
+fn stage_asr_runtime(app: &tauri::AppHandle) -> Result<AsrRuntime, String> {
     let source_dir = resolve_asr_resource_dir(app)?;
     let runtime_dir = app
         .path()
@@ -619,11 +700,16 @@ async fn translate_text_with_settings(
     settings: &HashMap<String, String>,
     text: &str,
     target_language: &str,
+    mode: TranslationMode,
 ) -> Result<String, String> {
+    let max_input_chars = match mode {
+        TranslationMode::Standard => MAX_TRANSLATION_INPUT_CHARS,
+        TranslationMode::LiveSubtitle => MAX_LIVE_TRANSLATION_INPUT_CHARS,
+    };
     let text = text
         .trim()
         .chars()
-        .take(MAX_TRANSLATION_INPUT_CHARS)
+        .take(max_input_chars)
         .collect::<String>();
     if text.is_empty() {
         return Ok(String::new());
@@ -638,31 +724,48 @@ async fn translate_text_with_settings(
         .unwrap_or(DEFAULT_DEEPSEEK_MODEL);
 
     let target = language_name(target_language);
+    let (system_prompt, user_prompt, temperature, max_tokens, timeout_seconds) = match mode {
+        TranslationMode::Standard => (
+            "You are a live subtitle translation engine. Translate only the user's speech transcript. Preserve short subtitle-like phrasing. Do not add explanations, notes, quotes, or markdown.",
+            format!("Translate this speech transcript into {target}:\n\n{text}"),
+            0.2,
+            600,
+            30,
+        ),
+        TranslationMode::LiveSubtitle => (
+            "You are a real-time subtitle translator. Translate only the user's short ASR transcript. Return one compact subtitle line. No explanations, no notes, no quotes, no markdown.",
+            format!("Translate this short live caption into {target}:\n\n{text}"),
+            0.0,
+            160,
+            12,
+        ),
+    };
+
     let body = serde_json::json!({
         "model": model,
         "messages": [
             RequestMessage {
                 role: "system",
-                content: "You are a live subtitle translation engine. Translate only the user's speech transcript. Preserve short subtitle-like phrasing. Do not add explanations, notes, quotes, or markdown.".to_string(),
+                content: system_prompt.to_string(),
             },
             RequestMessage {
                 role: "user",
-                content: format!("Translate this speech transcript into {target}:\n\n{text}"),
+                content: user_prompt,
             }
         ],
         "thinking": { "type": "disabled" },
-        "temperature": 0.2,
-        "max_tokens": 600,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
         "stream": false
     });
 
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
+        .timeout(Duration::from_secs(timeout_seconds))
         .build()
         .map_err(|e| format!("Could not create DeepSeek client: {e}"))?;
 
     let response = client
-        .post(deepseek_endpoint(settings))
+        .post(deepseek_endpoint(settings)?)
         .bearer_auth(bearer_token)
         .json(&body)
         .send()
@@ -717,44 +820,46 @@ fn deepseek_bearer_token(settings: &HashMap<String, String>) -> Result<&str, Str
         .ok_or_else(|| "DeepSeek API key or proxy token is not configured".to_string())
 }
 
-fn deepseek_endpoint(settings: &HashMap<String, String>) -> String {
+fn deepseek_endpoint(settings: &HashMap<String, String>) -> Result<String, String> {
     let Some(proxy_url) = settings
         .get("ai_deepseek_proxy_url")
         .map(|value| value.trim().trim_end_matches('/'))
         .filter(|value| !value.is_empty())
     else {
-        return DEEPSEEK_CHAT_COMPLETIONS_URL.to_string();
+        return Ok(DEEPSEEK_CHAT_COMPLETIONS_URL.to_string());
     };
+    validate_api_url(proxy_url)?;
 
     if proxy_url.ends_with("/chat/completions") {
-        return proxy_url.to_string();
+        return Ok(proxy_url.to_string());
     }
     if proxy_url.ends_with("/v1") {
-        return format!("{proxy_url}/chat/completions");
+        return Ok(format!("{proxy_url}/chat/completions"));
     }
-    format!("{proxy_url}/v1/chat/completions")
+    Ok(format!("{proxy_url}/v1/chat/completions"))
 }
 
-fn deepseek_models_endpoint(settings: &HashMap<String, String>) -> String {
+fn deepseek_models_endpoint(settings: &HashMap<String, String>) -> Result<String, String> {
     let Some(api_url) = api_base_url(settings) else {
-        return DEEPSEEK_MODELS_URL.to_string();
+        return Ok(DEEPSEEK_MODELS_URL.to_string());
     };
+    validate_api_url(api_url)?;
 
     if api_url.ends_with("/models") {
-        return api_url.to_string();
+        return Ok(api_url.to_string());
     }
     if api_url.ends_with("/chat/completions") {
-        return format!(
+        return Ok(format!(
             "{}/models",
             api_url
                 .trim_end_matches("/chat/completions")
                 .trim_end_matches('/')
-        );
+        ));
     }
     if api_url.ends_with("/v1") {
-        return format!("{api_url}/models");
+        return Ok(format!("{api_url}/models"));
     }
-    format!("{api_url}/v1/models")
+    Ok(format!("{api_url}/v1/models"))
 }
 
 fn api_base_url(settings: &HashMap<String, String>) -> Option<&str> {
@@ -762,6 +867,15 @@ fn api_base_url(settings: &HashMap<String, String>) -> Option<&str> {
         .get("ai_deepseek_proxy_url")
         .map(|value| value.trim().trim_end_matches('/'))
         .filter(|value| !value.is_empty())
+}
+
+fn validate_api_url(value: &str) -> Result<(), String> {
+    let parsed = Url::parse(value)
+        .map_err(|_| "API address must be a valid http or https URL".to_string())?;
+    if !matches!(parsed.scheme(), "http" | "https") || parsed.host_str().is_none() {
+        return Err("API address must start with http:// or https://".to_string());
+    }
+    Ok(())
 }
 
 fn format_model_label(id: &str) -> String {

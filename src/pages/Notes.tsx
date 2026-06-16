@@ -20,6 +20,7 @@ import { getAllNotes, updateNote, deleteNote } from "@/lib/store";
 import { NoteEditor } from "@/components/course-detail/NoteEditor";
 import { EASE_OUT, SNAPPY } from "@/lib/constants";
 import { useI18n } from "@/hooks/useI18n";
+import { noteHtmlToText, sanitizeNoteHtml } from "@/lib/sanitize";
 
 type SortField = "updated" | "created" | "course";
 type SortDir = "desc" | "asc";
@@ -77,7 +78,7 @@ export function Notes({ className }: NotesProps) {
       const q = search.toLowerCase();
       result = result.filter(
         (n) =>
-          stripHtml(n.content).toLowerCase().includes(q) ||
+          noteHtmlToText(n.content).toLowerCase().includes(q) ||
           n.lessonTitle.toLowerCase().includes(q) ||
           n.courseTitle.toLowerCase().includes(q),
       );
@@ -300,7 +301,6 @@ export function Notes({ className }: NotesProps) {
     </div>
   );
 }
-
 function NoteItem({
   note,
   onStartEdit,
@@ -332,7 +332,7 @@ function NoteItem({
         <div className="min-w-0 flex-1">
           <div
             className="note-content font-sans text-sm leading-relaxed text-foreground/90"
-            dangerouslySetInnerHTML={{ __html: note.content }}
+            dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(note.content) }}
           />
 
           <div className="mt-2 flex items-center gap-1.5">
@@ -378,10 +378,4 @@ function NoteItem({
       </div>
     </div>
   );
-}
-
-function stripHtml(html: string): string {
-  const tmp = document.createElement("div");
-  tmp.innerHTML = html;
-  return tmp.textContent ?? "";
 }

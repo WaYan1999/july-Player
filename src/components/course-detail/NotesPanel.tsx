@@ -7,6 +7,7 @@ import { NoteEditor } from "./NoteEditor";
 import { SNAPPY } from "@/lib/constants";
 import type { Note } from "@/types";
 import { useI18n } from "@/hooks/useI18n";
+import { sanitizeNoteHtml } from "@/lib/sanitize";
 
 interface NotesPanelProps {
   notes: Note[];
@@ -122,7 +123,7 @@ function NoteCard({
       <div className="flex items-start gap-2">
         <div
           className="note-content flex-1 font-sans text-xs leading-relaxed text-foreground/90"
-          dangerouslySetInnerHTML={{ __html: note.content }}
+          dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(note.content) }}
           onClick={(e) => {
             const target = e.target as HTMLElement;
             if (target.classList.contains("note-timestamp")) {

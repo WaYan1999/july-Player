@@ -1,14 +1,32 @@
 import {
+  BatteryChargingIcon,
+  ForkKnifeIcon,
+  HeartIcon,
+  SmileyIcon,
+  type Icon,
+} from "@phosphor-icons/react";
+import {
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/hooks/useI18n";
 import { useSettings } from "@/hooks/useSettings";
+import {
+  applyPetCareAction,
+  getPetCareState,
+  getPetVitals,
+  PET_CARE_ACTIONS,
+  PET_CARE_UPDATED_EVENT,
+  type PetCareActionId,
+  type PetCareActionResult,
+  type PetVitals,
+} from "@/lib/petCare";
 import {
   createPetSpriteStyle,
   PET_ACTION_EVENT,
@@ -20,27 +38,168 @@ import {
 const PET_POSITION_KEY = "july-player:resident-pet-position";
 const PET_SIZE = { width: 82, height: 88 };
 const PET_MARGIN = 12;
+const WHEEL_SIZE = 188;
 
 type Point = { x: number; y: number };
 type SpeechState = Required<Pick<PetSpeechPayload, "message" | "tone">> &
   Pick<PetSpeechPayload, "title"> & {
     nonce: number;
   };
+type ResidentPetCopy = Record<
+  | "clickTitle"
+  | "clickMessage"
+  | "wheelTitle"
+  | "feed"
+  | "play"
+  | "pet"
+  | "nap"
+  | "food"
+  | "energy"
+  | "bond"
+  | "fedMessage"
+  | "playMessage"
+  | "petMessage"
+  | "napMessage"
+  | "careReward"
+  | "careCost"
+  | "careFree"
+  | "careBlocked"
+  | "careCooldown"
+  | "careDailyLimit"
+  | "careTokenShort"
+  | "careStatFull"
+  | "careStatLow"
+  | "actionFailed",
+  string
+>;
 
 const PET_COPY = {
   en: {
     clickTitle: "Pet",
-    clickMessage: "I am here. Drag me anywhere while you watch.",
+    clickMessage: "Choose a care action, or drag me anywhere while you watch.",
+    wheelTitle: "Care",
+    feed: "Feed",
+    play: "Play",
+    pet: "Pet",
+    nap: "Rest",
+    food: "Food",
+    energy: "Energy",
+    bond: "Bond",
+    fedMessage: "Snack served.",
+    playMessage: "A quick game helped.",
+    petMessage: "Thanks for the attention.",
+    napMessage: "Rest time started.",
+    careReward: "+{xp} XP",
+    careCost: "{cost} tokens spent",
+    careFree: "Free action",
+    careBlocked: "Not now",
+    careCooldown: "Try again in {seconds}s.",
+    careDailyLimit: "Daily care limit reached.",
+    careTokenShort: "Not enough tokens. Finish a lesson or check in first.",
+    careStatFull: "That need is already high.",
+    careStatLow: "Food or energy is too low.",
+    actionFailed: "Action failed. Please try again.",
   },
   zh: {
     clickTitle: "宠物",
-    clickMessage: "我在这里，看视频时也可以拖动我换位置。",
+    clickMessage: "选择一个照顾动作，也可以拖动我换位置。",
+    wheelTitle: "照顾",
+    feed: "喂养",
+    play: "玩耍",
+    pet: "抚摸",
+    nap: "休息",
+    food: "食物",
+    energy: "能量",
+    bond: "羁绊",
+    fedMessage: "零食已经送到。",
+    playMessage: "陪宠物玩了一会儿。",
+    petMessage: "宠物收到了抚摸。",
+    napMessage: "宠物开始休息。",
+    careReward: "+{xp} XP",
+    careCost: "消耗 {cost} 代币",
+    careFree: "免费动作",
+    careBlocked: "暂时不能执行",
+    careCooldown: "还在冷却，{seconds} 秒后再试。",
+    careDailyLimit: "今天照顾次数已达上限。",
+    careTokenShort: "代币不够，先完成课程或签到。",
+    careStatFull: "这个状态已经很高了。",
+    careStatLow: "食物或能量太低了。",
+    actionFailed: "操作失败，请再试一次。",
   },
   fr: {
     clickTitle: "Compagnon",
-    clickMessage: "Je suis la. Vous pouvez me deplacer pendant la lecture.",
+    clickMessage: "Choisissez une action, ou deplacez-moi pendant la lecture.",
+    wheelTitle: "Soin",
+    feed: "Nourrir",
+    play: "Jouer",
+    pet: "Calin",
+    nap: "Repos",
+    food: "Nourriture",
+    energy: "Energie",
+    bond: "Lien",
+    fedMessage: "Collation servie.",
+    playMessage: "Petit jeu termine.",
+    petMessage: "Merci pour l'attention.",
+    napMessage: "Repos commence.",
+    careReward: "+{xp} XP",
+    careCost: "{cost} jetons utilises",
+    careFree: "Action gratuite",
+    careBlocked: "Pas maintenant",
+    careCooldown: "Reessayez dans {seconds}s.",
+    careDailyLimit: "Limite quotidienne atteinte.",
+    careTokenShort: "Pas assez de jetons.",
+    careStatFull: "Ce besoin est deja eleve.",
+    careStatLow: "Nourriture ou energie trop basse.",
+    actionFailed: "Action echouee. Reessayez.",
   },
-} as const;
+} as const satisfies Record<string, ResidentPetCopy>;
+
+const CARE_WHEEL_ACTIONS: {
+  id: PetCareActionId;
+  icon: Icon;
+  mood: PetState;
+  labelKey: "feed" | "play" | "pet" | "nap";
+  messageKey: "fedMessage" | "playMessage" | "petMessage" | "napMessage";
+  left: number;
+  top: number;
+}[] = [
+  {
+    id: "feed",
+    icon: ForkKnifeIcon,
+    mood: "hop",
+    labelKey: "feed",
+    messageKey: "fedMessage",
+    left: 66,
+    top: 4,
+  },
+  {
+    id: "play",
+    icon: SmileyIcon,
+    mood: "hop",
+    labelKey: "play",
+    messageKey: "playMessage",
+    left: 126,
+    top: 62,
+  },
+  {
+    id: "pet",
+    icon: HeartIcon,
+    mood: "wave",
+    labelKey: "pet",
+    messageKey: "petMessage",
+    left: 66,
+    top: 120,
+  },
+  {
+    id: "nap",
+    icon: BatteryChargingIcon,
+    mood: "thinking",
+    labelKey: "nap",
+    messageKey: "napMessage",
+    left: 8,
+    top: 62,
+  },
+];
 
 function clampPosition(point: Point): Point {
   if (typeof window === "undefined") return point;
@@ -78,16 +237,48 @@ function getInitialPosition(): Point {
   });
 }
 
+function formatRemainingSeconds(ms = 0) {
+  return String(Math.max(1, Math.ceil(ms / 1000)));
+}
+
+function formatActionMeta(
+  copy: Pick<ResidentPetCopy, "careCost" | "careFree">,
+  action: PetCareActionId,
+) {
+  const cost = PET_CARE_ACTIONS[action].tokenCost;
+  return cost > 0 ? copy.careCost.replace("{cost}", String(cost)) : copy.careFree;
+}
+
+function formatVitals(copy: Pick<ResidentPetCopy, "food" | "energy" | "bond">, vitals: PetVitals) {
+  return `${copy.food} ${vitals.food}% · ${copy.energy} ${vitals.energy}% · ${copy.bond} ${vitals.bond}%`;
+}
+
+function getCareFailureDetail(copy: ResidentPetCopy, result: PetCareActionResult) {
+  if (result.reason === "cooldown") {
+    return copy.careCooldown.replace("{seconds}", formatRemainingSeconds(result.cooldownRemainingMs));
+  }
+  if (result.reason === "daily_limit") return copy.careDailyLimit;
+  if (result.reason === "not_enough_tokens") return copy.careTokenShort;
+  if (result.reason === "stat_full") return copy.careStatFull;
+  if (result.reason === "stat_low") return copy.careStatLow;
+  return copy.actionFailed;
+}
+
 export function ResidentPet() {
   const { language } = useI18n();
   const { settings } = useSettings();
-  const copy = PET_COPY[language];
+  const copy = PET_COPY[language as keyof typeof PET_COPY] ?? PET_COPY.en;
   const [position, setPosition] = useState<Point>(getInitialPosition);
   const [petState, setPetState] = useState<PetState>("idle");
   const [animationNonce, setAnimationNonce] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [speech, setSpeech] = useState<SpeechState | null>(null);
+  const [wheelOpen, setWheelOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<PetCareActionId | null>(null);
+  const [vitals, setVitals] = useState<PetVitals | null>(null);
+  const [petName, setPetName] = useState("");
   const positionRef = useRef(position);
+  const rootRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     pointerId: number;
     offsetX: number;
@@ -98,8 +289,12 @@ export function ResidentPet() {
   } | null>(null);
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const speechTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wheelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingActionRef = useRef<PetCareActionId | null>(null);
   const suppressClickRef = useRef(false);
   const bubbleOnRight = typeof window !== "undefined" && position.x < window.innerWidth / 2;
+  const wheelOnRight = typeof window !== "undefined" && position.x < window.innerWidth - WHEEL_SIZE - PET_SIZE.width;
+  const wheelAbove = typeof window !== "undefined" && position.y > WHEEL_SIZE + 16;
 
   const spriteStyle = useMemo(
     () => createPetSpriteStyle(petState, settings.pet_variant, PET_SIZE.width),
@@ -135,6 +330,91 @@ export function ResidentPet() {
     );
   }, []);
 
+  const closeWheel = useCallback(() => {
+    if (wheelTimerRef.current) {
+      clearTimeout(wheelTimerRef.current);
+      wheelTimerRef.current = null;
+    }
+    setWheelOpen(false);
+  }, []);
+
+  const openWheel = useCallback(() => {
+    setWheelOpen(true);
+    showSpeech({
+      title: petName || copy.clickTitle,
+      message: copy.clickMessage,
+      tone: "info",
+      durationMs: 3600,
+    });
+    if (wheelTimerRef.current) clearTimeout(wheelTimerRef.current);
+    wheelTimerRef.current = setTimeout(() => {
+      wheelTimerRef.current = null;
+      setWheelOpen(false);
+    }, 9000);
+  }, [copy.clickMessage, copy.clickTitle, petName, showSpeech]);
+
+  const refreshVitals = useCallback(async () => {
+    try {
+      const state = await getPetCareState(settings.pet_variant);
+      setVitals(getPetVitals(state, settings.pet_variant));
+      setPetName(state.petName);
+    } catch {
+      setVitals(null);
+      setPetName("");
+    }
+  }, [settings.pet_variant]);
+
+  const runCareAction = async (action: (typeof CARE_WHEEL_ACTIONS)[number]) => {
+    if (pendingActionRef.current) return;
+
+    pendingActionRef.current = action.id;
+    setPendingAction(action.id);
+    setPetState(action.mood);
+    setAnimationNonce((current) => current + 1);
+    closeWheel();
+
+    try {
+      const result = await applyPetCareAction({
+        action: action.id,
+        petId: settings.pet_variant,
+        label: copy[action.labelKey],
+      });
+      setVitals(result.vitals);
+      if (result.skipped) {
+        showSpeech({
+          title: copy.careBlocked,
+          message: getCareFailureDetail(copy, result),
+          tone: "warning",
+          durationMs: 4200,
+        });
+        setPetState("thinking");
+        settleToIdle(1200);
+        return;
+      }
+
+      const reward = copy.careReward.replace("{xp}", String(result.xp));
+      showSpeech({
+        title: petName || copy[action.labelKey],
+        message: `${copy[action.messageKey]} ${formatVitals(copy, result.vitals)} ${reward}`,
+        tone: "success",
+        durationMs: 5200,
+      });
+      settleToIdle(1000);
+    } catch {
+      showSpeech({
+        title: petName || copy.careBlocked,
+        message: copy.actionFailed,
+        tone: "warning",
+        durationMs: 4200,
+      });
+      setPetState("thinking");
+      settleToIdle(1200);
+    } finally {
+      pendingActionRef.current = null;
+      setPendingAction(null);
+    }
+  };
+
   const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId);
     const nextPosition = clampPosition(positionRef.current);
@@ -146,6 +426,7 @@ export function ResidentPet() {
       startY: event.clientY,
       moved: false,
     };
+    closeWheel();
     setPosition(nextPosition);
     setIsDragging(true);
     setPetState("walk");
@@ -191,6 +472,16 @@ export function ResidentPet() {
   }, [position]);
 
   useEffect(() => {
+    void refreshVitals();
+  }, [refreshVitals]);
+
+  useEffect(() => {
+    const handleCareUpdate = () => void refreshVitals();
+    window.addEventListener(PET_CARE_UPDATED_EVENT, handleCareUpdate);
+    return () => window.removeEventListener(PET_CARE_UPDATED_EVENT, handleCareUpdate);
+  }, [refreshVitals]);
+
+  useEffect(() => {
     const handleResize = () => {
       setPosition((current) => {
         const next = clampPosition(current);
@@ -203,6 +494,25 @@ export function ResidentPet() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [persistPosition]);
+
+  useEffect(() => {
+    if (!wheelOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (rootRef.current?.contains(event.target as Node)) return;
+      closeWheel();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeWheel();
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closeWheel, wheelOpen]);
 
   useEffect(() => {
     const handlePetAction = (event: Event) => {
@@ -232,6 +542,7 @@ export function ResidentPet() {
     () => () => {
       if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
       if (speechTimerRef.current) clearTimeout(speechTimerRef.current);
+      if (wheelTimerRef.current) clearTimeout(wheelTimerRef.current);
     },
     [],
   );
@@ -239,43 +550,59 @@ export function ResidentPet() {
   if (!settings.pet_enabled) return null;
 
   return (
-    <button
-      type="button"
-      aria-label="July Player pet"
-      title="July Player pet"
-      className={cn(
-        "resident-pet fixed z-[80] cursor-grab touch-none border-0 bg-transparent p-0 outline-none",
-        "transition-transform duration-150 ease-out hover:scale-105 focus-visible:ring-2 focus-visible:ring-primary/70",
-        isDragging && "cursor-grabbing scale-105",
-      )}
+    <div
+      ref={rootRef}
+      className="resident-pet fixed z-[80] border-0 bg-transparent p-0"
       style={{
         left: position.x,
         top: position.y,
         width: PET_SIZE.width,
         height: PET_SIZE.height,
       }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={finishDrag}
-      onPointerCancel={finishDrag}
-      onClick={(event) => {
-        if (suppressClickRef.current) {
-          suppressClickRef.current = false;
-          event.preventDefault();
-          event.stopPropagation();
-          return;
-        }
-        setPetState("wave");
-        setAnimationNonce((current) => current + 1);
-        showSpeech({
-          title: copy.clickTitle,
-          message: copy.clickMessage,
-          tone: "info",
-          durationMs: 3600,
-        });
-        settleToIdle(800);
-      }}
     >
+      {wheelOpen && (
+        <div
+          className={cn(
+            "resident-pet-wheel absolute z-20",
+            wheelOnRight ? "left-[78px]" : "right-[78px]",
+            wheelAbove ? "bottom-[-18px]" : "top-[-18px]",
+          )}
+          role="menu"
+          aria-label={copy.wheelTitle}
+        >
+          <div className="resident-pet-wheel-center">
+            <span>{copy.wheelTitle}</span>
+            {vitals && (
+              <small>
+                {copy.food} {vitals.food}%
+              </small>
+            )}
+          </div>
+          {CARE_WHEEL_ACTIONS.map((action, index) => {
+            const IconComponent = action.icon;
+            const running = pendingAction === action.id;
+            return (
+              <button
+                key={action.id}
+                type="button"
+                role="menuitem"
+                disabled={Boolean(pendingAction)}
+                className={cn("resident-pet-wheel-item", running && "is-running")}
+                style={{ left: action.left, top: action.top, "--pet-wheel-index": index } as CSSProperties}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void runCareAction(action);
+                }}
+                title={`${copy[action.labelKey]} · ${formatActionMeta(copy, action.id)}`}
+              >
+                <IconComponent className="size-4.5" weight={running ? "fill" : "regular"} />
+                <span>{copy[action.labelKey]}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {speech && (
         <span
           key={speech.nonce}
@@ -299,12 +626,41 @@ export function ResidentPet() {
           </span>
         </span>
       )}
-      <span
-        key={`${petState}-${animationNonce}`}
-        className="openpets-ai-pet-sprite resident-pet-sprite"
-        style={spriteStyle}
-      />
-      <span className="resident-pet-shadow" />
-    </button>
+
+      <button
+        type="button"
+        aria-label={petName || copy.clickTitle}
+        title={copy.clickMessage}
+        className={cn(
+          "absolute inset-0 z-[2] cursor-grab touch-none border-0 bg-transparent p-0 outline-none",
+          "transition-transform duration-150 ease-out hover:scale-105 focus-visible:ring-2 focus-visible:ring-primary/70",
+          isDragging && "cursor-grabbing scale-105",
+          wheelOpen && "scale-105",
+        )}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={finishDrag}
+        onPointerCancel={finishDrag}
+        onClick={(event) => {
+          if (suppressClickRef.current) {
+            suppressClickRef.current = false;
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
+          setPetState("wave");
+          setAnimationNonce((current) => current + 1);
+          openWheel();
+          settleToIdle(900);
+        }}
+      >
+        <span
+          key={`${petState}-${animationNonce}`}
+          className="openpets-ai-pet-sprite resident-pet-sprite"
+          style={spriteStyle}
+        />
+        <span className="resident-pet-shadow" />
+      </button>
+    </div>
   );
 }

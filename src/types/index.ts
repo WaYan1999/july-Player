@@ -42,4 +42,5 @@ export type {
   VideoQuality,
   PreparedVideoQuality,
   AiAudioTranslation,
+  AiAudioTranscript,
 } from "./video";

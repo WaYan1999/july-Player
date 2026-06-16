@@ -20,6 +20,7 @@ export type PetCareEventType =
 
 export type PetVitalId = "food" | "energy" | "play" | "bond";
 export type PetCareActionId = "feed" | "play" | "pet" | "nap";
+export type PetPlayActionId = "treasure" | "jump" | "gift";
 export type PetDailyGoalId = "checkin" | "lesson" | "care" | "module" | "focus";
 export type PetCareAwardSkipReason =
   | "already_checked_in"
@@ -36,6 +37,18 @@ export type PetCareActionSkipReason =
   | "not_enough_tokens"
   | "stat_full"
   | "stat_low";
+
+export type PetPlayActionSkipReason =
+  | "cooldown"
+  | "daily_limit"
+  | "not_enough_tokens"
+  | "stat_low";
+
+export type PetPurchaseSkipReason =
+  | "already_owned"
+  | "level_locked"
+  | "not_enough_tokens"
+  | "invalid_pet";
 
 export interface PetCareEvent {
   id: string;
@@ -69,13 +82,19 @@ export interface PetCareState {
   petXp: Partial<Record<PetCatalogId, number>>;
   petVitals: Partial<Record<PetCatalogId, PetVitals>>;
   careActionCountsToday: Partial<Record<PetCareActionId, number>>;
+  playActionCountsToday: Partial<Record<PetPlayActionId, number>>;
   moduleActionCountsToday: Record<string, number>;
   eventCountsToday: Partial<Record<PetCareEventType, number>>;
   lastCareActionAt: Partial<Record<PetCareActionId, string>>;
+  lastPlayActionAt: Partial<Record<PetPlayActionId, string>>;
   lastModuleActionAt: Record<string, string>;
   dailyGoals: Partial<Record<PetDailyGoalId, boolean>>;
   rewardedLessonIds: number[];
   recentEvents: PetCareEvent[];
+  ownedPetIds: PetCatalogId[];
+  petName: string;
+  petNameClaimed: boolean;
+  playCombo: number;
 }
 
 export interface PetCareProgress {
@@ -130,9 +149,42 @@ export interface PetCareActionResult {
   unlockedPets: PetCatalogId[];
 }
 
+export interface PetPlayActionResult {
+  state: PetCareState;
+  action: PetPlayActionId;
+  vitals: PetVitals;
+  event: PetCareEvent | null;
+  skipped: boolean;
+  reason?: PetPlayActionSkipReason;
+  cooldownRemainingMs?: number;
+  tokenCost: number;
+  xp: number;
+  rewardTokens: number;
+  combo: number;
+  levelBefore: number;
+  levelAfter: number;
+  petLevelBefore: number;
+  petLevelAfter: number;
+  unlockedPets: PetCatalogId[];
+}
+
+export interface PetPurchaseResult {
+  state: PetCareState;
+  petId: PetCatalogId;
+  cost: number;
+  skipped: boolean;
+  reason?: PetPurchaseSkipReason;
+}
+
 type ApplyPetCareActionInput = {
   petId?: PetCatalogId;
   action: PetCareActionId;
+  label?: string;
+};
+
+type ApplyPetPlayActionInput = {
+  petId?: PetCatalogId;
+  action: PetPlayActionId;
   label?: string;
 };
 
@@ -163,6 +215,29 @@ const DAILY_TOKEN_LIMIT = 180;
 const MODULE_DAILY_LIMIT = 3;
 const MODULE_TOTAL_DAILY_LIMIT = 12;
 const MODULE_COOLDOWN_MS = 90 * 1000;
+const PLAY_COMBO_WINDOW_MS = 10 * 60 * 1000;
+
+export const PET_STORE_PRICES: Record<PetCatalogId, number> = {
+  builtin: 0,
+  tmuxai: 0,
+  nori: 0,
+  bitty: 0,
+  fixer: 60,
+  robot: 60,
+  "shadow-kit": 70,
+  fox: 100,
+  azure: 110,
+  penguin: 100,
+  orchestrator: 160,
+  snoopy: 180,
+  clippit: 180,
+  tux: 240,
+  "wall-e": 260,
+  dobby: 320,
+  cartman: 320,
+  panda: 420,
+  shiba: 420,
+};
 
 export const DEFAULT_PET_VITALS: PetVitals = {
   food: 78,
@@ -227,6 +302,46 @@ export const PET_CARE_ACTIONS: Record<
   },
 };
 
+export const PET_PLAY_ACTIONS: Record<
+  PetPlayActionId,
+  {
+    tokenCost: number;
+    xp: number;
+    rewardTokens: number;
+    cooldownMs: number;
+    dailyLimit: number;
+    deltas: Partial<Record<PetVitalId, number>>;
+    minBefore?: Partial<Record<PetVitalId, number>>;
+  }
+> = {
+  treasure: {
+    tokenCost: 0,
+    xp: 10,
+    rewardTokens: 6,
+    cooldownMs: 120 * 1000,
+    dailyLimit: 5,
+    deltas: { play: 12, bond: 5, energy: -8, food: -3 },
+    minBefore: { energy: 16, food: 10 },
+  },
+  jump: {
+    tokenCost: 0,
+    xp: 7,
+    rewardTokens: 3,
+    cooldownMs: 45 * 1000,
+    dailyLimit: 8,
+    deltas: { play: 14, bond: 3, energy: -10 },
+    minBefore: { energy: 14 },
+  },
+  gift: {
+    tokenCost: 8,
+    xp: 12,
+    rewardTokens: 0,
+    cooldownMs: 150 * 1000,
+    dailyLimit: 4,
+    deltas: { bond: 18, play: 6, food: 3 },
+  },
+};
+
 let careWriteQueue: Promise<unknown> = Promise.resolve();
 
 function queueCareWrite<T>(operation: () => Promise<T>): Promise<T> {
@@ -264,6 +379,10 @@ function isPetId(value: string): value is PetCatalogId {
 
 function isCareActionId(value: string): value is PetCareActionId {
   return value === "feed" || value === "play" || value === "pet" || value === "nap";
+}
+
+function isPlayActionId(value: string): value is PetPlayActionId {
+  return value === "treasure" || value === "jump" || value === "gift";
 }
 
 function isPetCareEventType(value: string): value is PetCareEventType {
@@ -341,6 +460,15 @@ function normalizeCareActionCounts(value: unknown): Partial<Record<PetCareAction
   return counts;
 }
 
+function normalizePlayActionCounts(value: unknown): Partial<Record<PetPlayActionId, number>> {
+  const counts: Partial<Record<PetPlayActionId, number>> = {};
+  if (!value || typeof value !== "object") return counts;
+  for (const [key, count] of Object.entries(value as Record<string, unknown>)) {
+    if (isPlayActionId(key)) counts[key] = clampInt(count);
+  }
+  return counts;
+}
+
 function normalizeEventCounts(value: unknown): Partial<Record<PetCareEventType, number>> {
   const counts: Partial<Record<PetCareEventType, number>> = {};
   if (!value || typeof value !== "object") return counts;
@@ -381,6 +509,16 @@ function normalizeCareActionDates(value: unknown): Partial<Record<PetCareActionI
   return record;
 }
 
+function normalizePlayActionDates(value: unknown): Partial<Record<PetPlayActionId, string>> {
+  const record: Partial<Record<PetPlayActionId, string>> = {};
+  if (!value || typeof value !== "object") return record;
+  for (const [key, dateValue] of Object.entries(value as Record<string, unknown>)) {
+    const date = parseIsoDate(dateValue);
+    if (isPlayActionId(key) && date) record[key] = date.toISOString();
+  }
+  return record;
+}
+
 function normalizeDailyGoals(value: unknown): Partial<Record<PetDailyGoalId, boolean>> {
   const goals: Partial<Record<PetDailyGoalId, boolean>> = {};
   if (!value || typeof value !== "object") return goals;
@@ -388,6 +526,25 @@ function normalizeDailyGoals(value: unknown): Partial<Record<PetDailyGoalId, boo
     goals[goal.id] = Boolean((value as Record<string, unknown>)[goal.id]);
   }
   return goals;
+}
+
+function normalizeOwnedPetIds(value: unknown, activePetId: PetCatalogId): PetCatalogId[] {
+  const owned = new Set<PetCatalogId>([DEFAULT_PET_VARIANT, activePetId]);
+  for (const pet of PET_CATALOG) {
+    if (pet.protected || (pet.unlockLevel ?? 1) <= 1) owned.add(pet.id);
+  }
+
+  if (Array.isArray(value)) {
+    for (const petId of value) {
+      if (typeof petId === "string" && isPetId(petId)) owned.add(petId);
+    }
+  }
+
+  return [...owned];
+}
+
+function normalizePetName(value: unknown) {
+  return typeof value === "string" ? value.trim().slice(0, 24) : "";
 }
 
 function rolloverDay(state: PetCareState, now = new Date()) {
@@ -409,9 +566,12 @@ function rolloverDay(state: PetCareState, now = new Date()) {
     tasksToday: 0,
     petVitals,
     careActionCountsToday: {},
+    playActionCountsToday: {},
     moduleActionCountsToday: {},
     eventCountsToday: {},
     dailyGoals: {},
+    lastPlayActionAt: {},
+    playCombo: 0,
   };
 }
 
@@ -431,13 +591,19 @@ export function defaultPetCareState(activePetId: PetCatalogId = DEFAULT_PET_VARI
     petXp: { [activePetId]: 0 },
     petVitals: { [activePetId]: { ...DEFAULT_PET_VITALS } },
     careActionCountsToday: {},
+    playActionCountsToday: {},
     moduleActionCountsToday: {},
     eventCountsToday: {},
     lastCareActionAt: {},
+    lastPlayActionAt: {},
     lastModuleActionAt: {},
     dailyGoals: {},
     rewardedLessonIds: [],
     recentEvents: [],
+    ownedPetIds: normalizeOwnedPetIds([activePetId], activePetId),
+    petName: "",
+    petNameClaimed: false,
+    playCombo: 0,
   };
 }
 
@@ -472,6 +638,8 @@ export function parsePetCareState(
           .slice(0, 8)
       : [];
 
+    const petName = normalizePetName(data.petName);
+
     return rolloverDay({
       xp: clampInt(data.xp),
       tokens: clampInt(data.tokens),
@@ -487,15 +655,21 @@ export function parsePetCareState(
       petXp,
       petVitals,
       careActionCountsToday: normalizeCareActionCounts(data.careActionCountsToday),
+      playActionCountsToday: normalizePlayActionCounts(data.playActionCountsToday),
       moduleActionCountsToday: normalizeStringNumberRecord(data.moduleActionCountsToday),
       eventCountsToday: normalizeEventCounts(data.eventCountsToday),
       lastCareActionAt: normalizeCareActionDates(data.lastCareActionAt),
+      lastPlayActionAt: normalizePlayActionDates(data.lastPlayActionAt),
       lastModuleActionAt: normalizeStringDateRecord(data.lastModuleActionAt),
       dailyGoals: normalizeDailyGoals(data.dailyGoals),
       rewardedLessonIds: Array.isArray(data.rewardedLessonIds)
         ? [...new Set(data.rewardedLessonIds.map((id) => clampInt(id)).filter(Boolean))]
         : [],
       recentEvents,
+      ownedPetIds: normalizeOwnedPetIds(data.ownedPetIds, activePetId),
+      petName,
+      petNameClaimed: Boolean(data.petNameClaimed) && petName.length > 0,
+      playCombo: clampInt(data.playCombo),
     });
   } catch {
     return defaultPetCareState(activePetId);
@@ -597,6 +771,21 @@ function getCooldownRemaining(lastAt: string | undefined, cooldownMs: number, no
   return Math.max(0, cooldownMs - elapsed);
 }
 
+function getLastPlayActionTime(state: PetCareState) {
+  let latest = 0;
+  for (const value of Object.values(state.lastPlayActionAt)) {
+    const date = parseIsoDate(value);
+    if (date) latest = Math.max(latest, date.getTime());
+  }
+  return latest;
+}
+
+function getNextPlayCombo(state: PetCareState, now: Date) {
+  const lastPlayAt = getLastPlayActionTime(state);
+  if (!lastPlayAt || now.getTime() - lastPlayAt > PLAY_COMBO_WINDOW_MS) return 1;
+  return Math.min(9, state.playCombo + 1);
+}
+
 export function getPetUnlockLevel(petId: PetCatalogId) {
   return PET_CATALOG.find((pet) => pet.id === petId)?.unlockLevel ?? 1;
 }
@@ -605,8 +794,24 @@ export function isPetUnlocked(petId: PetCatalogId, state: PetCareState) {
   return getPetCareProgress(state.xp).level >= getPetUnlockLevel(petId);
 }
 
+export function isPetOwned(petId: PetCatalogId, state: PetCareState) {
+  return state.ownedPetIds.includes(petId);
+}
+
+export function isPetAvailable(petId: PetCatalogId, state: PetCareState) {
+  return isPetUnlocked(petId, state) && isPetOwned(petId, state);
+}
+
+export function getPetStorePrice(petId: PetCatalogId) {
+  return PET_STORE_PRICES[petId] ?? 0;
+}
+
 export function getUnlockedPetIds(state: PetCareState) {
   return PET_CATALOG.filter((pet) => isPetUnlocked(pet.id, state)).map((pet) => pet.id);
+}
+
+export function getOwnedPetIds(state: PetCareState) {
+  return PET_CATALOG.filter((pet) => isPetOwned(pet.id, state)).map((pet) => pet.id);
 }
 
 function emitCareUpdated(result: PetCareAwardResult) {
@@ -833,6 +1038,17 @@ function getBlockedStatReason(
   return null;
 }
 
+function getBlockedPlayReason(
+  vitals: PetVitals,
+  rule: (typeof PET_PLAY_ACTIONS)[PetPlayActionId],
+): PetPlayActionSkipReason | null {
+  for (const [vital, min] of Object.entries(rule.minBefore ?? {})) {
+    if (vitals[vital as PetVitalId] < Number(min)) return "stat_low";
+  }
+
+  return null;
+}
+
 function buildSkippedCareActionResult(
   current: PetCareState,
   petId: PetCatalogId,
@@ -1028,6 +1244,296 @@ async function applyPetCareActionNow({
 
 export async function applyPetCareAction(input: ApplyPetCareActionInput) {
   return queueCareWrite(() => applyPetCareActionNow(input));
+}
+
+function buildSkippedPlayActionResult(
+  current: PetCareState,
+  petId: PetCatalogId,
+  action: PetPlayActionId,
+  reason: PetPlayActionSkipReason,
+  cooldownRemainingMs = 0,
+): PetPlayActionResult {
+  const levelBefore = getPetCareProgress(current.xp).level;
+  const petLevelBefore = getPetCareProgress(getPetXp(current, petId)).level;
+  const rule = PET_PLAY_ACTIONS[action];
+  return {
+    state: current,
+    action,
+    vitals: getPetVitals(current, petId),
+    event: null,
+    skipped: true,
+    reason,
+    cooldownRemainingMs,
+    tokenCost: rule.tokenCost,
+    xp: 0,
+    rewardTokens: 0,
+    combo: current.playCombo,
+    levelBefore,
+    levelAfter: levelBefore,
+    petLevelBefore,
+    petLevelAfter: petLevelBefore,
+    unlockedPets: [],
+  };
+}
+
+async function applyPetPlayActionNow({
+  petId = DEFAULT_PET_VARIANT,
+  action,
+  label,
+}: ApplyPetPlayActionInput): Promise<PetPlayActionResult> {
+  const now = new Date();
+  const state = await getPetCareState(petId);
+  const current = rolloverDay(state, now);
+  const rule = PET_PLAY_ACTIONS[action];
+  const vitals = getPetVitals(current, petId);
+
+  const cooldownRemainingMs = getCooldownRemaining(
+    current.lastPlayActionAt[action],
+    rule.cooldownMs,
+    now,
+  );
+  if (cooldownRemainingMs > 0) {
+    const skipped = buildSkippedPlayActionResult(
+      current,
+      petId,
+      action,
+      "cooldown",
+      cooldownRemainingMs,
+    );
+    emitCareUpdated({
+      state: skipped.state,
+      event: null,
+      skipped: true,
+      reason: "cooldown",
+      cooldownRemainingMs,
+      levelBefore: skipped.levelBefore,
+      levelAfter: skipped.levelAfter,
+      petLevelBefore: skipped.petLevelBefore,
+      petLevelAfter: skipped.petLevelAfter,
+      unlockedPets: [],
+    });
+    return skipped;
+  }
+
+  if ((current.playActionCountsToday[action] ?? 0) >= rule.dailyLimit) {
+    const skipped = buildSkippedPlayActionResult(current, petId, action, "daily_limit");
+    emitCareUpdated({
+      state: skipped.state,
+      event: null,
+      skipped: true,
+      reason: "daily_limit",
+      levelBefore: skipped.levelBefore,
+      levelAfter: skipped.levelAfter,
+      petLevelBefore: skipped.petLevelBefore,
+      petLevelAfter: skipped.petLevelAfter,
+      unlockedPets: [],
+    });
+    return skipped;
+  }
+
+  if (current.tokens < rule.tokenCost) {
+    const skipped = buildSkippedPlayActionResult(current, petId, action, "not_enough_tokens");
+    emitCareUpdated({
+      state: skipped.state,
+      event: null,
+      skipped: true,
+      reason: "not_enough_tokens",
+      levelBefore: skipped.levelBefore,
+      levelAfter: skipped.levelAfter,
+      petLevelBefore: skipped.petLevelBefore,
+      petLevelAfter: skipped.petLevelAfter,
+      unlockedPets: [],
+    });
+    return skipped;
+  }
+
+  const statReason = getBlockedPlayReason(vitals, rule);
+  if (statReason) {
+    const skipped = buildSkippedPlayActionResult(current, petId, action, statReason);
+    emitCareUpdated({
+      state: skipped.state,
+      event: null,
+      skipped: true,
+      reason: statReason,
+      levelBefore: skipped.levelBefore,
+      levelAfter: skipped.levelAfter,
+      petLevelBefore: skipped.petLevelBefore,
+      petLevelAfter: skipped.petLevelAfter,
+      unlockedPets: [],
+    });
+    return skipped;
+  }
+
+  const levelBefore = getPetCareProgress(current.xp).level;
+  const petLevelBefore = getPetCareProgress(getPetXp(current, petId)).level;
+  const unlockedBefore = new Set(getUnlockedPetIds(current));
+  const at = now.toISOString();
+  const combo = getNextPlayCombo(current, now);
+  const comboBonusXp = combo >= 3 ? Math.min(6, Math.floor(combo / 3) * 2) : 0;
+  const gainedXp = rule.xp + comboBonusXp;
+  const rewardTokens = canAddDailyTokens(current, rule.rewardTokens + (combo >= 5 ? 2 : 0));
+  const nextVitals = applyVitalDeltas(vitals, rule.deltas);
+  const event: PetCareEvent = {
+    id: eventId(),
+    type: "care",
+    label: label || action,
+    petId,
+    xp: gainedXp,
+    tokens: rewardTokens - rule.tokenCost,
+    at,
+  };
+  const nextEventCounts = {
+    ...current.eventCountsToday,
+    care: (current.eventCountsToday.care ?? 0) + 1,
+  };
+  const nextPetXp = getPetXp(current, petId) + gainedXp;
+  const next: PetCareState = {
+    ...current,
+    xp: current.xp + gainedXp,
+    tokens: Math.max(0, current.tokens - rule.tokenCost) + rewardTokens,
+    tokensToday: current.tokensToday + rewardTokens,
+    totalTokensEarned: current.totalTokensEarned + rewardTokens,
+    lastFedAt: at,
+    petXp: {
+      ...current.petXp,
+      [petId]: nextPetXp,
+    },
+    petVitals: {
+      ...current.petVitals,
+      [petId]: nextVitals,
+    },
+    playActionCountsToday: {
+      ...current.playActionCountsToday,
+      [action]: (current.playActionCountsToday[action] ?? 0) + 1,
+    },
+    lastPlayActionAt: {
+      ...current.lastPlayActionAt,
+      [action]: at,
+    },
+    eventCountsToday: nextEventCounts,
+    dailyGoals: getDailyGoalState("care", current.dailyGoals, nextEventCounts),
+    recentEvents: [event, ...current.recentEvents].slice(0, 8),
+    playCombo: combo,
+  };
+
+  await savePetCareState(next);
+
+  const levelAfter = getPetCareProgress(next.xp).level;
+  const petLevelAfter = getPetCareProgress(nextPetXp).level;
+  const unlockedPets = getUnlockedPetIds(next).filter((id) => !unlockedBefore.has(id));
+  const result: PetPlayActionResult = {
+    state: next,
+    action,
+    vitals: nextVitals,
+    event,
+    skipped: false,
+    tokenCost: rule.tokenCost,
+    xp: gainedXp,
+    rewardTokens,
+    combo,
+    levelBefore,
+    levelAfter,
+    petLevelBefore,
+    petLevelAfter,
+    unlockedPets,
+  };
+
+  emitCareUpdated({
+    state: next,
+    event,
+    skipped: false,
+    levelBefore,
+    levelAfter,
+    petLevelBefore,
+    petLevelAfter,
+    unlockedPets,
+  });
+  return result;
+}
+
+export async function applyPetPlayAction(input: ApplyPetPlayActionInput) {
+  return queueCareWrite(() => applyPetPlayActionNow(input));
+}
+
+export async function purchasePet(
+  petId: PetCatalogId,
+  activePetId: PetCatalogId = DEFAULT_PET_VARIANT,
+): Promise<PetPurchaseResult> {
+  return queueCareWrite(async () => {
+    const state = await getPetCareState(activePetId);
+    const current = rolloverDay(state, new Date());
+    const pet = PET_CATALOG.find((item) => item.id === petId);
+    const cost = getPetStorePrice(petId);
+
+    if (!pet) {
+      return { state: current, petId, cost, skipped: true, reason: "invalid_pet" };
+    }
+    if (isPetOwned(petId, current)) {
+      return { state: current, petId, cost, skipped: true, reason: "already_owned" };
+    }
+    if (!isPetUnlocked(petId, current)) {
+      return { state: current, petId, cost, skipped: true, reason: "level_locked" };
+    }
+    if (current.tokens < cost) {
+      return { state: current, petId, cost, skipped: true, reason: "not_enough_tokens" };
+    }
+
+    const next: PetCareState = {
+      ...current,
+      tokens: Math.max(0, current.tokens - cost),
+      ownedPetIds: normalizeOwnedPetIds([...current.ownedPetIds, petId], activePetId),
+    };
+    await savePetCareState(next);
+
+    const result = { state: next, petId, cost, skipped: false };
+    emitCareUpdated({
+      state: next,
+      event: null,
+      skipped: false,
+      levelBefore: getPetCareProgress(current.xp).level,
+      levelAfter: getPetCareProgress(next.xp).level,
+      petLevelBefore: getPetCareProgress(getPetXp(current, petId)).level,
+      petLevelAfter: getPetCareProgress(getPetXp(next, petId)).level,
+      unlockedPets: [],
+    });
+    return result;
+  });
+}
+
+export async function claimPetName(
+  name: string,
+  activePetId: PetCatalogId = DEFAULT_PET_VARIANT,
+): Promise<{ state: PetCareState; saved: boolean; reason?: "already_claimed" | "invalid_name" }> {
+  return queueCareWrite(async () => {
+    const state = await getPetCareState(activePetId);
+    const current = rolloverDay(state, new Date());
+    const normalized = normalizePetName(name);
+
+    if (current.petNameClaimed) {
+      return { state: current, saved: false, reason: "already_claimed" as const };
+    }
+    if (normalized.length < 1) {
+      return { state: current, saved: false, reason: "invalid_name" as const };
+    }
+
+    const next: PetCareState = {
+      ...current,
+      petName: normalized,
+      petNameClaimed: true,
+    };
+    await savePetCareState(next);
+    emitCareUpdated({
+      state: next,
+      event: null,
+      skipped: false,
+      levelBefore: getPetCareProgress(current.xp).level,
+      levelAfter: getPetCareProgress(next.xp).level,
+      petLevelBefore: getPetCareProgress(getPetXp(current, activePetId)).level,
+      petLevelAfter: getPetCareProgress(getPetXp(next, activePetId)).level,
+      unlockedPets: [],
+    });
+    return { state: next, saved: true };
+  });
 }
 
 export async function dailyPetCheckin(petId: PetCatalogId = DEFAULT_PET_VARIANT) {

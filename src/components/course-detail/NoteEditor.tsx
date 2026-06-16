@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { buildTimestampHtml, formatTimestamp, parseTimeString } from "@/lib/format";
 import { SNAPPY, EASE_OUT } from "@/lib/constants";
 import { useI18n } from "@/hooks/useI18n";
+import { sanitizeNoteHtml } from "@/lib/sanitize";
 
 // Matches @current or @m:ss / @h:mm:ss followed by a word boundary (space, end, punctuation)
 const TIMESTAMP_COMMIT_RE = /@(current|\d{1,2}(?::\d{2}){1,2})(?=[\s,.\-!?;:]|$)/;
@@ -65,7 +66,7 @@ export function NoteEditor({
     const el = editorRef.current;
     if (!el) return;
     if (initialContent) {
-      el.innerHTML = initialContent;
+      el.innerHTML = sanitizeNoteHtml(initialContent);
     }
     el.focus();
     const sel = window.getSelection();
@@ -271,7 +272,8 @@ export function NoteEditor({
 
   function handleSubmit() {
     if (isEmpty()) return;
-    const html = editorRef.current?.innerHTML ?? "";
+    const html = sanitizeNoteHtml(editorRef.current?.innerHTML ?? "");
+    if (!html) return;
     onSubmit(html);
     if (editorRef.current) editorRef.current.innerHTML = "";
     setMenu(null);

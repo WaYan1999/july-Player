@@ -11,11 +11,11 @@ import {
   HeartIcon,
   MagicWandIcon,
   MagnifyingGlassIcon,
+  CoinsIcon,
   RobotIcon,
   PauseIcon,
   PawPrintIcon,
   PlayIcon,
-  PuzzlePieceIcon,
   QuestionIcon,
   RocketLaunchIcon,
   SmileyIcon,
@@ -44,9 +44,12 @@ import {
   PET_CARE_LEVELS,
   PET_CARE_UPDATED_EVENT,
   PET_CARE_ACTIONS,
+  PET_PLAY_ACTIONS,
   PET_DAILY_GOALS,
   applyPetCareAction,
+  applyPetPlayAction,
   awardPetCare,
+  claimPetName,
   dailyPetCheckin,
   defaultPetCareState,
   getCompletedDailyGoalCount,
@@ -55,11 +58,18 @@ import {
   getPetCareProgress,
   getPetCareState,
   getPetVitals,
+  getOwnedPetIds,
+  getPetStorePrice,
   getPetUnlockLevel,
   getPetXp,
+  isPetAvailable,
+  isPetOwned,
   isPetUnlocked,
+  purchasePet,
   type PetCareActionId,
   type PetCareActionResult,
+  type PetPlayActionId,
+  type PetPlayActionResult,
   type PetDailyGoalId,
   type PetCareState,
   type PetVitals,
@@ -71,6 +81,7 @@ interface PetsProps {
 }
 
 type FilterId = "all" | "official" | "catalog";
+type PetView = "overview" | "shop" | "library" | "modules";
 type PetMood = "idle" | "thinking" | "wave" | "hop";
 type FeedbackTone = "info" | "success";
 type FeedbackState = {
@@ -123,10 +134,35 @@ const COPY = {
     companionStage5: "Expert",
     companionStage6: "Master",
     companionStage7: "Legend",
+    overviewTab: "Overview",
+    libraryTab: "Library",
+    shopTab: "Store",
+    modulesTab: "Modules",
     petModules: "Pet modules",
     openModules: "Open modules",
     closeModules: "Close modules",
     modulePanelHint: "The 9 OpenPets-style functions live here as a compact panel.",
+    playgroundTitle: "Pet playground",
+    playgroundDescription: "Run small real actions with cooldowns, daily limits, rewards, and combo XP.",
+    playCombo: "Combo x{combo}",
+    playDailyLeft: "{left}/{total} left",
+    playActionEarn: "+{tokens} tokens · +{xp} XP",
+    playActionSpend: "{cost} tokens · +{xp} XP",
+    playActionDone: "{action} complete",
+    playReward: "{tokens} tokens · +{xp} XP · combo x{combo}",
+    playTreasure: "Treasure hunt",
+    playTreasureDescription: "Search with your pet for a small token cache.",
+    playJump: "Jump training",
+    playJumpDescription: "A quick energy game that raises play and bond.",
+    playGift: "Surprise gift",
+    playGiftDescription: "Spend tokens for a stronger bond boost.",
+    playTreasureResult: "A small cache was found.",
+    playJumpResult: "Training landed cleanly.",
+    playGiftResult: "The gift was accepted happily.",
+    playCooldown: "This game is cooling down. Try again in {seconds}s.",
+    playDailyLimit: "This game reached today's limit.",
+    playTokenShort: "Not enough tokens for this game.",
+    playStatLow: "Your pet needs more food or energy first.",
     residentPet: "Resident pet",
     residentPetDescription: "Keep the pet visible across the app. Drag it anywhere while watching.",
     desktopPet: "Desktop pet",
@@ -151,6 +187,22 @@ const COPY = {
     disabled: "Disabled",
     choosePet: "Pet library",
     choosePetDescription: "Built-in OpenPets characters and catalog pets are ready to select.",
+    petShop: "Pet store",
+    petShopDescription: "Spend pet tokens on unlocked companions. Level gates still come from real progress.",
+    owned: "Owned",
+    buyPet: "Buy pet",
+    buyFor: "Buy for {cost}",
+    petBought: "{name} joined your pet library",
+    alreadyOwned: "{name} is already in your library.",
+    shopLocked: "Reach Lv.{level} before this companion can be purchased.",
+    shopTokenShort: "Not enough tokens. Check in, finish lessons, or use modules first.",
+    petNameTitle: "Name your companion",
+    petNameDescription: "You get one naming chance. Pick the name you want to keep.",
+    petNamePlaceholder: "Companion name",
+    savePetName: "Save name",
+    petNameSaved: "Name saved: {name}",
+    petNameLocked: "The name has already been set.",
+    petNameInvalid: "Enter a name first.",
     searchPlaceholder: "Search pets...",
     all: "All",
     official: "Official",
@@ -225,6 +277,7 @@ const COPY = {
     moduleRewardCapped: "Daily module reward limit reached. Function still ran.",
     moduleRewardSaved: "Reward saved: {reward}",
     moduleRewardFailed: "Function ran, but reward could not be saved.",
+    enableModule: "Enable module",
     focusTimer: "Focus timer",
     startFocus: "Start",
     pauseFocus: "Pause",
@@ -323,10 +376,35 @@ const COPY = {
     companionStage5: "专家",
     companionStage6: "大师",
     companionStage7: "传奇",
+    overviewTab: "概览",
+    libraryTab: "宠物库",
+    shopTab: "宠物商店",
+    modulesTab: "功能模块",
     petModules: "宠物模块",
     openModules: "打开模块",
     closeModules: "关闭模块",
     modulePanelHint: "9 个 OpenPets 风格功能集中放在这个小面板里。",
+    playgroundTitle: "宠物游乐场",
+    playgroundDescription: "这里是真实小游戏：有冷却、每日次数、奖励和连击经验。",
+    playCombo: "连击 x{combo}",
+    playDailyLeft: "剩余 {left}/{total}",
+    playActionEarn: "+{tokens} 代币 · +{xp} XP",
+    playActionSpend: "{cost} 代币 · +{xp} XP",
+    playActionDone: "{action}完成",
+    playReward: "{tokens} 代币 · +{xp} XP · 连击 x{combo}",
+    playTreasure: "寻宝",
+    playTreasureDescription: "和宠物一起找小代币宝箱。",
+    playJump: "跳跃训练",
+    playJumpDescription: "消耗一点能量，提升玩耍和亲密。",
+    playGift: "惊喜礼物",
+    playGiftDescription: "消耗代币，换更高亲密度。",
+    playTreasureResult: "找到了一个小宝箱。",
+    playJumpResult: "训练成功落地。",
+    playGiftResult: "宠物开心地收下了礼物。",
+    playCooldown: "这个小游戏还在冷却，{seconds} 秒后再试。",
+    playDailyLimit: "这个小游戏今天次数已用完。",
+    playTokenShort: "代币不够，暂时不能玩这个。",
+    playStatLow: "宠物需要先补充食物或能量。",
     residentPet: "常驻宠物",
     residentPetDescription: "让宠物一直显示在应用里，看视频时也可以自由拖拽移动。",
     desktopPet: "桌面宠物",
@@ -351,6 +429,22 @@ const COPY = {
     disabled: "已关闭",
     choosePet: "宠物库",
     choosePetDescription: "内置 OpenPets 角色和目录宠物都可以直接选择。",
+    petShop: "宠物商店",
+    petShopDescription: "使用宠物代币购买已解锁的伙伴。等级门槛仍然来自真实学习进度。",
+    owned: "已拥有",
+    buyPet: "购买宠物",
+    buyFor: "{cost} 代币购买",
+    petBought: "{name} 已加入宠物库",
+    alreadyOwned: "{name} 已经在宠物库里。",
+    shopLocked: "达到 Lv.{level} 后才可以购买这个伙伴。",
+    shopTokenShort: "代币不足。先签到、完成课程或使用模块获取代币。",
+    petNameTitle: "给宠物起名",
+    petNameDescription: "只有一次自定义名称机会。保存后就不能再改。",
+    petNamePlaceholder: "宠物名称",
+    savePetName: "保存名称",
+    petNameSaved: "名称已保存：{name}",
+    petNameLocked: "名称已经设置过了。",
+    petNameInvalid: "请先输入名称。",
     searchPlaceholder: "搜索宠物...",
     all: "全部",
     official: "官方",
@@ -425,6 +519,7 @@ const COPY = {
     moduleRewardCapped: "今日模块奖励已达上限，功能已执行。",
     moduleRewardSaved: "奖励已保存：{reward}",
     moduleRewardFailed: "功能已执行，但奖励保存失败。",
+    enableModule: "开启模块",
     focusTimer: "专注计时",
     startFocus: "开始",
     pauseFocus: "暂停",
@@ -523,10 +618,35 @@ const COPY = {
     companionStage5: "Expert",
     companionStage6: "Maitre",
     companionStage7: "Legende",
+    overviewTab: "Apercu",
+    libraryTab: "Bibliotheque",
+    shopTab: "Boutique",
+    modulesTab: "Modules",
     petModules: "Modules",
     openModules: "Ouvrir les modules",
     closeModules: "Fermer les modules",
     modulePanelHint: "Les 9 fonctions type OpenPets sont dans ce petit panneau.",
+    playgroundTitle: "Terrain de jeu",
+    playgroundDescription: "De vraies petites actions avec pause, limite du jour, recompenses et combo XP.",
+    playCombo: "Combo x{combo}",
+    playDailyLeft: "{left}/{total} restants",
+    playActionEarn: "+{tokens} jetons · +{xp} XP",
+    playActionSpend: "{cost} jetons · +{xp} XP",
+    playActionDone: "{action} termine",
+    playReward: "{tokens} jetons · +{xp} XP · combo x{combo}",
+    playTreasure: "Chasse au tresor",
+    playTreasureDescription: "Cherchez une petite cache de jetons avec le compagnon.",
+    playJump: "Entrainement saut",
+    playJumpDescription: "Un jeu rapide qui augmente jeu et lien.",
+    playGift: "Cadeau surprise",
+    playGiftDescription: "Depensez des jetons pour renforcer le lien.",
+    playTreasureResult: "Une petite cache a ete trouvee.",
+    playJumpResult: "L'entrainement est reussi.",
+    playGiftResult: "Le cadeau est accepte avec joie.",
+    playCooldown: "Ce jeu est en pause. Reessayez dans {seconds}s.",
+    playDailyLimit: "Limite du jour atteinte pour ce jeu.",
+    playTokenShort: "Pas assez de jetons pour ce jeu.",
+    playStatLow: "Le compagnon a besoin de nourriture ou d'energie.",
     residentPet: "Compagnon resident",
     residentPetDescription: "Gardez le compagnon visible dans l'application. Vous pouvez le deplacer pendant la lecture.",
     desktopPet: "Compagnon bureau",
@@ -551,6 +671,22 @@ const COPY = {
     disabled: "Desactive",
     choosePet: "Bibliotheque",
     choosePetDescription: "Les personnages OpenPets integres et les compagnons du catalogue sont prets.",
+    petShop: "Boutique",
+    petShopDescription: "Depensez les jetons du compagnon pour acheter les compagnons debloques.",
+    owned: "Possede",
+    buyPet: "Acheter",
+    buyFor: "Acheter pour {cost}",
+    petBought: "{name} a rejoint la bibliotheque",
+    alreadyOwned: "{name} est deja dans la bibliotheque.",
+    shopLocked: "Atteignez le niv.{level} avant l'achat.",
+    shopTokenShort: "Pas assez de jetons. Faites le check-in, terminez des lecons ou utilisez des modules.",
+    petNameTitle: "Nommer le compagnon",
+    petNameDescription: "Vous avez une seule chance de choisir un nom.",
+    petNamePlaceholder: "Nom du compagnon",
+    savePetName: "Enregistrer",
+    petNameSaved: "Nom enregistre : {name}",
+    petNameLocked: "Le nom est deja defini.",
+    petNameInvalid: "Entrez d'abord un nom.",
     searchPlaceholder: "Rechercher...",
     all: "Tous",
     official: "Officiels",
@@ -625,6 +761,7 @@ const COPY = {
     moduleRewardCapped: "Limite de recompense atteinte. La fonction a ete lancee.",
     moduleRewardSaved: "Recompense enregistree : {reward}",
     moduleRewardFailed: "Fonction lancee, mais recompense non enregistree.",
+    enableModule: "Activer",
     focusTimer: "Minuteur",
     startFocus: "Demarrer",
     pauseFocus: "Pause",
@@ -690,10 +827,89 @@ const COPY = {
 } as const satisfies Record<string, Record<string, string>>;
 
 const FILTERS: FilterId[] = ["all", "official", "catalog"];
+const PET_VIEWS: PetView[] = ["overview", "shop", "library", "modules"];
+const PET_VIEW_COPY_KEYS: Record<PetView, "overviewTab" | "shopTab" | "libraryTab" | "modulesTab"> = {
+  overview: "overviewTab",
+  shop: "shopTab",
+  library: "libraryTab",
+  modules: "modulesTab",
+};
+
 const PET_ACTIONS: { mood: PetMood; key: "thinking" | "happy" | "wave" }[] = [
   { mood: "thinking", key: "thinking" },
   { mood: "hop", key: "happy" },
   { mood: "wave", key: "wave" },
+];
+
+const CARE_ACTION_CONFIG: {
+  action: PetCareActionId;
+  labelKey: "feed" | "playGame" | "pet" | "nap";
+  resultKey: "fedResult" | "playResult" | "pettedResult" | "napResult";
+  mood: PetMood;
+  icon: typeof ForkKnifeIcon;
+}[] = [
+  {
+    action: "feed",
+    labelKey: "feed",
+    resultKey: "fedResult",
+    mood: "hop",
+    icon: ForkKnifeIcon,
+  },
+  {
+    action: "play",
+    labelKey: "playGame",
+    resultKey: "playResult",
+    mood: "hop",
+    icon: SmileyIcon,
+  },
+  {
+    action: "pet",
+    labelKey: "pet",
+    resultKey: "pettedResult",
+    mood: "wave",
+    icon: HeartIcon,
+  },
+  {
+    action: "nap",
+    labelKey: "nap",
+    resultKey: "napResult",
+    mood: "thinking",
+    icon: BatteryChargingIcon,
+  },
+];
+
+const PLAY_ACTION_CONFIG: {
+  action: PetPlayActionId;
+  labelKey: "playTreasure" | "playJump" | "playGift";
+  descriptionKey: "playTreasureDescription" | "playJumpDescription" | "playGiftDescription";
+  resultKey: "playTreasureResult" | "playJumpResult" | "playGiftResult";
+  mood: PetMood;
+  icon: typeof MagnifyingGlassIcon;
+}[] = [
+  {
+    action: "treasure",
+    labelKey: "playTreasure",
+    descriptionKey: "playTreasureDescription",
+    resultKey: "playTreasureResult",
+    mood: "thinking",
+    icon: MagnifyingGlassIcon,
+  },
+  {
+    action: "jump",
+    labelKey: "playJump",
+    descriptionKey: "playJumpDescription",
+    resultKey: "playJumpResult",
+    mood: "hop",
+    icon: RocketLaunchIcon,
+  },
+  {
+    action: "gift",
+    labelKey: "playGift",
+    descriptionKey: "playGiftDescription",
+    resultKey: "playGiftResult",
+    mood: "wave",
+    icon: MagicWandIcon,
+  },
 ];
 
 const DAILY_GOAL_COPY_KEYS: Record<
@@ -803,6 +1019,32 @@ function formatCareReward(
     .replace("{cost}", String(result.tokenCost));
 }
 
+function formatPlayActionMeta(
+  copy: {
+    playActionEarn: string;
+    playActionSpend: string;
+  },
+  actionId: PetPlayActionId,
+) {
+  const rule = PET_PLAY_ACTIONS[actionId];
+  const template = rule.tokenCost > 0 ? copy.playActionSpend : copy.playActionEarn;
+  return template
+    .replace("{cost}", String(rule.tokenCost))
+    .replace("{tokens}", String(rule.rewardTokens))
+    .replace("{xp}", String(rule.xp));
+}
+
+function formatPlayReward(
+  copy: { playReward: string },
+  result: PetPlayActionResult,
+) {
+  const tokenDelta = result.event?.tokens ?? result.rewardTokens - result.tokenCost;
+  return copy.playReward
+    .replace("{tokens}", formatEventTokens(tokenDelta))
+    .replace("{xp}", String(result.xp))
+    .replace("{combo}", String(result.combo));
+}
+
 function formatRemainingSeconds(ms = 0) {
   return String(Math.max(1, Math.ceil(ms / 1000)));
 }
@@ -858,10 +1100,15 @@ function getModuleAwardFeedback(
   return { detail: copy.actionFailed, tone: "info" };
 }
 
+function nextFeedbackNonce() {
+  return Date.now() + Math.random();
+}
+
 export function Pets({ className }: PetsProps) {
   const { language } = useI18n();
   const { settings, update, reload: reloadSettings } = useSettings();
   const copy = COPY[language];
+  const [activeView, setActiveView] = useState<PetView>("overview");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterId>("all");
   const [previewPetId, setPreviewPetId] = useState<PetCatalogId>(settings.pet_variant);
@@ -875,18 +1122,22 @@ export function Pets({ className }: PetsProps) {
   const [magicQuestion, setMagicQuestion] = useState("");
   const [runningPlugins, setRunningPlugins] = useState<Partial<Record<PetPluginId, boolean>>>({});
   const [careActionPending, setCareActionPending] = useState<Partial<Record<PetCareActionId, boolean>>>({});
+  const [playActionPending, setPlayActionPending] = useState<Partial<Record<PetPlayActionId, boolean>>>({});
   const [pluginTogglePending, setPluginTogglePending] = useState<Partial<Record<PetPluginId, boolean>>>({});
   const [careState, setCareState] = useState<PetCareState>(() =>
     defaultPetCareState(settings.pet_variant),
   );
   const [careLoading, setCareLoading] = useState(true);
-  const [modulePanelOpen, setModulePanelOpen] = useState(false);
   const [aiGrowthPending, setAiGrowthPending] = useState(false);
   const [desktopPetPending, setDesktopPetPending] = useState(false);
+  const [petNameDraft, setPetNameDraft] = useState("");
+  const [petNameSaving, setPetNameSaving] = useState(false);
+  const [buyingPetId, setBuyingPetId] = useState<PetCatalogId | null>(null);
 
   const activePluginIds = settings.pet_plugins_enabled;
   const currentPet = PET_CATALOG.find((pet) => pet.id === settings.pet_variant) ?? PET_CATALOG[0];
   const previewPet = PET_CATALOG.find((pet) => pet.id === previewPetId) ?? currentPet;
+  const currentPetName = careState.petName || currentPet.displayName;
   const growthProgress = getPetCareProgress(careState.xp);
   const previewPetProgress = getPetCareProgress(getPetXp(careState, previewPet.id));
   const currentPetProgress = getPetCareProgress(getPetXp(careState, currentPet.id));
@@ -894,13 +1145,13 @@ export function Pets({ className }: PetsProps) {
   const dailyGoalProgress = getDailyGoalProgress(careState);
   const completedDailyGoals = getCompletedDailyGoalCount(careState);
   const checkedInToday = careState.lastCheckinDate === getPetCareDayKey();
-  const unlockedCount = PET_CATALOG.filter((pet) => isPetUnlocked(pet.id, careState)).length;
+  const ownedCount = getOwnedPetIds(careState).length;
   const stageKey = `companionStage${growthProgress.level}` as keyof typeof copy;
   const stageLabel = copy[stageKey];
   const activeFeedback =
     lastFeedback ??
     ({
-      title: copy.statusReady.replace("{name}", currentPet.displayName),
+      title: copy.statusReady.replace("{name}", currentPetName),
       detail: copy.moduleDescription,
       tone: "info",
       nonce: 0,
@@ -933,6 +1184,11 @@ export function Pets({ className }: PetsProps) {
     });
   }, [filter, query]);
 
+  const shopPets = useMemo(
+    () => PET_CATALOG.filter((pet) => !pet.protected),
+    [],
+  );
+
   const activePluginCount = activePluginIds.length;
   const virtualPetEnabled = activePluginIds.includes("openpets.virtual-pet");
   const focusEnabled = activePluginIds.includes("openpets.focus-buddy");
@@ -959,28 +1215,29 @@ export function Pets({ className }: PetsProps) {
   }, [reloadCareState]);
 
   useEffect(() => {
-    const refresh = () => void reloadCareState();
+    if (careState.petNameClaimed) {
+      setPetNameDraft(careState.petName);
+    }
+  }, [careState.petName, careState.petNameClaimed]);
+
+  useEffect(() => {
+    const refresh = () => {
+      void reloadCareState();
+    };
     window.addEventListener(PET_CARE_UPDATED_EVENT, refresh);
     return () => window.removeEventListener(PET_CARE_UPDATED_EVENT, refresh);
   }, [reloadCareState]);
 
   useEffect(() => {
-    if (!modulePanelOpen) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setModulePanelOpen(false);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [modulePanelOpen]);
-
-  useEffect(() => {
     if (pets.some((pet) => pet.id === previewPetId)) return;
     setPreviewPetId(currentPet.id);
   }, [currentPet.id, previewPetId, pets]);
+
+  useEffect(() => {
+    if (activeView !== "library") {
+      setPreviewPetId(settings.pet_variant);
+    }
+  }, [activeView, settings.pet_variant]);
 
   const previewPetChoice = (petId: PetCatalogId) => {
     const nextPet = PET_CATALOG.find((pet) => pet.id === petId);
@@ -996,9 +1253,25 @@ export function Pets({ className }: PetsProps) {
       });
       return;
     }
+    if (nextPet && !isPetOwned(nextPet.id, careState)) {
+      setPreviewPetId(nextPet.id);
+      setActiveView("shop");
+      pushFeedback({
+        title: copy.buyPet,
+        detail: copy.buyFor.replace("{cost}", String(getPetStorePrice(nextPet.id))),
+        mood: "thinking",
+        tone: "info",
+      });
+      return;
+    }
     setPreviewPetId(petId);
     if (nextPet) {
-      toast.message(copy.petPreviewed.replace("{name}", nextPet.displayName));
+      pushFeedback({
+        title: copy.petPreviewed.replace("{name}", nextPet.displayName),
+        detail: nextPet.description,
+        mood: "wave",
+        tone: "info",
+      });
     }
   };
 
@@ -1043,7 +1316,7 @@ export function Pets({ className }: PetsProps) {
       detail,
       tone,
       pluginId,
-      nonce: Date.now(),
+      nonce: nextFeedbackNonce(),
     });
 
     if (pluginId) {
@@ -1063,6 +1336,16 @@ export function Pets({ className }: PetsProps) {
       toast.message(title, { description: detail });
     }
   }, [dispatchPetAction, dispatchPetSpeech]);
+
+  const pushFailureFeedback = useCallback((title: string, pluginId?: PetPluginId) => {
+    pushFeedback({
+      title,
+      detail: copy.actionFailed,
+      mood: "thinking",
+      tone: "info",
+      pluginId,
+    });
+  }, [copy.actionFailed, pushFeedback]);
 
   const handleFocusCompleted = useCallback(async () => {
     try {
@@ -1164,6 +1447,19 @@ export function Pets({ className }: PetsProps) {
     return copy.actionFailed;
   };
 
+  const getPlayFailureDetail = (result: PetPlayActionResult) => {
+    if (result.reason === "cooldown") {
+      return copy.playCooldown.replace(
+        "{seconds}",
+        formatRemainingSeconds(result.cooldownRemainingMs),
+      );
+    }
+    if (result.reason === "daily_limit") return copy.playDailyLimit;
+    if (result.reason === "not_enough_tokens") return copy.playTokenShort;
+    if (result.reason === "stat_low") return copy.playStatLow;
+    return copy.actionFailed;
+  };
+
   const handleDailyCheckin = async () => {
     if (checkingIn) return;
     setCheckingIn(true);
@@ -1171,24 +1467,138 @@ export function Pets({ className }: PetsProps) {
       const result = await dailyPetCheckin(settings.pet_variant);
       handleCareResult(result, copy.checkinDone, copy.checkinAlready);
     } catch {
-      toast.error(copy.actionFailed);
+      pushFailureFeedback(copy.checkinDone);
     } finally {
       setCheckingIn(false);
     }
   };
 
-  const applyPreviewPet = async () => {
-    if (applyingPet) return;
-    if (!isPetUnlocked(previewPet.id, careState)) {
-      const unlockLevel = getPetUnlockLevel(previewPet.id);
+  const handleSavePetName = async () => {
+    if (petNameSaving) return;
+    const nextName = petNameDraft.trim();
+    if (!nextName) {
       pushFeedback({
-        title: copy.petLocked
-          .replace("{name}", previewPet.displayName)
-          .replace("{level}", String(unlockLevel)),
-        detail: copy.workFeedsPet,
+        title: copy.petNameTitle,
+        detail: copy.petNameInvalid,
         mood: "thinking",
         tone: "info",
       });
+      return;
+    }
+
+    setPetNameSaving(true);
+    try {
+      const result = await claimPetName(nextName, settings.pet_variant);
+      setCareState(result.state);
+      if (!result.saved) {
+        pushFeedback({
+          title: copy.petNameTitle,
+          detail: result.reason === "already_claimed" ? copy.petNameLocked : copy.petNameInvalid,
+          mood: "thinking",
+          tone: "info",
+        });
+        return;
+      }
+
+      pushFeedback({
+        title: copy.petNameSaved.replace("{name}", result.state.petName),
+        detail: copy.currentCompanion,
+        mood: "wave",
+      });
+    } catch {
+      pushFailureFeedback(copy.petNameTitle);
+    } finally {
+      setPetNameSaving(false);
+    }
+  };
+
+  const buyPet = async (pet: PetCatalogPet) => {
+    if (buyingPetId) return;
+    setBuyingPetId(pet.id);
+    try {
+      const result = await purchasePet(pet.id, settings.pet_variant);
+      setCareState(result.state);
+      if (result.skipped) {
+        const detail =
+          result.reason === "already_owned"
+            ? copy.alreadyOwned.replace("{name}", pet.displayName)
+            : result.reason === "level_locked"
+              ? copy.shopLocked.replace("{level}", String(getPetUnlockLevel(pet.id)))
+              : result.reason === "not_enough_tokens"
+                ? copy.shopTokenShort
+                : copy.actionFailed;
+        pushFeedback({
+          title: copy.buyPet,
+          detail,
+          mood: "thinking",
+          tone: "info",
+        });
+        return;
+      }
+
+      setPreviewPetId(pet.id);
+      pushFeedback({
+        title: copy.petBought.replace("{name}", pet.displayName),
+        detail: `${copy.buyFor.replace("{cost}", String(result.cost))}. ${copy.selectPet}`,
+        mood: "hop",
+      });
+    } catch {
+      pushFailureFeedback(copy.buyPet);
+    } finally {
+      setBuyingPetId(null);
+    }
+  };
+
+  const applyOwnedShopPet = async (pet: PetCatalogPet) => {
+    if (applyingPet) return;
+
+    setPreviewPetId(pet.id);
+    if (settings.pet_variant === pet.id) {
+      pushFeedback({
+        title: copy.statusReady.replace("{name}", careState.petName || pet.displayName),
+        detail: copy.residentEnabled,
+        mood: "wave",
+        tone: "info",
+      });
+      return;
+    }
+
+    setApplyingPet(true);
+    try {
+      await update("pet_variant", pet.id);
+      if (!settings.pet_enabled) await update("pet_enabled", "true");
+      pushFeedback({
+        title: copy.petAppliedWithAction
+          .replace("{name}", pet.displayName)
+          .replace("{action}", copy.wave),
+        detail: copy.residentEnabled,
+        mood: "wave",
+      });
+    } catch {
+      pushFailureFeedback(copy.selectPet);
+      await reloadSettings();
+    } finally {
+      setApplyingPet(false);
+    }
+  };
+
+  const applyPreviewPet = async () => {
+    if (applyingPet) return;
+    if (!isPetAvailable(previewPet.id, careState)) {
+      const unlockLevel = getPetUnlockLevel(previewPet.id);
+      pushFeedback({
+        title: !isPetUnlocked(previewPet.id, careState)
+          ? copy.petLocked
+              .replace("{name}", previewPet.displayName)
+              .replace("{level}", String(unlockLevel))
+          : copy.buyPet,
+        detail: !isPetUnlocked(previewPet.id, careState)
+          ? copy.workFeedsPet
+          : copy.buyFor.replace("{cost}", String(getPetStorePrice(previewPet.id))),
+        mood: "thinking",
+        tone: "info",
+      });
+      if (isPetUnlocked(previewPet.id, careState)) setActiveView("shop");
       return;
     }
 
@@ -1205,7 +1615,7 @@ export function Pets({ className }: PetsProps) {
         mood: previewMood === "idle" ? "wave" : previewMood,
       });
     } catch {
-      toast.error(copy.actionFailed);
+      pushFailureFeedback(copy.selectPet);
       await reloadSettings();
     } finally {
       setApplyingPet(false);
@@ -1233,7 +1643,7 @@ export function Pets({ className }: PetsProps) {
         pluginId,
       });
     } catch {
-      toast.error(copy.actionFailed);
+      pushFailureFeedback(pluginName, pluginId);
       await reloadSettings();
     } finally {
       setPluginTogglePending((current) => ({ ...current, [pluginId]: false }));
@@ -1315,14 +1725,18 @@ export function Pets({ className }: PetsProps) {
     label,
     resultText,
     mood,
+    requireVirtualModule = false,
   }: {
     action: PetCareActionId;
     label: string;
     resultText: string;
     mood: PetMood;
+    requireVirtualModule?: boolean;
   }) => {
-    if (!requireModule(virtualPetEnabled, copy.virtualPetPlugin, "openpets.virtual-pet")) return;
     if (careActionPending[action]) return;
+    if (requireVirtualModule && !requireModule(virtualPetEnabled, copy.virtualPetPlugin, "openpets.virtual-pet")) {
+      return;
+    }
 
     setCareActionPending((current) => ({ ...current, [action]: true }));
     try {
@@ -1351,9 +1765,55 @@ export function Pets({ className }: PetsProps) {
         pluginId: "openpets.virtual-pet",
       });
     } catch {
-      toast.error(copy.actionFailed);
+      pushFailureFeedback(label, "openpets.virtual-pet");
     } finally {
       setCareActionPending((current) => ({ ...current, [action]: false }));
+    }
+  };
+
+  const playWithPet = async ({
+    action,
+    label,
+    resultText,
+    mood,
+  }: {
+    action: PetPlayActionId;
+    label: string;
+    resultText: string;
+    mood: PetMood;
+  }) => {
+    if (playActionPending[action]) return;
+
+    setPlayActionPending((current) => ({ ...current, [action]: true }));
+    try {
+      const result = await applyPetPlayAction({
+        action,
+        petId: settings.pet_variant,
+        label,
+      });
+      setCareState(result.state);
+      if (result.skipped) {
+        pushFeedback({
+          title: label,
+          detail: getPlayFailureDetail(result),
+          mood: "thinking",
+          tone: "info",
+        });
+        return;
+      }
+
+      const unlockDetail = result.unlockedPets.length
+        ? ` ${copy.unlockNotice.replace("{count}", String(result.unlockedPets.length))}`
+        : "";
+      pushFeedback({
+        title: copy.playActionDone.replace("{action}", label),
+        detail: `${resultText} ${formatPetHud(copy.virtualHud, result.vitals)} ${formatPlayReward(copy, result)}${unlockDetail}`,
+        mood,
+      });
+    } catch {
+      pushFailureFeedback(label);
+    } finally {
+      setPlayActionPending((current) => ({ ...current, [action]: false }));
     }
   };
 
@@ -1366,7 +1826,7 @@ export function Pets({ className }: PetsProps) {
         mood: enabled ? "wave" : "idle",
       });
     } catch {
-      toast.error(copy.actionFailed);
+      pushFailureFeedback(copy.residentPet);
       await reloadSettings();
     }
   };
@@ -1381,7 +1841,7 @@ export function Pets({ className }: PetsProps) {
         tone: enabled ? "success" : "info",
       });
     } catch {
-      toast.error(copy.actionFailed);
+      pushFailureFeedback(copy.aiGrowthTitle);
       await reloadSettings();
     }
   };
@@ -1398,7 +1858,7 @@ export function Pets({ className }: PetsProps) {
         tone: "info",
       });
     } catch {
-      toast.error(copy.actionFailed);
+      pushFailureFeedback(copy.aiDailyBudget);
       await reloadSettings();
     }
   };
@@ -1499,7 +1959,7 @@ export function Pets({ className }: PetsProps) {
         });
       }
     } catch {
-      toast.error(copy.actionFailed);
+      pushFailureFeedback(copy.desktopPet);
       await reloadSettings();
     } finally {
       setDesktopPetPending(false);
@@ -1685,21 +2145,48 @@ export function Pets({ className }: PetsProps) {
         </div>
         <button
           type="button"
-          onClick={() => setModulePanelOpen(true)}
+          onClick={() => setActiveView("shop")}
           className="flex h-10 items-center gap-2 rounded-lg border border-border bg-secondary/45 px-3 text-xs font-bold text-foreground transition-colors hover:border-primary/45 hover:bg-primary/10"
         >
-          <PuzzlePieceIcon className="size-4 text-primary" weight="bold" />
-          {copy.openModules}
+          <CoinsIcon className="size-4 text-primary" weight="bold" />
+          {copy.petShop}
           <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] text-primary">
-            {activePluginCount}/9
+            {formatNumber(careState.tokens)}
           </span>
         </button>
       </header>
 
-      <section
-        className="mb-5 rounded-xl border border-border/70 bg-card p-5"
-        style={{ animation: `card-in 350ms ${EASE_OUT} 60ms both` }}
+      <nav
+        aria-label="Pet sections"
+        className="mb-5 flex flex-wrap gap-2 rounded-xl border border-border/70 bg-card p-2"
+        style={{ animation: `card-in 350ms ${EASE_OUT} 35ms both` }}
       >
+        {PET_VIEWS.map((view) => {
+          const active = activeView === view;
+          return (
+            <button
+              key={view}
+              type="button"
+              onClick={() => setActiveView(view)}
+              className={cn(
+                "pet-view-tab flex h-10 min-w-28 items-center justify-center rounded-lg px-4 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70",
+                active
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+              )}
+              aria-current={active ? "page" : undefined}
+            >
+              {copy[PET_VIEW_COPY_KEYS[view]]}
+            </button>
+          );
+        })}
+      </nav>
+
+      {activeView === "overview" && (
+        <section
+          className="mb-5 rounded-xl border border-border/70 bg-card p-5"
+          style={{ animation: `card-in 350ms ${EASE_OUT} 60ms both` }}
+        >
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_310px]">
           <div>
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1766,6 +2253,85 @@ export function Pets({ className }: PetsProps) {
                 <p className="mt-1 font-mono text-lg font-bold text-foreground">
                   {copy.days.replace("{count}", String(careState.checkinStreak))}
                 </p>
+              </div>
+            </div>
+
+            <div className="pet-playground mt-5 rounded-lg border border-primary/20 bg-primary/5 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h4 className="flex items-center gap-2 text-sm font-bold text-foreground">
+                    <PawPrintIcon className="size-4 text-primary" weight="fill" />
+                    {copy.playgroundTitle}
+                  </h4>
+                  <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+                    {copy.playgroundDescription}
+                  </p>
+                </div>
+                <span className="rounded-full border border-primary/35 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary">
+                  {copy.playCombo.replace("{combo}", String(careState.playCombo))}
+                </span>
+              </div>
+
+              <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                {PLAY_ACTION_CONFIG.map((item) => {
+                  const Icon = item.icon;
+                  const rule = PET_PLAY_ACTIONS[item.action];
+                  const used = careState.playActionCountsToday[item.action] ?? 0;
+                  const left = Math.max(0, rule.dailyLimit - used);
+                  const pending = Boolean(playActionPending[item.action]);
+
+                  return (
+                    <button
+                      key={item.action}
+                      type="button"
+                      disabled={pending}
+                      onClick={() =>
+                        void playWithPet({
+                          action: item.action,
+                          label: copy[item.labelKey],
+                          resultText: copy[item.resultKey],
+                          mood: item.mood,
+                        })
+                      }
+                      className={cn(
+                        "pet-play-card pet-action-button min-h-32 rounded-lg border border-border bg-background/60 p-3 text-left transition-colors hover:border-primary/45 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 disabled:cursor-wait disabled:opacity-70",
+                        pending && "border-primary/45 bg-primary/10",
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
+                            <Icon className="size-4.5" weight={pending ? "fill" : "regular"} />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-bold text-foreground">
+                              {copy[item.labelKey]}
+                            </span>
+                            <span className="mt-0.5 block truncate text-[11px] font-semibold text-muted-foreground">
+                              {copy.playDailyLeft
+                                .replace("{left}", String(left))
+                                .replace("{total}", String(rule.dailyLimit))}
+                            </span>
+                          </span>
+                        </div>
+                        <span className="shrink-0 rounded-full bg-secondary px-2 py-1 text-[10px] font-bold text-muted-foreground">
+                          {pending
+                            ? copy.applying
+                            : copy.playDailyLeft
+                                .replace("{left}", String(left))
+                                .replace("{total}", String(rule.dailyLimit))}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                        {copy[item.descriptionKey]}
+                      </p>
+                      <div className="mt-3 flex items-center gap-2 text-[11px] font-semibold text-primary">
+                        <CoinsIcon className="size-3.5" weight="fill" />
+                        <span className="truncate">{formatPlayActionMeta(copy, item.action)}</span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -1843,232 +2409,122 @@ export function Pets({ className }: PetsProps) {
             </div>
           </div>
 
-          <div className="rounded-lg border border-border/70 bg-secondary/20 p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground">{copy.currentCompanion}</p>
-                <h4 className="mt-1 truncate font-heading text-lg font-bold text-foreground">{currentPet.displayName}</h4>
+          <aside className="space-y-4">
+            <div className="rounded-lg border border-border/70 bg-secondary/20 p-4">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-bold text-foreground">{copy.petNameTitle}</h4>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {careState.petNameClaimed ? copy.petNameLocked : copy.petNameDescription}
+                  </p>
+                </div>
+                <span className={cn(
+                  "shrink-0 rounded-full px-2 py-1 text-[11px] font-bold",
+                  careState.petNameClaimed ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground",
+                )}>
+                  {careState.petNameClaimed ? currentPetName : "1/1"}
+                </span>
               </div>
-              <span className="rounded-full border border-primary/35 bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
-                {copy.petLevel}{currentPetProgress.level}
-              </span>
-            </div>
-            <div className="flex items-end justify-center rounded-lg bg-background/45 py-4">
-              <PetSprite variantId={currentPet.id} state="idle" width={104} />
-            </div>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-border">
-              <div
-                className="pet-progress-fill h-full rounded-full bg-primary"
-                style={{ width: `${currentPetProgress.progress * 100}%` }}
-              />
-            </div>
-            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{copy.workFeedsPet}</p>
-          </div>
-        </div>
-      </section>
-
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <section
-          className="rounded-xl border border-border/70 bg-card"
-          style={{ animation: `card-in 350ms ${EASE_OUT} 120ms both` }}
-        >
-          <div className="border-b border-border/70 p-5">
-            <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <h3 className="font-heading text-base font-bold text-foreground">{copy.choosePet}</h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {copy.choosePetDescription} {copy.unlocked}: {unlockedCount}/{PET_CATALOG.length}
-                </p>
-              </div>
-              <div className="flex gap-1 rounded-lg border border-border/70 bg-secondary/35 p-1">
-                {FILTERS.map((filterId) => (
-                  <button
-                    key={filterId}
-                    type="button"
-                    onClick={() => setFilter(filterId)}
-                    className={cn(
-                      "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-                      filter === filterId
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-                    )}
-                  >
-                    {copy[filterId]}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <label className="flex h-10 items-center gap-2 rounded-lg border border-border/70 bg-background/70 px-3 text-sm text-muted-foreground focus-within:ring-2 focus-within:ring-primary/50">
-              <MagnifyingGlassIcon className="size-4 shrink-0" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={copy.searchPlaceholder}
-                className="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-              />
-            </label>
-          </div>
-
-          <div className="grid max-h-[600px] grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3 overflow-y-auto p-5">
-            {pets.map((pet) => {
-              const applied = settings.pet_variant === pet.id;
-              const previewing = previewPetId === pet.id;
-              const unlocked = isPetUnlocked(pet.id, careState);
-              const unlockLevel = getPetUnlockLevel(pet.id);
-              const petProgress = getPetCareProgress(getPetXp(careState, pet.id));
-
-              return (
-                <button
-                  key={pet.id}
-                  type="button"
-                  onClick={() => previewPetChoice(pet.id)}
-                  className={cn(
-                    "group relative min-h-44 rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70",
-                    previewing && unlocked
-                      ? "border-primary/70 bg-primary/10"
-                      : "border-border bg-secondary/20 hover:border-muted-foreground/35 hover:bg-secondary/40",
-                    !unlocked && "opacity-75",
-                  )}
-                >
-                  <div className="mb-3 flex items-start justify-between gap-2">
-                    <span className="rounded-full border border-border/70 bg-background/70 px-2 py-1 text-[11px] font-semibold text-muted-foreground">
-                      {sourceLabel(pet, copy)}
-                    </span>
-                    <span
-                      className={cn(
-                        "flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold",
-                        unlocked ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground",
-                      )}
-                    >
-                      {unlocked
-                        ? applied
-                          ? copy.selected
-                          : previewing
-                            ? copy.previewing
-                            : `Lv.${petProgress.level}`
-                        : copy.unlockAt.replace("{level}", String(unlockLevel))}
-                    </span>
-                  </div>
-
-                  <div className="flex items-end justify-between gap-3">
-                    <div className="min-w-0">
-                      <h4 className="truncate font-heading text-base font-bold text-foreground">
-                        {pet.displayName}
-                      </h4>
-                      <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                        {pet.description}
-                      </p>
-                      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-border">
-                        <div
-                          className={cn("h-full rounded-full", unlocked ? "bg-primary" : "bg-muted-foreground/40")}
-                          style={{ width: `${unlocked ? petProgress.progress * 100 : 0}%` }}
-                        />
-                      </div>
-                    </div>
-                    <div className={cn("relative flex h-24 w-20 shrink-0 items-end justify-center", !unlocked && "grayscale")}>
-                      <PetSprite
-                        variantId={pet.id}
-                        state={previewing && unlocked ? "wave" : "idle"}
-                        width={76}
-                        className="absolute bottom-0 left-1/2 -translate-x-1/2 transition-transform duration-200 group-hover:scale-105"
-                      />
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {pets.length === 0 && (
-            <div className="px-5 pb-5 text-sm text-muted-foreground">{copy.noPets}</div>
-          )}
-        </section>
-
-        <aside
-          className="rounded-xl border border-border/70 bg-card"
-          style={{ animation: `card-in 350ms ${EASE_OUT} 180ms both` }}
-        >
-          <div className="border-b border-border/70 p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-muted-foreground">{copy.preview}</p>
-                <h3 className="mt-1 truncate font-heading text-xl font-bold text-foreground">
-                  {previewPet.displayName}
-                </h3>
-                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{previewPet.description}</p>
-              </div>
-              <span className="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-                {copy.petLevel}{previewPetProgress.level}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex min-h-64 items-end justify-center bg-[radial-gradient(circle_at_50%_30%,rgba(200,241,53,0.13),transparent_38%)] p-7">
-            <PetSprite
-              key={`${previewPet.id}-${previewMood}`}
-              variantId={previewPet.id}
-              state={previewMood === "hop" ? "hop" : previewMood}
-              width={146}
-            />
-          </div>
-
-          <div className="space-y-4 border-t border-border/70 p-5">
-            <div>
-              <div className="mb-3 flex items-center justify-between">
-                <h4 className="font-heading text-sm font-bold text-foreground">{copy.preview}</h4>
+              <div className="flex gap-2">
+                <input
+                  value={petNameDraft}
+                  onChange={(event) => setPetNameDraft(event.target.value)}
+                  disabled={careState.petNameClaimed || petNameSaving}
+                  placeholder={copy.petNamePlaceholder}
+                  maxLength={24}
+                  className="h-10 min-w-0 flex-1 rounded-lg border border-border/70 bg-background/65 px-3 text-sm font-medium text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/60 focus:ring-2 focus:ring-primary/15 disabled:opacity-60"
+                />
                 <button
                   type="button"
-                  onClick={resetPreviewAction}
-                  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                  aria-label={copy.resetFocus}
+                  disabled={careState.petNameClaimed || petNameSaving}
+                  onClick={() => void handleSavePetName()}
+                  className="pet-action-button flex h-10 shrink-0 items-center justify-center rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
                 >
-                  <ArrowCounterClockwiseIcon className="size-4" />
+                  {petNameSaving ? copy.applying : copy.savePetName}
                 </button>
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                {PET_ACTIONS.map((action) => (
-                  <button
-                    key={action.key}
-                    type="button"
-                    onClick={() => playPreviewAction(action.mood, copy[action.key])}
-                    className={cn(
-                      "rounded-lg border px-3 py-2 text-xs font-semibold transition-colors",
-                      previewMood === action.mood
-                        ? "border-primary/70 bg-primary/10 text-primary"
-                        : "border-border bg-secondary/25 text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {copy[action.key]}
-                  </button>
-                ))}
+            </div>
+
+            <div className="rounded-lg border border-border/70 bg-secondary/20 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground">{copy.currentCompanion}</p>
+                  <h4 className="mt-1 truncate font-heading text-lg font-bold text-foreground">{currentPetName}</h4>
+                </div>
+                <span className="rounded-full border border-primary/35 bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
+                  {copy.petLevel}{currentPetProgress.level}
+                </span>
               </div>
               <button
                 type="button"
-                onClick={() => void applyPreviewPet()}
-                disabled={applyingPet}
-                className={cn(
-                  "mt-3 flex h-10 w-full items-center justify-center rounded-lg px-4 text-sm font-bold transition-colors",
-                  applyingPet
-                    ? "cursor-wait bg-secondary text-muted-foreground"
-                    : isPetUnlocked(previewPet.id, careState)
-                      ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                      : "border border-border bg-secondary/40 text-muted-foreground",
-                )}
+                onClick={() => {
+                  dispatchPetAction("wave");
+                  dispatchPetSpeech({
+                    title: copy.currentCompanion,
+                    message: formatPetHud(copy.virtualHud, petStats),
+                    tone: "info",
+                    durationMs: 3600,
+                  });
+                }}
+                className="group flex w-full items-end justify-center rounded-lg bg-background/45 py-4 transition-colors hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
               >
-                {applyingPet
-                  ? copy.applying
-                  : isPetUnlocked(previewPet.id, careState)
-                    ? copy.selectPet
-                    : copy.unlockAt.replace("{level}", String(getPetUnlockLevel(previewPet.id)))}
+                <PetSprite
+                  variantId={currentPet.id}
+                  state={previewMood === "idle" ? "idle" : previewMood}
+                  width={112}
+                  className="transition-transform duration-200 group-hover:scale-105"
+                />
               </button>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-border">
+                <div
+                  className="pet-progress-fill h-full rounded-full bg-primary"
+                  style={{ width: `${currentPetProgress.progress * 100}%` }}
+                />
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <StatBar label={copy.food} value={petStats.food} icon={ForkKnifeIcon} />
+                <StatBar label={copy.energy} value={petStats.energy} icon={BatteryChargingIcon} />
+                <StatBar label={copy.play} value={petStats.play} icon={SmileyIcon} />
+                <StatBar label={copy.bond} value={petStats.bond} icon={HeartIcon} />
+              </div>
+              <div className="mt-3 grid grid-cols-4 gap-2">
+                {CARE_ACTION_CONFIG.map((item) => {
+                  const Icon = item.icon;
+                  const pending = Boolean(careActionPending[item.action]);
+                  return (
+                    <button
+                      key={item.action}
+                      type="button"
+                      disabled={pending}
+                      onClick={() =>
+                        void careForPet({
+                          action: item.action,
+                          label: copy[item.labelKey],
+                          resultText: copy[item.resultKey],
+                          mood: item.mood,
+                          requireVirtualModule: false,
+                        })
+                      }
+                      className="pet-action-button flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border border-border bg-background/60 px-2 py-2 text-[11px] font-bold text-foreground transition-colors hover:border-primary/45 hover:bg-primary/10 disabled:cursor-wait disabled:opacity-70"
+                    >
+                      <Icon className="size-4 text-primary" weight={pending ? "fill" : "regular"} />
+                      <span className="truncate">{copy[item.labelKey]}</span>
+                      <span className="max-w-full truncate text-[9px] font-semibold text-muted-foreground">
+                        {formatCareActionMeta(copy, item.action)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{copy.workFeedsPet}</p>
             </div>
 
-            <div className="flex items-center justify-between rounded-lg border border-border/70 bg-secondary/20 p-3">
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 bg-secondary/20 p-3">
               <div>
                 <h4 className="text-sm font-bold text-foreground">{copy.residentPet}</h4>
                 <p className="mt-1 text-xs text-muted-foreground">{copy.residentPetDescription}</p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex shrink-0 items-center gap-3">
                 <span className="text-xs font-semibold text-muted-foreground">
                   {settings.pet_enabled ? copy.enabled : copy.disabled}
                 </span>
@@ -2150,7 +2606,7 @@ export function Pets({ className }: PetsProps) {
               </button>
             </div>
 
-            <div className="flex items-center justify-between rounded-lg border border-border/70 bg-secondary/20 p-3">
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 bg-secondary/20 p-3">
               <div>
                 <h4 className="flex items-center gap-2 text-sm font-bold text-foreground">
                   <DesktopIcon className="size-4 text-primary" weight="fill" />
@@ -2177,7 +2633,7 @@ export function Pets({ className }: PetsProps) {
             </div>
 
             <div
-              key={`side-${activeFeedback.nonce}`}
+              key={`overview-${activeFeedback.nonce}`}
               aria-live="polite"
               className={cn(
                 "pet-feedback-card flex items-start gap-3 rounded-lg border p-3",
@@ -2185,7 +2641,6 @@ export function Pets({ className }: PetsProps) {
                   ? "border-primary/45 bg-primary/10"
                   : "border-border bg-secondary/25",
               )}
-              style={{ animation: `card-in 220ms ${EASE_OUT} both` }}
             >
               <div
                 className={cn(
@@ -2226,22 +2681,364 @@ export function Pets({ className }: PetsProps) {
                 </p>
               )}
             </div>
+          </aside>
+        </div>
+      </section>
+      )}
+
+      {activeView === "library" && (
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <section
+          className="rounded-xl border border-border/70 bg-card"
+          style={{ animation: `card-in 350ms ${EASE_OUT} 120ms both` }}
+        >
+          <div className="border-b border-border/70 p-5">
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <h3 className="font-heading text-base font-bold text-foreground">{copy.choosePet}</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {copy.choosePetDescription} {copy.owned}: {ownedCount}/{PET_CATALOG.length}
+                </p>
+              </div>
+              <div className="flex gap-1 rounded-lg border border-border/70 bg-secondary/35 p-1">
+                {FILTERS.map((filterId) => (
+                  <button
+                    key={filterId}
+                    type="button"
+                    onClick={() => setFilter(filterId)}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+                      filter === filterId
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                    )}
+                  >
+                    {copy[filterId]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <label className="flex h-10 items-center gap-2 rounded-lg border border-border/70 bg-background/70 px-3 text-sm text-muted-foreground focus-within:ring-2 focus-within:ring-primary/50">
+              <MagnifyingGlassIcon className="size-4 shrink-0" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={copy.searchPlaceholder}
+                className="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+              />
+            </label>
+          </div>
+
+          <div className="grid max-h-[600px] grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3 overflow-y-auto p-5">
+            {pets.map((pet) => {
+              const applied = settings.pet_variant === pet.id;
+              const previewing = previewPetId === pet.id;
+              const unlocked = isPetUnlocked(pet.id, careState);
+              const owned = isPetOwned(pet.id, careState);
+              const unlockLevel = getPetUnlockLevel(pet.id);
+              const petProgress = getPetCareProgress(getPetXp(careState, pet.id));
+
+              return (
+                <button
+                  key={pet.id}
+                  type="button"
+                  onClick={() => previewPetChoice(pet.id)}
+                  className={cn(
+                    "group relative min-h-44 rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70",
+                    previewing && unlocked
+                      ? "border-primary/70 bg-primary/10"
+                      : "border-border bg-secondary/20 hover:border-muted-foreground/35 hover:bg-secondary/40",
+                    (!unlocked || !owned) && "opacity-75",
+                  )}
+                >
+                  <div className="mb-3 flex items-start justify-between gap-2">
+                    <span className="rounded-full border border-border/70 bg-background/70 px-2 py-1 text-[11px] font-semibold text-muted-foreground">
+                      {sourceLabel(pet, copy)}
+                    </span>
+                    <span
+                      className={cn(
+                        "flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold",
+                        unlocked && owned ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground",
+                      )}
+                    >
+                      {unlocked && owned
+                        ? applied
+                          ? copy.selected
+                          : previewing
+                            ? copy.previewing
+                            : `Lv.${petProgress.level}`
+                        : unlocked
+                          ? copy.buyPet
+                          : copy.unlockAt.replace("{level}", String(unlockLevel))}
+                    </span>
+                  </div>
+
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="min-w-0">
+                      <h4 className="truncate font-heading text-base font-bold text-foreground">
+                        {pet.displayName}
+                      </h4>
+                      <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                        {pet.description}
+                      </p>
+                      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-border">
+                        <div
+                          className={cn("h-full rounded-full", unlocked ? "bg-primary" : "bg-muted-foreground/40")}
+                          style={{ width: `${unlocked ? petProgress.progress * 100 : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className={cn("relative flex h-24 w-20 shrink-0 items-end justify-center", (!unlocked || !owned) && "grayscale")}>
+                      <PetSprite
+                        variantId={pet.id}
+                        state={previewing && unlocked ? "wave" : "idle"}
+                        width={76}
+                        className="absolute bottom-0 left-1/2 -translate-x-1/2 transition-transform duration-200 group-hover:scale-105"
+                      />
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {pets.length === 0 && (
+            <div className="px-5 pb-5 text-sm text-muted-foreground">{copy.noPets}</div>
+          )}
+        </section>
+
+        <aside
+          className="rounded-xl border border-border/70 bg-card"
+          style={{ animation: `card-in 350ms ${EASE_OUT} 180ms both` }}
+        >
+          <div className="border-b border-border/70 p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-muted-foreground">{copy.preview}</p>
+                <h3 className="mt-1 truncate font-heading text-xl font-bold text-foreground">
+                  {previewPet.displayName}
+                </h3>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{previewPet.description}</p>
+              </div>
+              <span className="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                {copy.petLevel}{previewPetProgress.level}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex min-h-64 items-end justify-center bg-[radial-gradient(circle_at_50%_30%,rgba(200,241,53,0.13),transparent_38%)] p-7">
+            <PetSprite
+              key={`${previewPet.id}-${previewMood}`}
+              variantId={previewPet.id}
+              state={previewMood === "hop" ? "hop" : previewMood}
+              width={146}
+            />
+          </div>
+
+          <div className="space-y-4 border-t border-border/70 p-5">
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <h4 className="font-heading text-sm font-bold text-foreground">{copy.preview}</h4>
+                <button
+                  type="button"
+                  onClick={resetPreviewAction}
+                  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  aria-label={copy.resetFocus}
+                >
+                  <ArrowCounterClockwiseIcon className="size-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {PET_ACTIONS.map((action) => (
+                  <button
+                    key={action.key}
+                    type="button"
+                    onClick={() => playPreviewAction(action.mood, copy[action.key])}
+                    className={cn(
+                      "pet-action-button rounded-lg border px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70",
+                      previewMood === action.mood
+                        ? "border-primary/70 bg-primary/10 text-primary"
+                        : "border-border bg-secondary/25 text-muted-foreground hover:text-foreground",
+                    )}
+                    aria-pressed={previewMood === action.mood}
+                  >
+                    {copy[action.key]}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => void applyPreviewPet()}
+                disabled={applyingPet}
+                className={cn(
+                  "pet-action-button mt-3 flex h-10 w-full items-center justify-center rounded-lg px-4 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70",
+                  applyingPet
+                    ? "cursor-wait bg-secondary text-muted-foreground"
+                    : isPetUnlocked(previewPet.id, careState)
+                      ? isPetAvailable(previewPet.id, careState)
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                        : "border border-border bg-secondary/40 text-muted-foreground"
+                      : "border border-border bg-secondary/40 text-muted-foreground",
+                )}
+              >
+                {applyingPet
+                  ? copy.applying
+                  : isPetAvailable(previewPet.id, careState)
+                    ? copy.selectPet
+                    : isPetUnlocked(previewPet.id, careState)
+                      ? copy.buyFor.replace("{cost}", String(getPetStorePrice(previewPet.id)))
+                      : copy.unlockAt.replace("{level}", String(getPetUnlockLevel(previewPet.id)))}
+              </button>
+            </div>
+
+            <div
+              key={`side-${activeFeedback.nonce}`}
+              aria-live="polite"
+              className={cn(
+                "pet-feedback-card flex items-start gap-3 rounded-lg border p-3",
+                activeFeedback.tone === "success"
+                  ? "border-primary/45 bg-primary/10"
+                  : "border-border bg-secondary/25",
+              )}
+              style={{ animation: `card-in 220ms ${EASE_OUT} both` }}
+            >
+              <div
+                className={cn(
+                  "flex size-9 shrink-0 items-center justify-center rounded-lg",
+                  activeFeedback.tone === "success" ? "bg-primary text-primary-foreground" : "bg-secondary text-primary",
+                )}
+              >
+                <FeedbackIcon className="size-4.5" weight="fill" />
+              </div>
+              <div className="min-w-0">
+                <p className="mb-1 text-[11px] font-semibold text-muted-foreground">{copy.latestFeedback}</p>
+                <h4 className="text-sm font-bold text-foreground">{activeFeedback.title}</h4>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{activeFeedback.detail}</p>
+              </div>
+            </div>
+
           </div>
         </aside>
       </div>
+      )}
 
-      {modulePanelOpen && (
-        <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-background/70 p-5 backdrop-blur-sm"
-          onMouseDown={() => setModulePanelOpen(false)}
+      {activeView === "shop" && (
+        <section
+          className="rounded-xl border border-border/70 bg-card"
+          style={{ animation: `card-in 350ms ${EASE_OUT} 90ms both` }}
         >
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border/70 p-5">
+            <div>
+              <h3 className="font-heading text-lg font-bold text-foreground">{copy.petShop}</h3>
+              <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
+                {copy.petShopDescription}
+              </p>
+            </div>
+            <span className="flex h-9 items-center gap-2 rounded-lg border border-primary/35 bg-primary/10 px-3 text-xs font-bold text-primary">
+              <CoinsIcon className="size-4" weight="fill" />
+              {formatNumber(careState.tokens)} {copy.tokens}
+            </span>
+          </div>
+
+          <div className="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-3">
+            {shopPets.map((pet) => {
+              const unlocked = isPetUnlocked(pet.id, careState);
+              const owned = isPetOwned(pet.id, careState);
+              const price = getPetStorePrice(pet.id);
+              const unlockLevel = getPetUnlockLevel(pet.id);
+              const buying = buyingPetId === pet.id;
+              const canBuy = unlocked && !owned && careState.tokens >= price;
+
+              return (
+                <article
+                  key={pet.id}
+                  className={cn(
+                    "flex min-h-52 flex-col rounded-lg border p-4 transition-colors",
+                    owned
+                      ? "border-primary/40 bg-primary/8"
+                      : unlocked
+                        ? "border-border bg-secondary/20"
+                        : "border-border/70 bg-secondary/10 opacity-75",
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-border/70 bg-background/70 px-2 py-1 text-[11px] font-semibold text-muted-foreground">
+                          {sourceLabel(pet, copy)}
+                        </span>
+                        <span className={cn(
+                          "rounded-full px-2 py-1 text-[11px] font-bold",
+                          owned ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground",
+                        )}>
+                          {owned
+                            ? copy.owned
+                            : unlocked
+                              ? copy.buyFor.replace("{cost}", String(price))
+                              : copy.unlockAt.replace("{level}", String(unlockLevel))}
+                        </span>
+                      </div>
+                      <h4 className="truncate font-heading text-base font-bold text-foreground">{pet.displayName}</h4>
+                      <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                        {pet.description}
+                      </p>
+                    </div>
+                    <div className={cn("relative flex h-24 w-20 shrink-0 items-end justify-center", !owned && "grayscale")}>
+                      <PetSprite
+                        variantId={pet.id}
+                        state={owned ? "wave" : "idle"}
+                        width={78}
+                        className="absolute bottom-0 left-1/2 -translate-x-1/2"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-auto pt-4">
+                    <button
+                      type="button"
+                      disabled={buying || applyingPet}
+                      onClick={() => owned ? void applyOwnedShopPet(pet) : void buyPet(pet)}
+                      className={cn(
+                        "pet-action-button flex h-10 w-full items-center justify-center gap-2 rounded-lg text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 disabled:cursor-not-allowed disabled:opacity-70",
+                        owned || canBuy
+                          ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                          : "border border-border bg-background/60 text-muted-foreground hover:bg-secondary hover:text-foreground",
+                      )}
+                    >
+                      {owned ? (
+                        <PawPrintIcon className="size-4" weight="fill" />
+                      ) : (
+                        <CoinsIcon className="size-4" weight={canBuy ? "fill" : "regular"} />
+                      )}
+                      {buying
+                        ? copy.applying
+                        : owned
+                          ? settings.pet_variant === pet.id
+                            ? copy.selected
+                            : copy.selectPet
+                          : unlocked
+                            ? copy.buyFor.replace("{cost}", String(price))
+                            : copy.unlockAt.replace("{level}", String(unlockLevel))}
+                    </button>
+                    {!owned && unlocked && careState.tokens < price && (
+                      <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                        {copy.shopTokenShort}
+                      </p>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {activeView === "modules" && (
           <section
-            role="dialog"
-            aria-modal="true"
+            role="region"
             aria-labelledby="pet-modules-title"
-            className="flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl"
-            onMouseDown={(event) => event.stopPropagation()}
-            style={{ animation: `card-in 220ms ${EASE_OUT} both` }}
+            className="rounded-xl border border-border/70 bg-card"
+            style={{ animation: `card-in 350ms ${EASE_OUT} 80ms both` }}
           >
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border/70 p-5">
               <div>
@@ -2256,7 +3053,7 @@ export function Pets({ className }: PetsProps) {
                 </span>
                 <button
                   type="button"
-                  onClick={() => setModulePanelOpen(false)}
+                  onClick={() => setActiveView("overview")}
                   className="flex size-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
                   aria-label={copy.closeModules}
                 >
@@ -2265,7 +3062,7 @@ export function Pets({ className }: PetsProps) {
               </div>
             </div>
 
-            <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_320px]">
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {PET_PLUGINS.map((plugin) => {
                   const Icon = PLUGIN_ICONS[plugin.id];
@@ -2336,9 +3133,8 @@ export function Pets({ className }: PetsProps) {
                         </div>
                         <button
                           type="button"
-                          onClick={() => void runPluginAction(plugin.id)}
-                          disabled={runningPlugins[plugin.id]}
-                          aria-disabled={!checked}
+                          onClick={() => checked ? void runPluginAction(plugin.id) : void togglePlugin(plugin.id, true)}
+                          disabled={Boolean(runningPlugins[plugin.id] || pluginTogglePending[plugin.id])}
                           className={cn(
                             "flex h-9 w-full items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 disabled:cursor-wait disabled:opacity-70",
                             checked
@@ -2347,7 +3143,11 @@ export function Pets({ className }: PetsProps) {
                           )}
                         >
                           <PlayIcon className="size-3.5" weight={checked ? "fill" : "regular"} />
-                          {runningPlugins[plugin.id] ? copy.applying : copy.useModule}
+                          {runningPlugins[plugin.id]
+                            ? copy.applying
+                            : checked
+                              ? copy.useModule
+                              : copy.enableModule}
                         </button>
                       </div>
                     </article>
@@ -2356,7 +3156,7 @@ export function Pets({ className }: PetsProps) {
               </div>
 
               <div className="space-y-4">
-                <div className={cn("rounded-lg border border-border bg-secondary/20 p-4", !virtualPetEnabled && "opacity-55")}>
+                <div className={cn("rounded-lg border border-border bg-secondary/20 p-4", !virtualPetEnabled && "opacity-80")}>
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <h4 className="font-heading text-sm font-bold text-foreground">{copy.virtualStats}</h4>
                     <HeartIcon className="size-4 text-primary" weight={virtualPetEnabled ? "fill" : "regular"} />
@@ -2368,94 +3168,39 @@ export function Pets({ className }: PetsProps) {
                     <StatBar label={copy.bond} value={petStats.bond} icon={HeartIcon} />
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      disabled={careActionPending.feed}
-                      aria-disabled={!virtualPetEnabled}
-                      onClick={() =>
-                        void careForPet({
-                          action: "feed",
-                          label: copy.feed,
-                          resultText: copy.fedResult,
-                          mood: "hop",
-                        })
-                      }
-                      className={cn(
-                        "pet-action-button rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary disabled:cursor-wait disabled:opacity-70",
-                        !virtualPetEnabled && "cursor-not-allowed opacity-60",
-                      )}
-                    >
-                      <span className="block">{copy.feed}</span>
-                      <span className="mt-0.5 block text-[10px] font-medium text-muted-foreground">
-                        {formatCareActionMeta(copy, "feed")}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={careActionPending.play}
-                      aria-disabled={!virtualPetEnabled}
-                      onClick={() =>
-                        void careForPet({
-                          action: "play",
-                          label: copy.playGame,
-                          resultText: copy.playResult,
-                          mood: "hop",
-                        })
-                      }
-                      className={cn(
-                        "pet-action-button rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary disabled:cursor-wait disabled:opacity-70",
-                        !virtualPetEnabled && "cursor-not-allowed opacity-60",
-                      )}
-                    >
-                      <span className="block">{copy.playGame}</span>
-                      <span className="mt-0.5 block text-[10px] font-medium text-muted-foreground">
-                        {formatCareActionMeta(copy, "play")}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={careActionPending.pet}
-                      aria-disabled={!virtualPetEnabled}
-                      onClick={() =>
-                        void careForPet({
-                          action: "pet",
-                          label: copy.pet,
-                          resultText: copy.pettedResult,
-                          mood: "wave",
-                        })
-                      }
-                      className={cn(
-                        "pet-action-button rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary disabled:cursor-wait disabled:opacity-70",
-                        !virtualPetEnabled && "cursor-not-allowed opacity-60",
-                      )}
-                    >
-                      <span className="block">{copy.pet}</span>
-                      <span className="mt-0.5 block text-[10px] font-medium text-muted-foreground">
-                        {formatCareActionMeta(copy, "pet")}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={careActionPending.nap}
-                      aria-disabled={!virtualPetEnabled}
-                      onClick={() =>
-                        void careForPet({
-                          action: "nap",
-                          label: copy.nap,
-                          resultText: copy.napResult,
-                          mood: "thinking",
-                        })
-                      }
-                      className={cn(
-                        "pet-action-button rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary disabled:cursor-wait disabled:opacity-70",
-                        !virtualPetEnabled && "cursor-not-allowed opacity-60",
-                      )}
-                    >
-                      <span className="block">{copy.nap}</span>
-                      <span className="mt-0.5 block text-[10px] font-medium text-muted-foreground">
-                        {formatCareActionMeta(copy, "nap")}
-                      </span>
-                    </button>
+                    {CARE_ACTION_CONFIG.map((item) => {
+                      const Icon = item.icon;
+                      const pending = Boolean(careActionPending[item.action]);
+                      return (
+                        <button
+                          key={item.action}
+                          type="button"
+                          disabled={pending}
+                          onClick={() =>
+                            void careForPet({
+                              action: item.action,
+                              label: copy[item.labelKey],
+                              resultText: copy[item.resultKey],
+                              mood: item.mood,
+                              requireVirtualModule: true,
+                            })
+                          }
+                          className={cn(
+                            "pet-action-button flex min-h-14 items-center gap-2 rounded-lg border border-border bg-background/60 px-3 py-2 text-left text-xs font-semibold text-foreground transition-colors hover:border-primary/45 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 disabled:cursor-wait disabled:opacity-70",
+                            pending && "border-primary/45 bg-primary/10",
+                            !virtualPetEnabled && "text-muted-foreground",
+                          )}
+                        >
+                          <Icon className="size-4 shrink-0 text-primary" weight={pending ? "fill" : "regular"} />
+                          <span className="min-w-0">
+                            <span className="block truncate">{copy[item.labelKey]}</span>
+                            <span className="mt-0.5 block truncate text-[10px] font-medium text-muted-foreground">
+                              {formatCareActionMeta(copy, item.action)}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -2470,11 +3215,10 @@ export function Pets({ className }: PetsProps) {
                   <div className="grid grid-cols-3 gap-2">
                     <button
                       type="button"
-                      aria-disabled={!focusEnabled}
                       onClick={startFocus}
                       className={cn(
                         "pet-action-button flex items-center justify-center gap-1 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground",
-                        !focusEnabled && "cursor-not-allowed opacity-60",
+                        !focusEnabled && "border border-border bg-background/60 text-muted-foreground hover:bg-secondary hover:text-foreground",
                         focusRunning && "bg-primary/80",
                       )}
                     >
@@ -2483,11 +3227,10 @@ export function Pets({ className }: PetsProps) {
                     </button>
                     <button
                       type="button"
-                      aria-disabled={!focusEnabled}
                       onClick={pauseFocus}
                       className={cn(
                         "pet-action-button flex items-center justify-center gap-1 rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground",
-                        !focusEnabled && "cursor-not-allowed opacity-60",
+                        !focusEnabled && "text-muted-foreground hover:bg-secondary hover:text-foreground",
                       )}
                     >
                       <PauseIcon className="size-3.5" weight="fill" />
@@ -2495,11 +3238,10 @@ export function Pets({ className }: PetsProps) {
                     </button>
                     <button
                       type="button"
-                      aria-disabled={!focusEnabled}
                       onClick={resetFocus}
                       className={cn(
                         "pet-action-button flex items-center justify-center gap-1 rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground",
-                        !focusEnabled && "cursor-not-allowed opacity-60",
+                        !focusEnabled && "text-muted-foreground hover:bg-secondary hover:text-foreground",
                       )}
                     >
                       <ArrowCounterClockwiseIcon className="size-3.5" />
@@ -2509,7 +3251,7 @@ export function Pets({ className }: PetsProps) {
                 </div>
 
                 <div
-                  key={`modal-${activeFeedback.nonce}`}
+                  key={`module-${activeFeedback.nonce}`}
                   aria-live="polite"
                   className="pet-feedback-card rounded-lg border border-border/70 bg-secondary/20 p-4"
                 >
@@ -2523,7 +3265,6 @@ export function Pets({ className }: PetsProps) {
               </div>
             </div>
           </section>
-        </div>
       )}
     </div>
   );

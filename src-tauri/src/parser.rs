@@ -601,7 +601,7 @@ fn build_lessons_from_files(
             }
         });
     } else {
-        sorted_videos.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        sorted_videos.sort_by_key(|a| a.name.to_lowercase());
     }
 
     // Build subtitle map by base name (case-insensitive)
@@ -625,7 +625,7 @@ fn build_lessons_from_files(
             }
         });
     } else {
-        sorted_subtitles.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        sorted_subtitles.sort_by_key(|a| a.name.to_lowercase());
     }
 
     let mut used_positional = false;
@@ -649,7 +649,10 @@ fn build_lessons_from_files(
                 })
             })
             .collect();
-        handles.into_iter().map(|h| h.join().unwrap()).collect()
+        handles
+            .into_iter()
+            .map(|h| h.join().unwrap_or((0, Vec::new())))
+            .collect()
     });
 
     let mut lessons = Vec::new();
@@ -720,7 +723,7 @@ fn build_lessons_from_files(
     // (e.g., "CS50x 2026 - " prefix and " - CS50" suffix)
     let mut titles: Vec<String> = lessons.iter().map(|l| l.title.clone()).collect();
     strip_common_affixes(&mut titles);
-    for (lesson, title) in lessons.iter_mut().zip(titles.into_iter()) {
+    for (lesson, title) in lessons.iter_mut().zip(titles) {
         lesson.title = title;
     }
 
@@ -1071,7 +1074,7 @@ fn extract_subtitle_language(subtitle_name: &str, video_base: &str) -> Option<St
         let remainder = name.get(video_base.len()..).unwrap_or("");
         let lang = remainder
             .trim()
-            .trim_start_matches(|c| c == '.' || c == '_' || c == '-')
+            .trim_start_matches(['.', '_', '-'])
             .trim();
         if !lang.is_empty() {
             return Some(normalize_language(lang));
@@ -1152,7 +1155,7 @@ fn clean_display_name(name: &str) -> String {
     }
 
     // Replace underscores and hyphens with spaces
-    result = result.replace('_', " ").replace('-', " ");
+    result = result.replace(['_', '-'], " ");
 
     // Collapse duplicate spaces
     while result.contains("  ") {
@@ -1186,8 +1189,7 @@ fn strip_leading_number(name: &str) -> String {
             let inner: String = chars[1..close_pos].iter().collect();
             if inner.chars().all(|c| c.is_ascii_digit()) {
                 let rest: String = chars[close_pos + 1..].iter().collect();
-                let rest =
-                    rest.trim_start_matches(|c: char| c == ' ' || c == '-' || c == '.' || c == '_');
+                let rest = rest.trim_start_matches([' ', '-', '.', '_']);
                 return rest.to_string();
             }
         }
@@ -1209,9 +1211,7 @@ fn strip_leading_number(name: &str) -> String {
                 .collect();
             if !digits.is_empty() {
                 let after = &rest[digits.len()..];
-                let after = after.trim_start_matches(|c: char| {
-                    c == ' ' || c == '-' || c == '.' || c == '_' || c == ':'
-                });
+                let after = after.trim_start_matches([' ', '-', '.', '_', ':']);
                 if !after.is_empty() {
                     return after.to_string();
                 }
@@ -1223,7 +1223,7 @@ fn strip_leading_number(name: &str) -> String {
     let digits: String = chars.iter().take_while(|c| c.is_ascii_digit()).collect();
     if !digits.is_empty() {
         let rest: String = chars[digits.len()..].iter().collect();
-        let rest = rest.trim_start_matches(|c: char| c == ' ' || c == '-' || c == '.' || c == '_');
+        let rest = rest.trim_start_matches([' ', '-', '.', '_']);
         if !rest.is_empty() {
             return rest.to_string();
         }
@@ -1487,7 +1487,7 @@ pub fn probe_embedded_subtitles(path: &Path, ffprobe_bin: &str) -> Vec<ParsedSub
             .and_then(|t| t.get("language").or_else(|| t.get("title")))
             .and_then(|l| l.as_str())
             .filter(|l| !l.eq_ignore_ascii_case("und"))
-            .map(|l| normalize_language(l));
+            .map(normalize_language);
 
         result.push(ParsedSubtitle {
             path: format!("{}#subtitle:{}", video_path_str, index),

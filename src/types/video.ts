@@ -19,3 +19,9 @@ export interface AiAudioTranslation {
   startSeconds: number;
   durationSeconds: number;
 }
+
+export interface AiAudioTranscript {
+  transcript: string;
+  startSeconds: number;
+  durationSeconds: number;
+}

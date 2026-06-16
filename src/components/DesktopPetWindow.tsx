@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { XIcon } from "@phosphor-icons/react";
 import { closeDesktopPet } from "@/lib/store";
 import { createPetSpriteStyle } from "@/lib/pets";
+import { getPetCareState, PET_CARE_UPDATED_EVENT } from "@/lib/petCare";
 import { useI18n } from "@/hooks/useI18n";
 import { useSettings } from "@/hooks/useSettings";
 
@@ -27,10 +28,30 @@ export function DesktopPetWindow() {
   const { language } = useI18n();
   const { settings, update } = useSettings();
   const copy = COPY[language];
+  const [petName, setPetName] = useState("");
   const spriteStyle = useMemo(
     () => createPetSpriteStyle("idle", settings.pet_variant, 128),
     [settings.pet_variant],
   );
+
+  const refreshPetName = useCallback(async () => {
+    try {
+      const state = await getPetCareState(settings.pet_variant);
+      setPetName(state.petName);
+    } catch {
+      setPetName("");
+    }
+  }, [settings.pet_variant]);
+
+  useEffect(() => {
+    void refreshPetName();
+  }, [refreshPetName]);
+
+  useEffect(() => {
+    const handleCareUpdate = () => void refreshPetName();
+    window.addEventListener(PET_CARE_UPDATED_EVENT, handleCareUpdate);
+    return () => window.removeEventListener(PET_CARE_UPDATED_EVENT, handleCareUpdate);
+  }, [refreshPetName]);
 
   const closeWindow = async () => {
     await update("pet_desktop_enabled", "false");
@@ -50,7 +71,7 @@ export function DesktopPetWindow() {
       </button>
 
       <div className="desktop-pet-bubble" aria-live="polite">
-        <strong>{copy.title}</strong>
+        <strong>{petName || copy.title}</strong>
         <span>{copy.message}</span>
       </div>
 

@@ -30,11 +30,17 @@ import {
 import { cn } from "@/lib/utils";
 import { formatVideoTime } from "@/lib/format";
 import type { Lesson, Subtitle, VideoPlayerHandle, VideoQuality } from "@/types";
-import { getSubtitleVtt, prepareVideoQuality, translateAudioSegment } from "@/lib/store";
+import {
+  getSubtitleVtt,
+  prepareVideoQuality,
+  transcribeAudioSegmentOnly,
+  translateLiveSubtitleText,
+} from "@/lib/store";
 import { EASE_OUT } from "@/lib/constants";
 import type { PlayerTranslationKey } from "@/lib/i18n";
 import { useI18n } from "@/hooks/useI18n";
 import { useSettings } from "@/hooks/useSettings";
+import { plainTextToSubtitleLines } from "@/lib/sanitize";
 
 interface VideoPlayerProps {
   lesson: Lesson | undefined;
@@ -60,6 +66,13 @@ const QUALITY_OPTIONS: { label: string; value: VideoQuality }[] = [
   { label: "1080P", value: "1080p" },
   { label: "2K", value: "2k" },
 ];
+const LIVE_AI_SEGMENT_SECONDS = 1.8;
+const LIVE_AI_SEGMENT_OVERLAP_SECONDS = 0.25;
+const LIVE_AI_SEGMENT_STEP_SECONDS = 0.75;
+const LIVE_AI_POLL_MS = 220;
+const LIVE_AI_BUSY_POLL_MS = 180;
+const LIVE_AI_PAUSED_POLL_MS = 700;
+const LIVE_AI_CACHE_LIMIT = 120;
 
 const SUB_SIZE_OPTIONS: { labelKey: PlayerTranslationKey; value: number }[] = [
   { labelKey: "small", value: 14 },
@@ -197,14 +210,24 @@ function getPreferredSubtitleKey(idx: number, subtitles: Subtitle[]): string {
   return subtitles[idx] ? getSubtitleLanguageKey(subtitles[idx]) : SUBTITLE_OFF_KEY;
 }
 
-function textToSubtitleHtml(text: string): string {
+function normalizeLiveSubtitleText(text: string): string {
   return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;")
-    .replace(/\n/g, "<br/>");
+    .replace(/\[[^\]]*]/g, " ")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function setLimitedCacheValue(cache: Map<string, string>, key: string, value: string) {
+  if (cache.has(key)) {
+    cache.delete(key);
+  }
+  while (cache.size >= LIVE_AI_CACHE_LIMIT) {
+    const oldestKey = cache.keys().next().value;
+    if (!oldestKey) break;
+    cache.delete(oldestKey);
+  }
+  cache.set(key, value);
 }
 
 export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function VideoPlayer({
@@ -237,7 +260,14 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const aiTranslateRequestRef = useRef(0);
   const aiSegmentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aiSegmentInFlightRef = useRef(false);
+  const aiTranslationInFlightRef = useRef(false);
   const aiLastSegmentStartRef = useRef<number | null>(null);
+  const aiLastTranscriptRef = useRef("");
+  const aiPendingTranscriptRef = useRef("");
+  const aiVisibleSubtitleRef = useRef("");
+  const aiEmptySegmentCountRef = useRef(0);
+  const aiSegmentCacheRef = useRef(new Map<string, string>());
+  const aiTranslationCacheRef = useRef(new Map<string, string>());
 
   useImperativeHandle(ref, () => ({
     seekTo(seconds: number) {
@@ -287,6 +317,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const [aiStatus, setAiStatus] = useState("");
   const [aiError, setAiError] = useState("");
   const [isAiTranslating, setIsAiTranslating] = useState(false);
+  const updateAiSubtitleText = useCallback((text: string) => {
+    aiVisibleSubtitleRef.current = text;
+    setAiTranslatedText(text);
+  }, []);
   const hasSubtitles = subtitles.length > 0;
   const aiConfigured =
     settings.ai_deepseek_proxy_url.trim().length > 0 &&
@@ -502,11 +536,9 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         : [];
   const aiSubtitleCueText =
     showAiPanel && (aiError || aiTranslatedText || isAiTranslating || aiStatus)
-      ? textToSubtitleHtml(
-          aiError ||
-            aiTranslatedText ||
-            (isAiTranslating ? t.aiTranslating : aiStatus || t.aiListening),
-        )
+      ? aiError ||
+        aiTranslatedText ||
+        (isAiTranslating ? t.aiTranslating : aiStatus || t.aiListening)
       : null;
   const displaySubtitleCueTexts = aiSubtitleCueText
     ? [aiSubtitleCueText]
@@ -518,6 +550,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       aiSegmentTimerRef.current = null;
     }
     aiSegmentInFlightRef.current = false;
+    aiTranslationInFlightRef.current = false;
     aiLastSegmentStartRef.current = null;
   }, []);
 
@@ -548,12 +581,18 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   useEffect(() => {
     aiTranslateRequestRef.current += 1;
     setShowAiPanel(false);
-    setAiTranslatedText("");
+    updateAiSubtitleText("");
     setAiStatus("");
     setAiError("");
     setIsAiTranslating(false);
+    aiLastTranscriptRef.current = "";
+    aiPendingTranscriptRef.current = "";
+    aiVisibleSubtitleRef.current = "";
+    aiEmptySegmentCountRef.current = 0;
+    aiSegmentCacheRef.current.clear();
+    aiTranslationCacheRef.current.clear();
     stopAiAudioTranslation();
-  }, [lesson?.id, stopAiAudioTranslation]);
+  }, [lesson?.id, stopAiAudioTranslation, updateAiSubtitleText]);
 
   useEffect(() => {
     if (!showAiPanel || !aiConfigured || !activeVideoPath) {
@@ -565,60 +604,55 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     aiTranslateRequestRef.current = requestId;
     let cancelled = false;
     setAiError("");
+    updateAiSubtitleText("");
     setAiStatus(t.aiListening);
+    aiLastTranscriptRef.current = "";
+    aiPendingTranscriptRef.current = "";
+    aiVisibleSubtitleRef.current = "";
+    aiEmptySegmentCountRef.current = 0;
+    aiSegmentCacheRef.current.clear();
+    aiTranslationCacheRef.current.clear();
 
-    const runSegment = async () => {
-      if (cancelled || !videoRef.current) return;
-      const video = videoRef.current;
+    const scheduleNextSegment = (delayMs: number) => {
+      if (aiSegmentTimerRef.current) {
+        clearTimeout(aiSegmentTimerRef.current);
+      }
+      aiSegmentTimerRef.current = setTimeout(runSegment, delayMs);
+    };
 
-      if (video.paused || video.ended || !Number.isFinite(video.currentTime)) {
-        setIsAiTranslating(false);
-        setAiStatus(t.aiListening);
-        aiSegmentTimerRef.current = setTimeout(runSegment, 900);
+    const translateTranscript = async (transcript: string) => {
+      const normalizedTranscript = normalizeLiveSubtitleText(transcript);
+      if (!normalizedTranscript) return;
+      if (aiTranslationInFlightRef.current) {
+        aiPendingTranscriptRef.current = normalizedTranscript;
         return;
       }
 
-      if (aiSegmentInFlightRef.current) {
-        aiSegmentTimerRef.current = setTimeout(runSegment, 500);
-        return;
-      }
-      const durationSeconds = 4;
-      const startSeconds = Math.max(0, video.currentTime - durationSeconds);
-      const roundedStart = Math.floor(startSeconds * 2) / 2;
-      if (
-        aiLastSegmentStartRef.current !== null &&
-        Math.abs(aiLastSegmentStartRef.current - roundedStart) < 2
-      ) {
-        aiSegmentTimerRef.current = setTimeout(runSegment, 1000);
+      const translationKey = `${settings.ai_translation_target}:${normalizedTranscript.toLowerCase()}`;
+      const cachedTranslation = aiTranslationCacheRef.current.get(translationKey);
+      if (cachedTranslation) {
+        updateAiSubtitleText(cachedTranslation);
+        setAiError("");
+        setAiStatus("");
         return;
       }
 
-      aiLastSegmentStartRef.current = roundedStart;
-      aiSegmentInFlightRef.current = true;
+      aiTranslationInFlightRef.current = true;
       setIsAiTranslating(true);
-      setAiStatus(t.aiListening);
+      setAiStatus((current) => current || t.aiTranslating);
 
       try {
-        const segmentDuration = Math.max(
-          1,
-          Math.min(durationSeconds, video.currentTime - roundedStart),
-        );
-        const result = await translateAudioSegment(
-          activeVideoPath,
-          roundedStart,
-          segmentDuration,
-          settings.ai_translation_target,
+        const translation = normalizeLiveSubtitleText(
+          await translateLiveSubtitleText(normalizedTranscript, settings.ai_translation_target),
         );
         if (cancelled || aiTranslateRequestRef.current !== requestId) return;
-        if (result.translation.trim()) {
-          setAiTranslatedText(result.translation.trim());
+        if (translation) {
+          setLimitedCacheValue(aiTranslationCacheRef.current, translationKey, translation);
+          if (aiLastTranscriptRef.current === normalizedTranscript) {
+            updateAiSubtitleText(translation);
+          }
           setAiError("");
           setAiStatus("");
-        } else if (result.transcript.trim()) {
-          setAiTranslatedText(result.transcript.trim());
-          setAiStatus("");
-        } else {
-          setAiStatus(t.aiNoSource);
         }
       } catch (err) {
         if (cancelled || aiTranslateRequestRef.current !== requestId) return;
@@ -628,19 +662,121 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
             : typeof err === "string" && err.trim()
               ? err
               : t.aiTranslationFailed;
-        setAiError(message);
-        setAiTranslatedText("");
+        setAiError("");
         setAiStatus(message);
       } finally {
         if (!cancelled && aiTranslateRequestRef.current === requestId) {
-          aiSegmentInFlightRef.current = false;
+          aiTranslationInFlightRef.current = false;
           setIsAiTranslating(false);
-          aiSegmentTimerRef.current = setTimeout(runSegment, 1200);
+          const pendingTranscript = aiPendingTranscriptRef.current;
+          aiPendingTranscriptRef.current = "";
+          if (pendingTranscript && pendingTranscript !== normalizedTranscript) {
+            void translateTranscript(pendingTranscript);
+          }
         }
       }
     };
 
-    aiSegmentTimerRef.current = setTimeout(runSegment, 250);
+    const runSegment = async () => {
+      if (cancelled || !videoRef.current) return;
+      const video = videoRef.current;
+
+      if (video.paused || video.ended || !Number.isFinite(video.currentTime)) {
+        setIsAiTranslating(false);
+        setAiStatus(t.aiListening);
+        scheduleNextSegment(LIVE_AI_PAUSED_POLL_MS);
+        return;
+      }
+
+      if (aiSegmentInFlightRef.current) {
+        scheduleNextSegment(LIVE_AI_BUSY_POLL_MS);
+        return;
+      }
+      const durationSeconds = LIVE_AI_SEGMENT_SECONDS;
+      const startSeconds = Math.max(
+        0,
+        video.currentTime - durationSeconds - LIVE_AI_SEGMENT_OVERLAP_SECONDS,
+      );
+      const roundedStart = Math.floor(startSeconds * 4) / 4;
+      if (
+        aiLastSegmentStartRef.current !== null &&
+        Math.abs(aiLastSegmentStartRef.current - roundedStart) < LIVE_AI_SEGMENT_STEP_SECONDS
+      ) {
+        scheduleNextSegment(LIVE_AI_POLL_MS);
+        return;
+      }
+
+      aiLastSegmentStartRef.current = roundedStart;
+      aiSegmentInFlightRef.current = true;
+      setIsAiTranslating(!aiVisibleSubtitleRef.current);
+      setAiStatus(t.aiListening);
+
+      try {
+        const segmentDuration = Math.max(
+          0.8,
+          Math.min(durationSeconds, video.currentTime - roundedStart),
+        );
+        const segmentKey = `${activeVideoPath}:${roundedStart.toFixed(2)}:${segmentDuration.toFixed(2)}`;
+        const cachedTranscript = aiSegmentCacheRef.current.get(segmentKey);
+        const result = cachedTranscript
+          ? {
+              transcript: cachedTranscript,
+              startSeconds: roundedStart,
+              durationSeconds: segmentDuration,
+            }
+          : await transcribeAudioSegmentOnly(activeVideoPath, roundedStart, segmentDuration);
+        if (cancelled || aiTranslateRequestRef.current !== requestId) return;
+
+        if (!cachedTranscript) {
+          setLimitedCacheValue(
+            aiSegmentCacheRef.current,
+            segmentKey,
+            normalizeLiveSubtitleText(result.transcript),
+          );
+        }
+
+        const transcript = normalizeLiveSubtitleText(result.transcript);
+        if (transcript) {
+          aiEmptySegmentCountRef.current = 0;
+          if (transcript !== aiLastTranscriptRef.current) {
+            aiLastTranscriptRef.current = transcript;
+            const translationKey = `${settings.ai_translation_target}:${transcript.toLowerCase()}`;
+            const cachedTranslation = aiTranslationCacheRef.current.get(translationKey);
+            updateAiSubtitleText(cachedTranslation || transcript);
+            setAiStatus(cachedTranslation ? "" : t.aiTranslating);
+            void translateTranscript(transcript);
+          } else if (!aiVisibleSubtitleRef.current) {
+            updateAiSubtitleText(transcript);
+          }
+          setAiError("");
+        } else {
+          aiEmptySegmentCountRef.current += 1;
+          if (aiEmptySegmentCountRef.current >= 3 && !aiTranslationInFlightRef.current) {
+            setAiStatus(t.aiNoSource);
+          }
+        }
+      } catch (err) {
+        if (cancelled || aiTranslateRequestRef.current !== requestId) return;
+        const message =
+          err instanceof Error
+            ? err.message
+            : typeof err === "string" && err.trim()
+              ? err
+              : t.aiTranslationFailed;
+        setAiError("");
+        setAiStatus(message);
+      } finally {
+        if (!cancelled && aiTranslateRequestRef.current === requestId) {
+          aiSegmentInFlightRef.current = false;
+          if (!aiTranslationInFlightRef.current) {
+            setIsAiTranslating(false);
+          }
+          scheduleNextSegment(LIVE_AI_POLL_MS);
+        }
+      }
+    };
+
+    aiSegmentTimerRef.current = setTimeout(runSegment, LIVE_AI_POLL_MS);
 
     return () => {
       cancelled = true;
@@ -650,11 +786,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     showAiPanel,
     aiConfigured,
     activeVideoPath,
-    isPlaying,
     settings.ai_translation_target,
     stopAiAudioTranslation,
+    updateAiSubtitleText,
     t.aiListening,
     t.aiNoSource,
+    t.aiTranslating,
     t.aiTranslationFailed,
   ]);
 
@@ -1125,8 +1262,14 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                     ? "0 1px 4px rgba(0,0,0,0.8), 0 0 2px rgba(0,0,0,0.6)"
                     : "none",
               }}
-              dangerouslySetInnerHTML={{ __html: cueText }}
-            />
+            >
+              {plainTextToSubtitleLines(cueText).map((line, lineIdx) => (
+                <span key={`${lineIdx}-${line}`}>
+                  {lineIdx > 0 && <br />}
+                  {line}
+                </span>
+              ))}
+            </span>
           ))}
         </div>
       )}
@@ -1796,13 +1939,7 @@ function parseVttCues(
       .join("\n")
       .trim();
     if (text) {
-      // Convert newlines to <br> for HTML rendering, escape HTML
-      const safe = text
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/\n/g, "<br/>");
-      cues.push({ start, end, text: safe });
+      cues.push({ start, end, text });
     }
   }
 

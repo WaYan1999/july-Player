@@ -1045,7 +1045,7 @@ fn extract_subtitle_language(subtitle_name: &str, video_base: &str) -> Option<St
         let remainder = name.get(video_base.len()..).unwrap_or("");
         let lang = remainder
             .trim()
-            .trim_start_matches(|c| c == '.' || c == '_' || c == '-')
+            .trim_start_matches(['.', '_', '-'])
             .trim();
         if !lang.is_empty() {
             return Some(normalize_language(lang));
@@ -1217,9 +1217,9 @@ pub fn get_dashboard_stats(conn: &Connection) -> SqlResult<DashboardStats> {
         .filter_map(|r| r.ok())
         .collect();
     let mut week_activity = vec![false; 7];
-    for i in 0..7usize {
+    for (i, active) in week_activity.iter_mut().enumerate() {
         let target_date = days_to_date(today_days - (6 - i as i64));
-        week_activity[i] = active_dates.contains(&target_date);
+        *active = active_dates.contains(&target_date);
     }
 
     let (user_level, lessons_to_next_level) = calculate_level(completed_lessons);
@@ -1493,8 +1493,8 @@ fn date_to_days(date: &str) -> i64 {
     } else {
         [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
     };
-    for i in 0..(m.saturating_sub(1)) {
-        days += month_days[i] as i64;
+    for month_day in month_days.iter().take(m.saturating_sub(1)) {
+        days += *month_day as i64;
     }
     days += d - 1;
     days

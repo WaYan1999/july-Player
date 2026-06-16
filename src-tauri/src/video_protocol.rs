@@ -7,6 +7,7 @@ use tauri::http::{header, HeaderValue, Method, Request, Response, StatusCode};
 use tauri::{UriSchemeContext, UriSchemeResponder, Wry};
 
 pub const SCHEME: &str = "stream";
+const DEFAULT_CHUNK_SIZE: u64 = 4 * 1024 * 1024;
 
 pub fn handle(
     _ctx: UriSchemeContext<'_, Wry>,
@@ -62,17 +63,20 @@ fn serve(request: &Request<Vec<u8>>) -> Response<Vec<u8>> {
         };
     }
 
-    let mut buf = Vec::with_capacity(file_size as usize);
-    if file.read_to_end(&mut buf).is_err() {
-        return status_only(StatusCode::INTERNAL_SERVER_ERROR);
+    if file_size == 0 {
+        return Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, mime)
+            .header(header::CONTENT_LENGTH, "0")
+            .header(header::ACCEPT_RANGES, "bytes")
+            .body(Vec::new())
+            .unwrap_or_else(|_| status_only(StatusCode::INTERNAL_SERVER_ERROR));
     }
-    Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, mime)
-        .header(header::CONTENT_LENGTH, file_size.to_string())
-        .header(header::ACCEPT_RANGES, "bytes")
-        .body(buf)
-        .unwrap_or_else(|_| status_only(StatusCode::INTERNAL_SERVER_ERROR))
+
+    let end = file_size
+        .saturating_sub(1)
+        .min(DEFAULT_CHUNK_SIZE.saturating_sub(1));
+    serve_range(&mut file, 0, end, file_size, mime)
 }
 
 fn serve_range(

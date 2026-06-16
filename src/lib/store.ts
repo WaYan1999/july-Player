@@ -14,6 +14,7 @@ import type {
   SearchResult,
   PreparedVideoQuality,
   VideoQuality,
+  AiAudioTranscript,
   AiAudioTranslation,
   AiModelOption,
 } from "@/types";
@@ -160,6 +161,13 @@ export async function translateWithDeepSeek(
   return invoke<string>("translate_with_deepseek", { text, targetLanguage });
 }
 
+export async function translateLiveSubtitleText(
+  text: string,
+  targetLanguage: string,
+): Promise<string> {
+  return invoke<string>("translate_live_subtitle_text", { text, targetLanguage });
+}
+
 export async function askPetAi(prompt: string, language: string): Promise<string> {
   return invoke<string>("ask_pet_ai", { prompt, language });
 }
@@ -187,6 +195,18 @@ export async function translateAudioSegment(
     startSeconds,
     durationSeconds,
     targetLanguage,
+  });
+}
+
+export async function transcribeAudioSegmentOnly(
+  videoPath: string,
+  startSeconds: number,
+  durationSeconds: number,
+): Promise<AiAudioTranscript> {
+  return invoke<AiAudioTranscript>("transcribe_audio_segment_only", {
+    videoPath,
+    startSeconds,
+    durationSeconds,
   });
 }
 
