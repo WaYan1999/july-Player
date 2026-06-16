@@ -66,7 +66,10 @@ jobs:
           tagName: v__VERSION__
           releaseName: '七月播放器 v__VERSION__'
           releaseBody: |
-            七月播放器 1.1.3 新增修改：
+            七月播放器 1.1.3-beta 新增修改：
+            - 新增 AI 宠物自我成长：用户授权后，宠物可使用 AI 模块配置的 API 地址和 API Key 生成短思考并获得 XP 成长。
+            - 新增宠物 AI Token 授权与每日预算：默认不消耗 AI token，可在宠物页开启授权并设置每日 1/3/5 次预算。
+            - 新增桌面宠物模式：宠物可离开播放器进入独立透明桌面小窗口，主播放器内会自动隐藏重复常驻宠物。
             - 新增 AI 实时音频识别翻译：播放器倍速按钮左侧增加 AI 按钮，可识别当前视频音频并翻译。
             - 优化 AI 翻译显示方式：AI 翻译结果直接替换为播放器场景字幕，不再显示左侧黑色翻译框。
             - 新增内置离线 ASR：语音识别不再需要单独配置接口或密钥，API 地址和 API Key 只用于翻译识别后的文字。
@@ -90,7 +93,7 @@ jobs:
             - 发布前清理播放器调试日志，并完成前端构建与 Rust 后端检查。
           includeUpdaterJson: true
           releaseDraft: true
-          prerelease: false
+          prerelease: true
           args: ${{ matrix.args }}
 
   publish-release:
@@ -106,7 +109,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="$(node -p "require('./package.json').version")"
-          gh release edit "v${VERSION}" --draft=false --prerelease=false
+          gh release edit "v${VERSION}" --draft=false --prerelease=true
 
       - name: Upload updater manifest
         env:
@@ -169,7 +172,10 @@ jobs:
           const latest = {
             version,
             notes: [
-              "七月播放器 1.1.3 新增修改：",
+              "七月播放器 1.1.3-beta 新增修改：",
+              "- 新增 AI 宠物自我成长：用户授权后，宠物可使用 AI 模块配置的 API 地址和 API Key 生成短思考并获得 XP 成长。",
+              "- 新增宠物 AI Token 授权与每日预算：默认不消耗 AI token，可在宠物页开启授权并设置每日 1/3/5 次预算。",
+              "- 新增桌面宠物模式：宠物可离开播放器进入独立透明桌面小窗口，主播放器内会自动隐藏重复常驻宠物。",
               "- 新增 AI 实时音频识别翻译：播放器倍速按钮左侧增加 AI 按钮，可识别当前视频音频并翻译。",
               "- 优化 AI 翻译显示方式：AI 翻译结果直接替换为播放器场景字幕，不再显示左侧黑色翻译框。",
               "- 新增内置离线 ASR：语音识别不再需要单独配置接口或密钥，API 地址和 API Key 只用于翻译识别后的文字。",

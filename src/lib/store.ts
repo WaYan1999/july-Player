@@ -160,6 +160,18 @@ export async function translateWithDeepSeek(
   return invoke<string>("translate_with_deepseek", { text, targetLanguage });
 }
 
+export async function askPetAi(prompt: string, language: string): Promise<string> {
+  return invoke<string>("ask_pet_ai", { prompt, language });
+}
+
+export async function openDesktopPet(): Promise<void> {
+  return invoke("open_desktop_pet");
+}
+
+export async function closeDesktopPet(): Promise<void> {
+  return invoke("close_desktop_pet");
+}
+
 export async function getAiModels(): Promise<AiModelOption[]> {
   return invoke<AiModelOption[]>("get_ai_models");
 }

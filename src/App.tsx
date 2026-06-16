@@ -10,6 +10,7 @@ import { Notes } from "@/pages/Notes";
 import { Settings } from "@/pages/Settings";
 import { AiModule } from "@/pages/AiModule";
 import { Pets } from "@/pages/Pets";
+import { DesktopPetWindow } from "@/components/DesktopPetWindow";
 import { ActivePathContext } from "@/hooks/usePageVisible";
 import { sectionMemory } from "@/hooks/useSectionMemory";
 import { SettingsContext, useSettingsProvider } from "@/hooks/useSettings";
@@ -106,15 +107,23 @@ function KeepAliveRoutes() {
 function App() {
   const settingsCtx = useSettingsProvider();
   const updaterCtx = useUpdaterProvider();
+  const location = useLocation();
+  const isDesktopPetWindow = location.pathname === "/desktop-pet";
   useStartupUpdateCheck(updaterCtx);
 
   return (
     <SettingsContext.Provider value={settingsCtx}>
       <UpdaterContext.Provider value={updaterCtx}>
-        <AppShell>
-          <KeepAliveRoutes />
-        </AppShell>
-        <UpdateBanner />
+        {isDesktopPetWindow ? (
+          <DesktopPetWindow />
+        ) : (
+          <>
+            <AppShell>
+              <KeepAliveRoutes />
+            </AppShell>
+            <UpdateBanner />
+          </>
+        )}
       </UpdaterContext.Provider>
     </SettingsContext.Provider>
   );

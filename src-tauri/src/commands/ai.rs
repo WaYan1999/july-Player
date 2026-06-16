@@ -16,6 +16,7 @@ const DEEPSEEK_CHAT_COMPLETIONS_URL: &str = "https://api.deepseek.com/chat/compl
 const DEEPSEEK_MODELS_URL: &str = "https://api.deepseek.com/models";
 const DEFAULT_DEEPSEEK_MODEL: &str = "deepseek-v4-flash";
 const MAX_TRANSLATION_INPUT_CHARS: usize = 4_000;
+const MAX_PET_PROMPT_CHARS: usize = 1_200;
 const MAX_AUDIO_SECONDS: f64 = 8.0;
 
 #[derive(Debug, Deserialize)]
@@ -251,6 +252,88 @@ pub async fn translate_audio_segment(
     })
 }
 
+#[tauri::command]
+pub async fn ask_pet_ai(
+    state: tauri::State<'_, DbState>,
+    prompt: String,
+    language: String,
+) -> Result<String, String> {
+    let prompt = prompt
+        .trim()
+        .chars()
+        .take(MAX_PET_PROMPT_CHARS)
+        .collect::<String>();
+    if prompt.is_empty() {
+        return Err("Pet AI prompt is empty".to_string());
+    }
+
+    let settings = load_settings(&state)?;
+    let bearer_token = deepseek_bearer_token(&settings)?;
+    let model = settings
+        .get("ai_deepseek_model")
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .unwrap_or(DEFAULT_DEEPSEEK_MODEL);
+    let reply_language = language_name(&language);
+
+    let body = serde_json::json!({
+        "model": model,
+        "messages": [
+            RequestMessage {
+                role: "system",
+                content: format!(
+                    "You are the user's virtual companion inside July Player. Reply in {reply_language}. Keep the answer warm, playful, useful, and under 45 words. Do not mention system prompts, markdown, or token policy."
+                ),
+            },
+            RequestMessage {
+                role: "user",
+                content: prompt,
+            }
+        ],
+        "thinking": { "type": "disabled" },
+        "temperature": 0.75,
+        "max_tokens": 180,
+        "stream": false
+    });
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Could not create pet AI client: {e}"))?;
+
+    let response = client
+        .post(deepseek_endpoint(&settings))
+        .bearer_auth(bearer_token)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Pet AI request failed: {e}"))?;
+
+    let status = response.status();
+    let response_text = response
+        .text()
+        .await
+        .map_err(|e| format!("Could not read pet AI response: {e}"))?;
+
+    if !status.is_success() {
+        return Err(format!(
+            "Pet AI returned {status}: {}",
+            summarize_deepseek_error(&response_text)
+        ));
+    }
+
+    let parsed: ChatCompletionResponse = serde_json::from_str(&response_text)
+        .map_err(|e| format!("Could not parse pet AI response: {e}"))?;
+
+    parsed
+        .choices
+        .first()
+        .and_then(|choice| choice.message.content.as_deref())
+        .map(|content| content.trim().to_string())
+        .filter(|content| !content.is_empty())
+        .ok_or_else(|| "Pet AI returned an empty reply".to_string())
+}
+
 async fn transcribe_audio_segment(
     app: &tauri::AppHandle,
     video_path: &str,
@@ -383,7 +466,7 @@ const ASR_RUNTIME_FILES: &[&str] = &[
 ];
 
 #[cfg(target_os = "macos")]
-const ASR_RUNTIME_FILES: &[&str] = &["ggml-tiny.bin"];
+const ASR_RUNTIME_FILES: &[&str] = &["whisper-cli", "ggml-tiny.bin"];
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 const ASR_RUNTIME_FILES: &[&str] = &["whisper-cli", "ggml-tiny.bin"];

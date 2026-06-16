@@ -139,8 +139,12 @@ function getSubtitleTokens(sub: Subtitle): string[] {
 
 function getSubtitleLanguageKey(sub: Subtitle): string {
   const tokens = getSubtitleTokens(sub);
+  const searchText = getSubtitleSearchText(sub);
 
   if (
+    searchText.includes("中文") ||
+    searchText.includes("简体") ||
+    searchText.includes("繁体") ||
     tokens.some((token) => token.startsWith("zh")) ||
     tokens.some((token) =>
       ["chinese", "china", "chi", "zho", "cmn"].includes(token),

@@ -15,6 +15,7 @@ import { CourseTitleProvider } from "./CourseTitleContext";
 import { NavSection } from "./NavSection";
 import { SidebarSearch } from "./SidebarSearch";
 import { useI18n } from "@/hooks/useI18n";
+import { useSettings } from "@/hooks/useSettings";
 import { AppWindowTitleBar } from "./AppWindowTitleBar";
 import { ResidentPet } from "@/components/ResidentPet";
 
@@ -33,6 +34,7 @@ export function AppShell({ children }: AppShellProps) {
 function AppShellInner({ children }: AppShellProps) {
   const breadcrumbs = useBreadcrumbs();
   const { t } = useI18n();
+  const { settings } = useSettings();
   const [collapsed, setCollapsed] = useState(false);
   const [isSmallScreen, setIsSmallScreen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -179,7 +181,7 @@ function AppShellInner({ children }: AppShellProps) {
         </main>
       </div>
 
-      <ResidentPet />
+      {!settings.pet_desktop_enabled && <ResidentPet />}
     </div>
   );
 }

@@ -50,6 +50,7 @@ export interface PetCatalogPet {
   thumbnail: string;
   spritesheet: string;
   category: "built-in" | "official" | "catalog";
+  unlockLevel?: number;
   featured?: boolean;
   protected?: boolean;
 }
@@ -85,6 +86,16 @@ type PetPluginTranslationKeys = {
 
 export const DEFAULT_PET_VARIANT: PetCatalogId = "builtin";
 export const PET_ACTION_EVENT = "july-player:pet-action";
+export const PET_SPEAK_EVENT = "july-player:pet-speak";
+
+export type PetSpeechTone = "info" | "success" | "warning";
+
+export interface PetSpeechPayload {
+  title?: string;
+  message: string;
+  tone?: PetSpeechTone;
+  durationMs?: number;
+}
 
 export const DEFAULT_PET_PLUGINS: PetPluginId[] = [
   "openpets.reminders",
@@ -102,6 +113,7 @@ export const PET_CATALOG: PetCatalogPet[] = [
     thumbnail: openPetsThumbnailUrl,
     spritesheet: openPetsSpriteUrl,
     category: "built-in",
+    unlockLevel: 1,
     featured: true,
     protected: true,
   },
@@ -112,6 +124,7 @@ export const PET_CATALOG: PetCatalogPet[] = [
     thumbnail: openPetsPetUrl("tmuxai-openpets", "thumb.webp"),
     spritesheet: openPetsPetUrl("tmuxai-openpets", "spritesheet.webp"),
     category: "official",
+    unlockLevel: 1,
     featured: true,
   },
   {
@@ -121,6 +134,7 @@ export const PET_CATALOG: PetCatalogPet[] = [
     thumbnail: openPetsPetUrl("nori-openpets", "thumb.webp"),
     spritesheet: openPetsPetUrl("nori-openpets", "spritesheet.webp"),
     category: "official",
+    unlockLevel: 1,
     featured: true,
   },
   {
@@ -130,6 +144,7 @@ export const PET_CATALOG: PetCatalogPet[] = [
     thumbnail: openPetsPetUrl("bitty-openpets", "thumb.webp"),
     spritesheet: openPetsPetUrl("bitty-openpets", "spritesheet.webp"),
     category: "official",
+    unlockLevel: 1,
     featured: true,
   },
   {
@@ -139,6 +154,7 @@ export const PET_CATALOG: PetCatalogPet[] = [
     thumbnail: openPetsPetUrl("fixer-openpets", "thumb.webp"),
     spritesheet: openPetsPetUrl("fixer-openpets", "spritesheet.webp"),
     category: "official",
+    unlockLevel: 2,
     featured: true,
   },
   {
@@ -148,6 +164,7 @@ export const PET_CATALOG: PetCatalogPet[] = [
     thumbnail: openPetsPetUrl("robot-openpets", "thumb.webp"),
     spritesheet: openPetsPetUrl("robot-openpets", "spritesheet.webp"),
     category: "official",
+    unlockLevel: 2,
     featured: true,
   },
   {
@@ -157,6 +174,7 @@ export const PET_CATALOG: PetCatalogPet[] = [
     thumbnail: openPetsPetUrl("shadow-kit-openpets", "thumb.webp"),
     spritesheet: openPetsPetUrl("shadow-kit-openpets", "spritesheet.webp"),
     category: "official",
+    unlockLevel: 2,
     featured: true,
   },
   {
@@ -166,6 +184,7 @@ export const PET_CATALOG: PetCatalogPet[] = [
     thumbnail: openPetsPetUrl("fox-openpets", "thumb.webp"),
     spritesheet: openPetsPetUrl("fox-openpets", "spritesheet.webp"),
     category: "official",
+    unlockLevel: 3,
     featured: true,
   },
   {
@@ -175,6 +194,7 @@ export const PET_CATALOG: PetCatalogPet[] = [
     thumbnail: openPetsPetUrl("azure-openpets", "thumb.webp"),
     spritesheet: openPetsPetUrl("azure-openpets", "spritesheet.webp"),
     category: "official",
+    unlockLevel: 3,
     featured: true,
   },
   {
@@ -184,6 +204,7 @@ export const PET_CATALOG: PetCatalogPet[] = [
     thumbnail: openPetsPetUrl("penguin-openpets", "thumb.webp"),
     spritesheet: openPetsPetUrl("penguin-openpets", "spritesheet.webp"),
     category: "official",
+    unlockLevel: 3,
     featured: true,
   },
   {
@@ -193,6 +214,7 @@ export const PET_CATALOG: PetCatalogPet[] = [
     thumbnail: openPetsPetUrl("orchestrator-openpets", "thumb.webp"),
     spritesheet: openPetsPetUrl("orchestrator-openpets", "spritesheet.webp"),
     category: "official",
+    unlockLevel: 4,
     featured: true,
   },
   {
@@ -202,6 +224,7 @@ export const PET_CATALOG: PetCatalogPet[] = [
     thumbnail: openPetsPetUrl("snoopy-23e05847", "thumb.webp"),
     spritesheet: openPetsPetUrl("snoopy-23e05847", "spritesheet.webp"),
     category: "catalog",
+    unlockLevel: 4,
   },
   {
     id: "clippit",
@@ -210,6 +233,7 @@ export const PET_CATALOG: PetCatalogPet[] = [
     thumbnail: openPetsPetUrl("clippit-904b393f", "thumb.webp"),
     spritesheet: openPetsPetUrl("clippit-904b393f", "spritesheet.webp"),
     category: "catalog",
+    unlockLevel: 4,
   },
   {
     id: "tux",
@@ -218,6 +242,7 @@ export const PET_CATALOG: PetCatalogPet[] = [
     thumbnail: openPetsPetUrl("tux-de2f300f", "thumb.webp"),
     spritesheet: openPetsPetUrl("tux-de2f300f", "spritesheet.webp"),
     category: "catalog",
+    unlockLevel: 5,
   },
   {
     id: "wall-e",
@@ -226,6 +251,7 @@ export const PET_CATALOG: PetCatalogPet[] = [
     thumbnail: openPetsPetUrl("wall-e-779d5202", "thumb.webp"),
     spritesheet: openPetsPetUrl("wall-e-779d5202", "spritesheet.webp"),
     category: "catalog",
+    unlockLevel: 5,
   },
   {
     id: "dobby",
@@ -234,6 +260,7 @@ export const PET_CATALOG: PetCatalogPet[] = [
     thumbnail: openPetsPetUrl("dobby-3f6746e0", "thumb.webp"),
     spritesheet: openPetsPetUrl("dobby-3f6746e0", "spritesheet.webp"),
     category: "catalog",
+    unlockLevel: 6,
   },
   {
     id: "cartman",
@@ -242,6 +269,7 @@ export const PET_CATALOG: PetCatalogPet[] = [
     thumbnail: openPetsPetUrl("cartman-3e20c8d0", "thumb.webp"),
     spritesheet: openPetsPetUrl("cartman-3e20c8d0", "spritesheet.webp"),
     category: "catalog",
+    unlockLevel: 6,
   },
   {
     id: "panda",
@@ -250,6 +278,7 @@ export const PET_CATALOG: PetCatalogPet[] = [
     thumbnail: openPetsPetUrl("panda-9afe6a6d", "thumb.webp"),
     spritesheet: openPetsPetUrl("panda-9afe6a6d", "spritesheet.webp"),
     category: "catalog",
+    unlockLevel: 7,
   },
   {
     id: "shiba",
@@ -258,6 +287,7 @@ export const PET_CATALOG: PetCatalogPet[] = [
     thumbnail: openPetsPetUrl("shiba-4c9bdc8c", "thumb.webp"),
     spritesheet: openPetsPetUrl("shiba-4c9bdc8c", "spritesheet.webp"),
     category: "catalog",
+    unlockLevel: 7,
   },
 ];
 

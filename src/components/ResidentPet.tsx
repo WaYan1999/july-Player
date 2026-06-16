@@ -7,14 +7,40 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/hooks/useI18n";
 import { useSettings } from "@/hooks/useSettings";
-import { createPetSpriteStyle, PET_ACTION_EVENT, type PetState } from "@/lib/pets";
+import {
+  createPetSpriteStyle,
+  PET_ACTION_EVENT,
+  PET_SPEAK_EVENT,
+  type PetSpeechPayload,
+  type PetState,
+} from "@/lib/pets";
 
 const PET_POSITION_KEY = "july-player:resident-pet-position";
 const PET_SIZE = { width: 82, height: 88 };
 const PET_MARGIN = 12;
 
 type Point = { x: number; y: number };
+type SpeechState = Required<Pick<PetSpeechPayload, "message" | "tone">> &
+  Pick<PetSpeechPayload, "title"> & {
+    nonce: number;
+  };
+
+const PET_COPY = {
+  en: {
+    clickTitle: "Pet",
+    clickMessage: "I am here. Drag me anywhere while you watch.",
+  },
+  zh: {
+    clickTitle: "宠物",
+    clickMessage: "我在这里，看视频时也可以拖动我换位置。",
+  },
+  fr: {
+    clickTitle: "Compagnon",
+    clickMessage: "Je suis la. Vous pouvez me deplacer pendant la lecture.",
+  },
+} as const;
 
 function clampPosition(point: Point): Point {
   if (typeof window === "undefined") return point;
@@ -53,11 +79,14 @@ function getInitialPosition(): Point {
 }
 
 export function ResidentPet() {
+  const { language } = useI18n();
   const { settings } = useSettings();
+  const copy = PET_COPY[language];
   const [position, setPosition] = useState<Point>(getInitialPosition);
   const [petState, setPetState] = useState<PetState>("idle");
   const [animationNonce, setAnimationNonce] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [speech, setSpeech] = useState<SpeechState | null>(null);
   const positionRef = useRef(position);
   const dragRef = useRef<{
     pointerId: number;
@@ -68,6 +97,9 @@ export function ResidentPet() {
     moved: boolean;
   } | null>(null);
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const speechTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressClickRef = useRef(false);
+  const bubbleOnRight = typeof window !== "undefined" && position.x < window.innerWidth / 2;
 
   const spriteStyle = useMemo(
     () => createPetSpriteStyle(petState, settings.pet_variant, PET_SIZE.width),
@@ -85,6 +117,22 @@ export function ResidentPet() {
     } catch {
       // Ignore storage failures.
     }
+  }, []);
+
+  const showSpeech = useCallback((payload: PetSpeechPayload) => {
+    if (!payload.message.trim()) return;
+
+    if (speechTimerRef.current) clearTimeout(speechTimerRef.current);
+    setSpeech({
+      title: payload.title,
+      message: payload.message.trim(),
+      tone: payload.tone ?? "info",
+      nonce: Date.now(),
+    });
+    speechTimerRef.current = setTimeout(
+      () => setSpeech(null),
+      payload.durationMs ?? 5200,
+    );
   }, []);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -127,12 +175,14 @@ export function ResidentPet() {
     } catch {
       // Pointer capture may already be released.
     }
+    const moved = drag.moved;
+    suppressClickRef.current = moved;
     const finalPosition = clampPosition(positionRef.current);
     setPosition(finalPosition);
     persistPosition(finalPosition);
     setIsDragging(false);
-    setPetState(drag.moved ? "hop" : "wave");
-    settleToIdle(drag.moved ? 850 : 700);
+    setPetState(moved ? "hop" : "wave");
+    settleToIdle(moved ? 850 : 700);
     dragRef.current = null;
   };
 
@@ -168,9 +218,20 @@ export function ResidentPet() {
     return () => window.removeEventListener(PET_ACTION_EVENT, handlePetAction);
   }, [settleToIdle]);
 
+  useEffect(() => {
+    const handlePetSpeech = (event: Event) => {
+      const payload = (event as CustomEvent<PetSpeechPayload>).detail;
+      if (payload) showSpeech(payload);
+    };
+
+    window.addEventListener(PET_SPEAK_EVENT, handlePetSpeech);
+    return () => window.removeEventListener(PET_SPEAK_EVENT, handlePetSpeech);
+  }, [showSpeech]);
+
   useEffect(
     () => () => {
       if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+      if (speechTimerRef.current) clearTimeout(speechTimerRef.current);
     },
     [],
   );
@@ -198,12 +259,46 @@ export function ResidentPet() {
       onPointerUp={finishDrag}
       onPointerCancel={finishDrag}
       onClick={(event) => {
-        if (dragRef.current?.moved) {
+        if (suppressClickRef.current) {
+          suppressClickRef.current = false;
           event.preventDefault();
           event.stopPropagation();
+          return;
         }
+        setPetState("wave");
+        setAnimationNonce((current) => current + 1);
+        showSpeech({
+          title: copy.clickTitle,
+          message: copy.clickMessage,
+          tone: "info",
+          durationMs: 3600,
+        });
+        settleToIdle(800);
       }}
     >
+      {speech && (
+        <span
+          key={speech.nonce}
+          className={cn(
+            "resident-pet-bubble pointer-events-none absolute top-[-8px] z-10 block w-[min(260px,calc(100vw-132px))] rounded-xl border px-3.5 py-3 text-left shadow-lg",
+            bubbleOnRight ? "resident-pet-bubble-right left-[72px]" : "resident-pet-bubble-left right-[72px]",
+            speech.tone === "success"
+              ? "border-primary/35 bg-card text-foreground"
+              : speech.tone === "warning"
+                ? "border-yellow-500/40 bg-card text-foreground"
+                : "border-border/80 bg-card text-foreground",
+          )}
+        >
+          {speech.title && (
+            <span className="mb-1 block text-[11px] font-bold text-primary">
+              {speech.title}
+            </span>
+          )}
+          <span className="block text-xs leading-relaxed text-foreground/90">
+            {speech.message}
+          </span>
+        </span>
+      )}
       <span
         key={`${petState}-${animationNonce}`}
         className="openpets-ai-pet-sprite resident-pet-sprite"

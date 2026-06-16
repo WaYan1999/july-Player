@@ -187,6 +187,11 @@
   html.light {
     background-color: #F5F5F5;
     }
+  html:has(.desktop-pet-window),
+  html:has(.desktop-pet-window) body,
+  html:has(.desktop-pet-window) #root {
+    background: transparent;
+  }
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-weight: 400;
@@ -309,7 +314,7 @@
 }
 
 .resident-pet {
-  contain: layout paint;
+  contain: layout;
   -webkit-app-region: no-drag;
 }
 
@@ -333,6 +338,159 @@
   transform: scaleX(1.05);
 }
 
+.resident-pet-bubble {
+  animation: resident-pet-bubble-in 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.desktop-pet-window {
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  overflow: hidden;
+  -webkit-app-region: drag;
+}
+
+.desktop-pet-stage {
+  position: relative;
+  width: 170px;
+  height: 170px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 18px;
+}
+
+.desktop-pet-sprite {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.desktop-pet-shadow {
+  position: absolute;
+  right: 34px;
+  bottom: 16px;
+  left: 34px;
+  z-index: 1;
+  height: 14px;
+  border-radius: 999px;
+  background: radial-gradient(ellipse at center, rgb(0 0 0 / 0.36), transparent 70%);
+  pointer-events: none;
+}
+
+.desktop-pet-bubble {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  z-index: 3;
+  width: min(188px, calc(100vw - 28px));
+  transform: translateX(-50%);
+  border: 1px solid rgb(255 255 255 / 0.18);
+  border-radius: 12px;
+  background: rgb(17 18 20 / 0.82);
+  color: var(--foreground);
+  box-shadow: 0 8px 18px rgb(0 0 0 / 0.24);
+  padding: 8px 10px;
+  text-align: left;
+  animation: resident-pet-bubble-in 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  -webkit-app-region: no-drag;
+}
+
+.desktop-pet-bubble strong,
+.desktop-pet-bubble span {
+  display: block;
+}
+
+.desktop-pet-bubble strong {
+  margin-bottom: 2px;
+  font-size: 11px;
+  color: var(--primary);
+}
+
+.desktop-pet-bubble span {
+  font-size: 11px;
+  line-height: 1.35;
+  color: rgb(237 237 237 / 0.88);
+}
+
+.desktop-pet-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 4;
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background: rgb(17 18 20 / 0.74);
+  color: rgb(237 237 237 / 0.82);
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    transform 150ms cubic-bezier(0.22, 1, 0.36, 1);
+  -webkit-app-region: no-drag;
+}
+
+.desktop-pet-close:hover {
+  background: rgb(255 107 107 / 0.24);
+  color: #fff;
+}
+
+.desktop-pet-close:active {
+  transform: scale(0.96);
+}
+
+.pet-progress-fill {
+  transition: width 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: width;
+}
+
+.pet-feedback-card {
+  animation: pet-feedback-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.pet-action-button {
+  transition:
+    transform 150ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    opacity 150ms ease;
+}
+
+.pet-action-button:not(:disabled):active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.resident-pet-bubble-left::after,
+.resident-pet-bubble-right::after {
+  content: "";
+  position: absolute;
+  bottom: 22px;
+  width: 12px;
+  height: 12px;
+  background: var(--card);
+}
+
+.resident-pet-bubble-left::after {
+  right: -7px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  transform: rotate(-45deg);
+}
+
+.resident-pet-bubble-right::after {
+  left: -7px;
+  border-left: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  transform: rotate(45deg);
+}
+
 @keyframes openpets-ai-pet-frames {
   from {
     background-position: 0 var(--openpets-row-y);
@@ -342,8 +500,53 @@
   }
 }
 
+@keyframes resident-pet-bubble-in {
+  from {
+    opacity: 0;
+    transform: translate(8px, 6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@keyframes pet-feedback-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+
   .openpets-ai-pet-sprite {
+    animation: none;
+  }
+
+  .resident-pet-bubble {
+    animation: none;
+  }
+
+  .desktop-pet-bubble {
+    animation: none;
+  }
+
+  .pet-progress-fill,
+  .pet-action-button {
+    transition: none;
+  }
+
+  .pet-feedback-card {
     animation: none;
   }
 }

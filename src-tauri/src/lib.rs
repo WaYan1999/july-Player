@@ -67,6 +67,9 @@ pub fn run() {
             commands::get_ai_models,
             commands::translate_with_deepseek,
             commands::translate_audio_segment,
+            commands::ask_pet_ai,
+            commands::open_desktop_pet,
+            commands::close_desktop_pet,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

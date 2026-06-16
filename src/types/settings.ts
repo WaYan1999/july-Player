@@ -20,6 +20,9 @@ export interface AppSettings {
   pet_enabled: boolean;
   pet_variant: PetCatalogId;
   pet_plugins_enabled: PetPluginId[];
+  pet_ai_token_enabled: boolean;
+  pet_ai_daily_token_budget: number;
+  pet_desktop_enabled: boolean;
 }
 
 export interface AiModelOption {

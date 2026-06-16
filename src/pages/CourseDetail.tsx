@@ -34,6 +34,8 @@ import { useSettings } from "@/hooks/useSettings";
 import { useI18n } from "@/hooks/useI18n";
 import type { AppTranslations } from "@/lib/i18n";
 import { useCourseTitles } from "@/components/app-shell/CourseTitleContext";
+import { awardPetCare } from "@/lib/petCare";
+import { PET_ACTION_EVENT, PET_SPEAK_EVENT } from "@/lib/pets";
 import {
   getCourse,
   getCourseDetail,
@@ -219,7 +221,7 @@ function CourseDetailInner({
   className?: string;
 }) {
   const { settings, loaded: settingsLoaded } = useSettings();
-  const { t, formatMessage } = useI18n();
+  const { t, language, formatMessage } = useI18n();
   const { setTitle: setBreadcrumbTitle } = useCourseTitles();
   const allLessons = courseData.sections.flatMap((s) => s.lessons);
 
@@ -375,11 +377,92 @@ function CourseDetailInner({
     }
   }, [activeLesson, allLessons, course.id, onDataChange]);
 
+  const showPetReward = useCallback(
+    (result: Awaited<ReturnType<typeof awardPetCare>>, lessonTitle: string) => {
+      if (result.skipped || !result.event) return;
+
+      const title =
+        language === "zh"
+          ? "宠物获得奖励"
+          : language === "fr"
+            ? "Recompense du compagnon"
+            : "Pet reward";
+      const levelText =
+        result.petLevelAfter > result.petLevelBefore
+          ? language === "zh"
+            ? `，${result.event.petId} 升到 Lv.${result.petLevelAfter}`
+            : language === "fr"
+              ? `, ${result.event.petId} passe au niv. ${result.petLevelAfter}`
+              : `, ${result.event.petId} reached Lv.${result.petLevelAfter}`
+          : "";
+      const detail =
+        language === "zh"
+          ? `完成「${lessonTitle}」 +${result.event.tokens} 代币 +${result.event.xp} XP${levelText}`
+          : language === "fr"
+            ? `"${lessonTitle}" termine, +${result.event.tokens} jetons +${result.event.xp} XP${levelText}`
+            : `"${lessonTitle}" completed, +${result.event.tokens} tokens +${result.event.xp} XP${levelText}`;
+
+      window.dispatchEvent(new CustomEvent(PET_ACTION_EVENT, { detail: "hop" }));
+      window.dispatchEvent(
+        new CustomEvent(PET_SPEAK_EVENT, {
+          detail: { title, message: detail, tone: "success", durationMs: 5200 },
+        }),
+      );
+    },
+    [language],
+  );
+
+  const reportPetRewardError = useCallback(
+    (err: unknown) => {
+      console.error("pet reward failed", err);
+      const title =
+        language === "zh"
+          ? "宠物奖励未保存"
+          : language === "fr"
+            ? "Recompense non enregistree"
+            : "Pet reward not saved";
+      const message =
+        language === "zh"
+          ? "课程进度已更新，宠物奖励稍后可以继续累积。"
+          : language === "fr"
+            ? "La progression est enregistree. Les recompenses reprendront ensuite."
+            : "Lesson progress was saved. Pet rewards can continue later.";
+
+      window.dispatchEvent(
+        new CustomEvent(PET_SPEAK_EVENT, {
+          detail: { title, message, tone: "warning", durationMs: 5200 },
+        }),
+      );
+    },
+    [language],
+  );
+
+  const grantPetLessonReward = useCallback(
+    async (lessonId: number, lessonTitle: string) => {
+      try {
+        const result = await awardPetCare({
+          type: "lesson",
+          petId: settings.pet_variant,
+          lessonId,
+          label: lessonTitle,
+        });
+        showPetReward(result, lessonTitle);
+      } catch (err) {
+        reportPetRewardError(err);
+      }
+    },
+    [reportPetRewardError, settings.pet_variant, showPetReward],
+  );
+
   const handleToggleComplete = useCallback(
     async (lessonId: number) => {
       try {
-        await toggleLessonCompleted(lessonId);
+        const completed = await toggleLessonCompleted(lessonId);
         await onDataChange();
+        if (completed) {
+          const lesson = allLessons.find((item) => item.id === lessonId);
+          await grantPetLessonReward(lessonId, lesson?.title ?? t.courseDetail.completed);
+        }
       } catch (err) {
         console.error("toggleLessonCompleted failed", err);
         toast.error(t.courseDetail.updateLessonFailed, {
@@ -387,7 +470,7 @@ function CourseDetailInner({
         });
       }
     },
-    [onDataChange],
+    [allLessons, grantPetLessonReward, onDataChange, t.courseDetail.completed],
   );
 
   const handleToggleFavorite = useCallback(
@@ -411,12 +494,13 @@ function CourseDetailInner({
       try {
         await toggleLessonCompleted(activeLesson.id);
         await onDataChange();
+        await grantPetLessonReward(activeLesson.id, activeLesson.title);
       } catch (err) {
         // Background auto-complete; no toast since it wasn't user-initiated.
         console.error("auto-complete on video end failed", err);
       }
     }
-  }, [activeLesson, onDataChange]);
+  }, [activeLesson, grantPetLessonReward, onDataChange]);
 
   const handleDurationChange = useCallback(
     (duration: number) => {

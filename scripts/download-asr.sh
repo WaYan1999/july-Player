@@ -42,7 +42,37 @@ case "$(uname -s)" in
     cp "$TMP_DIR/Release/SDL2.dll" "$ASR_DIR/SDL2.dll"
     ;;
   Darwin*)
-    echo "Offline ASR model is ready. macOS whisper runtime is not bundled in CI yet."
+    if [[ ! -x "$ASR_DIR/whisper-cli" ]]; then
+      TMP_SRC_ARCHIVE="${TMPDIR:-/tmp}/whisper.cpp-${WHISPER_VERSION}.tar.gz"
+      TMP_SRC_DIR="${TMPDIR:-/tmp}/whisper.cpp-${WHISPER_VERSION}"
+      TMP_BUILD_DIR="${TMPDIR:-/tmp}/whisper.cpp-build-${WHISPER_VERSION}"
+      rm -rf "$TMP_SRC_DIR" "$TMP_BUILD_DIR"
+
+      if ! command -v cmake >/dev/null 2>&1; then
+        echo "Installing CMake for macOS ASR runtime build..."
+        brew install cmake
+      fi
+
+      echo "Building whisper.cpp macOS runtime..."
+      download "$WHISPER_SRC_URL" "$TMP_SRC_ARCHIVE"
+      mkdir -p "$TMP_SRC_DIR"
+      tar -xzf "$TMP_SRC_ARCHIVE" -C "$TMP_SRC_DIR" --strip-components=1
+      cmake -S "$TMP_SRC_DIR" -B "$TMP_BUILD_DIR" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+        -DGGML_METAL=OFF \
+        -DWHISPER_BUILD_TESTS=OFF \
+        -DWHISPER_BUILD_EXAMPLES=ON
+      cmake --build "$TMP_BUILD_DIR" --config Release --target whisper-cli --parallel 2
+
+      WHISPER_BIN="$(find "$TMP_BUILD_DIR" -type f -name whisper-cli -print -quit)"
+      if [[ -z "$WHISPER_BIN" ]]; then
+        echo "Could not find built whisper-cli binary" >&2
+        exit 1
+      fi
+      cp "$WHISPER_BIN" "$ASR_DIR/whisper-cli"
+      chmod +x "$ASR_DIR/whisper-cli"
+    fi
     ;;
   *)
     echo "Skipping whisper.cpp runtime download on this platform."

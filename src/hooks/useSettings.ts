@@ -32,6 +32,9 @@ const DEFAULTS: AppSettings = {
   pet_enabled: true,
   pet_variant: DEFAULT_PET_VARIANT,
   pet_plugins_enabled: DEFAULT_PET_PLUGINS,
+  pet_ai_token_enabled: false,
+  pet_ai_daily_token_budget: 3,
+  pet_desktop_enabled: false,
 };
 
 function parseAiTarget(value: string | undefined): AppSettings["ai_translation_target"] {
@@ -58,6 +61,9 @@ function parse(raw: Record<string, string>): AppSettings {
     pet_enabled: raw.pet_enabled !== "false",
     pet_variant: isPetVariantId(raw.pet_variant) ? raw.pet_variant : DEFAULT_PET_VARIANT,
     pet_plugins_enabled: parsePetPlugins(raw.pet_plugins_enabled),
+    pet_ai_token_enabled: raw.pet_ai_token_enabled === "true",
+    pet_ai_daily_token_budget: Math.max(1, Math.min(10, Number(raw.pet_ai_daily_token_budget) || 3)),
+    pet_desktop_enabled: raw.pet_desktop_enabled === "true",
   };
 }
 
