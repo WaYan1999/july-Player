@@ -16,6 +16,7 @@ import { CourseTitleProvider } from "./CourseTitleContext";
 import { NavSection } from "./NavSection";
 import { SidebarSearch } from "./SidebarSearch";
 import { useI18n } from "@/hooks/useI18n";
+import { AppWindowTitleBar } from "./AppWindowTitleBar";
 
 interface AppShellProps {
   children: ReactNode;
@@ -67,8 +68,7 @@ function AppShellInner({ children }: AppShellProps) {
     <div className="flex h-screen flex-col bg-linear-to-b from-background to-sidebar text-foreground">
       <SquircleClipDefs />
 
-      {/* Drag strip — provides window dragging and clears the traffic lights zone */}
-      <div data-tauri-drag-region className="h-7 w-full shrink-0" />
+      <AppWindowTitleBar />
 
       <header className="flex h-15 shrink-0 items-center">
         <div

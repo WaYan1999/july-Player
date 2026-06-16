@@ -103,6 +103,13 @@
     --sidebar-border: #252729;
     --sidebar-ring: #C8F135;
     --gradient-spot: rgba(200, 241, 53, 0.10);
+    --titlebar: #111316;
+    --titlebar-highlight: rgba(255, 255, 255, 0.055);
+    --titlebar-border: rgba(255, 255, 255, 0.085);
+    --titlebar-control: #A9AFBA;
+    --titlebar-control-hover: rgba(255, 255, 255, 0.055);
+    --titlebar-control-danger-hover: rgba(255, 107, 107, 0.18);
+    --titlebar-control-danger: #FFB9B9;
 }
 
 .light {
@@ -140,6 +147,13 @@
     --sidebar-border: #D9DBDF;
     --sidebar-ring: #8AB400;
     --gradient-spot: rgba(138, 180, 0, 0.07);
+    --titlebar: #FFFFFF;
+    --titlebar-highlight: rgba(255, 255, 255, 0.75);
+    --titlebar-border: rgba(26, 26, 26, 0.10);
+    --titlebar-control: #4B5058;
+    --titlebar-control-hover: rgba(26, 26, 26, 0.055);
+    --titlebar-control-danger-hover: rgba(229, 77, 77, 0.12);
+    --titlebar-control-danger: #C13E3E;
 }
 
 @layer base {
@@ -192,6 +206,43 @@
 /* Apple-style spring easing */
 .ease-apple {
   transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.app-titlebar {
+  height: 38px;
+  background:
+    linear-gradient(180deg, var(--titlebar-highlight), transparent 42%),
+    var(--titlebar);
+  border-bottom: 1px solid var(--titlebar-border);
+}
+
+.app-window-control {
+  display: inline-flex;
+  width: 38px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  color: var(--titlebar-control);
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+.app-window-control:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.app-window-control:not(:disabled):hover {
+  background: var(--titlebar-control-hover);
+  color: var(--foreground);
+}
+
+.app-window-control-danger:not(:disabled):hover {
+  background: var(--titlebar-control-danger-hover);
+  color: var(--titlebar-control-danger);
 }
 
 /* Note editor — contentEditable placeholder + allow text selection */
