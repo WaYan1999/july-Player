@@ -382,7 +382,10 @@ const ASR_RUNTIME_FILES: &[&str] = &[
     "SDL2.dll",
 ];
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "macos")]
+const ASR_RUNTIME_FILES: &[&str] = &["ggml-tiny.bin"];
+
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 const ASR_RUNTIME_FILES: &[&str] = &["whisper-cli", "ggml-tiny.bin"];
 
 fn asr_engine_file_name() -> &'static str {
