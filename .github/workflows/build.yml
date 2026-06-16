@@ -61,7 +61,13 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: '七月播放器 v__VERSION__'
-          releaseBody: '七月播放器远程更新包。安装后可在播放器内检查并安装新版本。'
+          releaseBody: |
+            七月播放器 1.1.0 新增功能：
+            - 新增 AI 模块，可配置 DeepSeek API Key、模型和翻译目标语言。
+            - 播放器字幕旁新增 AI 翻译面板，优先实时翻译当前字幕。
+            - 未配置 DeepSeek 时会引导到 AI 模块，避免打开不可用功能。
+            - 优化 AI 配置保存、测试翻译反馈、DeepSeek 超时和错误提示。
+            - 保留 1080P / 2K 清晰度选择与低分辨率视频转换缓存能力。
           includeUpdaterJson: true
           releaseDraft: true
           prerelease: false
@@ -131,7 +137,14 @@ jobs:
 
           const latest = {
             version,
-            notes: "七月播放器远程更新包。安装后可在播放器内检查并安装新版本。",
+            notes: [
+              "七月播放器 1.1.0 新增功能：",
+              "- 新增 AI 模块，可配置 DeepSeek API Key、模型和翻译目标语言。",
+              "- 播放器字幕旁新增 AI 翻译面板，优先实时翻译当前字幕。",
+              "- 未配置 DeepSeek 时会引导到 AI 模块，避免打开不可用功能。",
+              "- 优化 AI 配置保存、测试翻译反馈、DeepSeek 超时和错误提示。",
+              "- 保留 1080P / 2K 清晰度选择与低分辨率视频转换缓存能力。"
+            ].join("\n"),
             pub_date: release.publishedAt,
             platforms: {
               "darwin-aarch64": { signature: macSig, url: macUrl },
