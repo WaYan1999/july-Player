@@ -31,3 +31,6 @@ dist-ssr
 
 # Specific files
 lemonsqueezy.txt
+
+# Offline ASR resources are downloaded during CI/local packaging.
+src-tauri/resources/asr/

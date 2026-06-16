@@ -51,6 +51,10 @@ jobs:
         run: bash scripts/download-ffmpeg.sh
         shell: bash
 
+      - name: Setup offline ASR resources
+        run: bash scripts/download-asr.sh
+        shell: bash
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -62,15 +66,27 @@ jobs:
           tagName: v__VERSION__
           releaseName: '七月播放器 v__VERSION__'
           releaseBody: |
-            七月播放器 1.1.2 新增修改：
+            七月播放器 1.1.3 新增修改：
             - 新增 AI 实时音频识别翻译：播放器倍速按钮左侧增加 AI 按钮，可识别当前视频音频并翻译。
             - 优化 AI 翻译显示方式：AI 翻译结果直接替换为播放器场景字幕，不再显示左侧黑色翻译框。
-            - 新增 AI 模块语音识别配置：支持填写 ASR API Key、模型和兼容 /audio/transcriptions 的接口地址。
+            - 新增内置离线 ASR：语音识别不再需要单独配置接口或密钥，API 地址和 API Key 只用于翻译识别后的文字。
+            - 修复离线 ASR 中文安装路径崩溃：安装在 C:\Program Files\七月播放器 时，会自动把 ASR 引擎复制到英文缓存目录运行。
+            - 新增 AI 模块 API 配置：支持配置 API 地址、API Key、自动获取上游模型，并提供 July API 广告入口。
+            - 新增 26 个翻译目标语言：AI 翻译语言下拉框支持更多国家语言，并优化下拉框视觉反馈。
             - 新增宠物模块：侧边栏设置下方增加宠物入口，可管理常驻宠物与宠物功能。
             - 新增多宠物选择：支持 Built-in Pet、Orchestrator、Fixer、Snoopy、Clippy、Tux、Wall-E、Dobby 等 OpenPets 宠物。
             - 新增官方宠物功能模块：支持提醒、虚拟宠物、专注伙伴、饮水提醒、早晚日常、情绪自检、发布伙伴、魔法 8 号球和幸运饼干开关。
             - 优化常驻宠物：宠物在应用内常驻显示，可自由拖拽移动，不再带黑色控制框。
+            - 优化宠物选择反馈：点击预览只预览动作，点击使用才切换宠物和动作，并显示成功提示。
             - 修复宠物插件设置持久化：关闭全部宠物功能后，重启应用不会自动恢复默认开启。
+            - 新增字幕文件名语言识别：支持 zh、zh-CN、en、es 等后缀，001 Introduction_zh.srt 这类文件会正确匹配视频。
+            - 优化中文字幕默认策略：包含 zh 的字幕自动识别为中文字幕，存在中文字幕时默认优先显示中文。
+            - 优化双语字幕：双语字幕使用中文加任意另一种语言，英文存在时优先组合中英双语。
+            - 新增播放器清晰度选择：字幕旁边可选择 1080P 和 2K，720P 视频可自动转换缓存为 1080P。
+            - 新增多语言界面：设置页支持中文、英文、法语切换。
+            - 优化 Windows 无边框窗口：自定义标题栏颜色跟随主题，窗口按钮反馈更柔和。
+            - 优化品牌与侧边栏：应用名称改为七月播放器，logo 透明化，移除侧边栏重复标题，为后续账号模块留出空间。
+            - 新增 GitHub Actions 发布构建：支持 Windows 安装包、macOS DMG/通用包和远程更新清单构建。
             - 发布前清理播放器调试日志，并完成前端构建与 Rust 后端检查。
           includeUpdaterJson: true
           releaseDraft: true
@@ -112,10 +128,14 @@ jobs:
           ], { encoding: "utf8" }));
 
           const assets = new Map(release.assets.map((asset) => [asset.name, asset.url]));
-          const download = (name) => {
-            const url = assets.get(name);
-            if (!url) throw new Error(`Missing release asset: ${name}`);
-            return url;
+          const findAsset = (suffix) => {
+            const exact = assets.get(suffix);
+            if (exact) return { name: suffix, url: exact };
+            const match = release.assets.find((asset) => asset.name.endsWith(suffix));
+            if (!match) {
+              throw new Error(`Missing release asset ending with: ${suffix}`);
+            }
+            return match;
           };
           fs.rmSync("release-signatures", { recursive: true, force: true });
           fs.mkdirSync("release-signatures");
@@ -132,25 +152,44 @@ jobs:
             return fs.readFileSync(`release-signatures/${name}`, "utf8").trim();
           };
 
-          const macUrl = download("_universal.app.tar.gz");
-          const macSig = signature("_universal.app.tar.gz.sig");
-          const winMsiUrl = download(`_${version}_x64_zh-CN.msi`);
-          const winMsiSig = signature(`_${version}_x64_zh-CN.msi.sig`);
-          const winNsisUrl = download(`_${version}_x64-setup.exe`);
-          const winNsisSig = signature(`_${version}_x64-setup.exe.sig`);
+          const macAsset = findAsset("_universal.app.tar.gz");
+          const macSigAsset = findAsset("_universal.app.tar.gz.sig");
+          const winMsiAsset = findAsset(`_${version}_x64_zh-CN.msi`);
+          const winMsiSigAsset = findAsset(`_${version}_x64_zh-CN.msi.sig`);
+          const winNsisAsset = findAsset(`_${version}_x64-setup.exe`);
+          const winNsisSigAsset = findAsset(`_${version}_x64-setup.exe.sig`);
+
+          const macUrl = macAsset.url;
+          const macSig = signature(macSigAsset.name);
+          const winMsiUrl = winMsiAsset.url;
+          const winMsiSig = signature(winMsiSigAsset.name);
+          const winNsisUrl = winNsisAsset.url;
+          const winNsisSig = signature(winNsisSigAsset.name);
 
           const latest = {
             version,
             notes: [
-              "七月播放器 1.1.2 新增修改：",
+              "七月播放器 1.1.3 新增修改：",
               "- 新增 AI 实时音频识别翻译：播放器倍速按钮左侧增加 AI 按钮，可识别当前视频音频并翻译。",
               "- 优化 AI 翻译显示方式：AI 翻译结果直接替换为播放器场景字幕，不再显示左侧黑色翻译框。",
-              "- 新增 AI 模块语音识别配置：支持填写 ASR API Key、模型和兼容 /audio/transcriptions 的接口地址。",
+              "- 新增内置离线 ASR：语音识别不再需要单独配置接口或密钥，API 地址和 API Key 只用于翻译识别后的文字。",
+              "- 修复离线 ASR 中文安装路径崩溃：安装在 C:\\Program Files\\七月播放器 时，会自动把 ASR 引擎复制到英文缓存目录运行。",
+              "- 新增 AI 模块 API 配置：支持配置 API 地址、API Key、自动获取上游模型，并提供 July API 广告入口。",
+              "- 新增 26 个翻译目标语言：AI 翻译语言下拉框支持更多国家语言，并优化下拉框视觉反馈。",
               "- 新增宠物模块：侧边栏设置下方增加宠物入口，可管理常驻宠物与宠物功能。",
               "- 新增多宠物选择：支持 Built-in Pet、Orchestrator、Fixer、Snoopy、Clippy、Tux、Wall-E、Dobby 等 OpenPets 宠物。",
               "- 新增官方宠物功能模块：支持提醒、虚拟宠物、专注伙伴、饮水提醒、早晚日常、情绪自检、发布伙伴、魔法 8 号球和幸运饼干开关。",
               "- 优化常驻宠物：宠物在应用内常驻显示，可自由拖拽移动，不再带黑色控制框。",
+              "- 优化宠物选择反馈：点击预览只预览动作，点击使用才切换宠物和动作，并显示成功提示。",
               "- 修复宠物插件设置持久化：关闭全部宠物功能后，重启应用不会自动恢复默认开启。",
+              "- 新增字幕文件名语言识别：支持 zh、zh-CN、en、es 等后缀，001 Introduction_zh.srt 这类文件会正确匹配视频。",
+              "- 优化中文字幕默认策略：包含 zh 的字幕自动识别为中文字幕，存在中文字幕时默认优先显示中文。",
+              "- 优化双语字幕：双语字幕使用中文加任意另一种语言，英文存在时优先组合中英双语。",
+              "- 新增播放器清晰度选择：字幕旁边可选择 1080P 和 2K，720P 视频可自动转换缓存为 1080P。",
+              "- 新增多语言界面：设置页支持中文、英文、法语切换。",
+              "- 优化 Windows 无边框窗口：自定义标题栏颜色跟随主题，窗口按钮反馈更柔和。",
+              "- 优化品牌与侧边栏：应用名称改为七月播放器，logo 透明化，移除侧边栏重复标题，为后续账号模块留出空间。",
+              "- 新增 GitHub Actions 发布构建：支持 Windows 安装包、macOS DMG/通用包和远程更新清单构建。",
               "- 发布前清理播放器调试日志，并完成前端构建与 Rust 后端检查。"
             ].join("\n"),
             pub_date: release.publishedAt,

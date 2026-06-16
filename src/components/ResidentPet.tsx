@@ -8,7 +8,7 @@ import {
 } from "react";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/hooks/useSettings";
-import { createPetSpriteStyle, type PetState } from "@/lib/pets";
+import { createPetSpriteStyle, PET_ACTION_EVENT, type PetState } from "@/lib/pets";
 
 const PET_POSITION_KEY = "july-player:resident-pet-position";
 const PET_SIZE = { width: 82, height: 88 };
@@ -56,6 +56,7 @@ export function ResidentPet() {
   const { settings } = useSettings();
   const [position, setPosition] = useState<Point>(getInitialPosition);
   const [petState, setPetState] = useState<PetState>("idle");
+  const [animationNonce, setAnimationNonce] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const positionRef = useRef(position);
   const dragRef = useRef<{
@@ -153,6 +154,20 @@ export function ResidentPet() {
     return () => window.removeEventListener("resize", handleResize);
   }, [persistPosition]);
 
+  useEffect(() => {
+    const handlePetAction = (event: Event) => {
+      const nextState = (event as CustomEvent<PetState>).detail;
+      if (!nextState) return;
+
+      setPetState(nextState);
+      setAnimationNonce((current) => current + 1);
+      settleToIdle(nextState === "thinking" ? 1500 : 900);
+    };
+
+    window.addEventListener(PET_ACTION_EVENT, handlePetAction);
+    return () => window.removeEventListener(PET_ACTION_EVENT, handlePetAction);
+  }, [settleToIdle]);
+
   useEffect(
     () => () => {
       if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
@@ -189,7 +204,11 @@ export function ResidentPet() {
         }
       }}
     >
-      <span key={petState} className="openpets-ai-pet-sprite resident-pet-sprite" style={spriteStyle} />
+      <span
+        key={`${petState}-${animationNonce}`}
+        className="openpets-ai-pet-sprite resident-pet-sprite"
+        style={spriteStyle}
+      />
       <span className="resident-pet-shadow" />
     </button>
   );

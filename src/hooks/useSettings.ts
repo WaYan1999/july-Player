@@ -1,7 +1,11 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { getAllSettings, setSetting } from "@/lib/store";
 import type { AppSettings } from "@/types";
-import { isAppLanguage } from "@/lib/i18n";
+import {
+  DEFAULT_TRANSLATION_LANGUAGE,
+  isAppLanguage,
+  isTranslationLanguage,
+} from "@/lib/i18n";
 import {
   DEFAULT_PET_PLUGINS,
   DEFAULT_PET_VARIANT,
@@ -18,18 +22,20 @@ const DEFAULTS: AppSettings = {
   skip_forward_secs: 10,
   skip_backward_secs: 10,
   ai_deepseek_api_key: "",
+  ai_deepseek_proxy_url: "",
+  ai_deepseek_proxy_token: "",
   ai_deepseek_model: "deepseek-v4-flash",
   ai_asr_api_key: "",
-  ai_asr_model: "whisper-1",
-  ai_asr_endpoint: "https://api.openai.com/v1/audio/transcriptions",
-  ai_translation_target: "zh",
+  ai_asr_model: "offline-whisper-tiny",
+  ai_asr_endpoint: "",
+  ai_translation_target: DEFAULT_TRANSLATION_LANGUAGE,
   pet_enabled: true,
   pet_variant: DEFAULT_PET_VARIANT,
   pet_plugins_enabled: DEFAULT_PET_PLUGINS,
 };
 
 function parseAiTarget(value: string | undefined): AppSettings["ai_translation_target"] {
-  return value === "en" || value === "zh" || value === "fr" ? value : "zh";
+  return isTranslationLanguage(value) ? value : DEFAULT_TRANSLATION_LANGUAGE;
 }
 
 function parse(raw: Record<string, string>): AppSettings {
@@ -42,10 +48,12 @@ function parse(raw: Record<string, string>): AppSettings {
     skip_forward_secs: Number(raw.skip_forward_secs) || 10,
     skip_backward_secs: Number(raw.skip_backward_secs) || 10,
     ai_deepseek_api_key: raw.ai_deepseek_api_key ?? "",
+    ai_deepseek_proxy_url: raw.ai_deepseek_proxy_url ?? "",
+    ai_deepseek_proxy_token: raw.ai_deepseek_proxy_token ?? "",
     ai_deepseek_model: raw.ai_deepseek_model || "deepseek-v4-flash",
     ai_asr_api_key: raw.ai_asr_api_key ?? "",
-    ai_asr_model: raw.ai_asr_model || "whisper-1",
-    ai_asr_endpoint: raw.ai_asr_endpoint || "https://api.openai.com/v1/audio/transcriptions",
+    ai_asr_model: raw.ai_asr_model || "offline-whisper-tiny",
+    ai_asr_endpoint: raw.ai_asr_endpoint ?? "",
     ai_translation_target: parseAiTarget(raw.ai_translation_target),
     pet_enabled: raw.pet_enabled !== "false",
     pet_variant: isPetVariantId(raw.pet_variant) ? raw.pet_variant : DEFAULT_PET_VARIANT,

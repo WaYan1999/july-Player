@@ -101,7 +101,7 @@ const SUBTITLE_OFF_KEY = "__off__";
 const BILINGUAL_SUBTITLE_KEY = "bilingual";
 const BILINGUAL_SUBTITLE_IDX = -2;
 const CHINESE_SUBTITLE_LABEL = "中文字幕";
-const BILINGUAL_SUBTITLE_LABEL = "中英双语字幕";
+const BILINGUAL_SUBTITLE_LABEL = "双语字幕";
 
 const DEFAULT_SUB_STYLE: SubtitleStyle = {
   fontSize: 18,
@@ -177,9 +177,14 @@ function getDefaultSubtitleIndex(subtitles: Subtitle[]): number {
 }
 
 function getBilingualSubtitleIndexes(subtitles: Subtitle[]): [number, number] | null {
-  const englishIdx = subtitles.findIndex((sub) => getSubtitleLanguageKey(sub) === "en");
   const chineseIdx = subtitles.findIndex((sub) => getSubtitleLanguageKey(sub) === "zh");
-  return englishIdx >= 0 && chineseIdx >= 0 ? [englishIdx, chineseIdx] : null;
+  if (chineseIdx < 0) return null;
+
+  const englishIdx = subtitles.findIndex((sub, idx) => idx !== chineseIdx && getSubtitleLanguageKey(sub) === "en");
+  const otherLanguageIdx = subtitles.findIndex((sub, idx) => idx !== chineseIdx && getSubtitleLanguageKey(sub) !== "zh");
+  const sourceIdx = englishIdx >= 0 ? englishIdx : otherLanguageIdx;
+
+  return sourceIdx >= 0 ? [sourceIdx, chineseIdx] : null;
 }
 
 function getPreferredSubtitleKey(idx: number, subtitles: Subtitle[]): string {
@@ -280,8 +285,9 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const [isAiTranslating, setIsAiTranslating] = useState(false);
   const hasSubtitles = subtitles.length > 0;
   const aiConfigured =
-    settings.ai_deepseek_api_key.trim().length > 0 &&
-    settings.ai_asr_api_key.trim().length > 0;
+    settings.ai_deepseek_proxy_url.trim().length > 0 &&
+    (settings.ai_deepseek_proxy_token.trim().length > 0 ||
+      settings.ai_deepseek_api_key.trim().length > 0);
 
   // Auto-skip countdown when video ends
   const autoSkipFiredRef = useRef(false);
@@ -612,9 +618,15 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         }
       } catch (err) {
         if (cancelled || aiTranslateRequestRef.current !== requestId) return;
-        setAiError(err instanceof Error ? err.message : t.aiTranslationFailed);
+        const message =
+          err instanceof Error
+            ? err.message
+            : typeof err === "string" && err.trim()
+              ? err
+              : t.aiTranslationFailed;
+        setAiError(message);
         setAiTranslatedText("");
-        setAiStatus(t.aiTranslationFailed);
+        setAiStatus(message);
       } finally {
         if (!cancelled && aiTranslateRequestRef.current === requestId) {
           aiSegmentInFlightRef.current = false;

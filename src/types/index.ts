@@ -33,7 +33,7 @@ export type {
   LibraryStats,
 } from "./progress";
 
-export type { AppSettings } from "./settings";
+export type { AiModelOption, AppSettings } from "./settings";
 
 export type { NavItem, BreadcrumbItem, SectionMemory } from "./navigation";
 

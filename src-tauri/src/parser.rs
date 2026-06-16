@@ -970,7 +970,7 @@ fn video_base_name(filename: &str) -> String {
 }
 
 fn subtitle_base_name(filename: &str) -> String {
-    // A subtitle might be: name.srt, name.en.srt, name.English.srt, name.en.vtt
+    // A subtitle might be: name.srt, name.en.srt, name_zh.srt, name.zh-CN.vtt
     let mut name = filename.to_string();
 
     // Strip the subtitle extension
@@ -983,10 +983,12 @@ fn subtitle_base_name(filename: &str) -> String {
     }
 
     // Strip language code if present (en, zh-CN, English, etc.)
-    if let Some((base, lang_part)) = name.rsplit_once('.') {
-        let lang_lower = lang_part.to_lowercase();
-        if is_subtitle_language_suffix(&lang_lower) && !base.is_empty() {
-            return base.to_string();
+    for separator in ['.', '_'] {
+        if let Some((base, lang_part)) = name.rsplit_once(separator) {
+            let lang_lower = lang_part.to_lowercase();
+            if is_subtitle_language_suffix(&lang_lower) && !base.is_empty() {
+                return base.to_string();
+            }
         }
     }
 
@@ -1838,6 +1840,19 @@ mod tests {
         assert!(!is_sample_video("01 - Introduction.mp4"));
         assert!(!is_sample_video("Lecture 3 - Algorithms.mp4"));
         assert!(!is_sample_video("trailer_park_boys.mp4")); // not an exact stem match
+    }
+
+    #[test]
+    fn subtitle_language_suffix_supports_underscore() {
+        assert_eq!(subtitle_base_name("001 Introduction_zh.srt"), "001 Introduction");
+        assert_eq!(subtitle_base_name("001 Introduction_en.srt"), "001 Introduction");
+        assert_eq!(subtitle_base_name("001 Introduction_es.srt"), "001 Introduction");
+        assert_eq!(subtitle_base_name("001 Introduction_zh-CN.srt"), "001 Introduction");
+
+        assert_eq!(
+            extract_subtitle_language("001 Introduction_zh.srt", "001 Introduction"),
+            Some("Chinese".to_string())
+        );
     }
 
     // --- is_subtitle_folder ---

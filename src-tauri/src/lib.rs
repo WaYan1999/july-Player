@@ -64,6 +64,7 @@ pub fn run() {
             commands::add_custom_category,
             commands::delete_custom_category,
             commands::search_content,
+            commands::get_ai_models,
             commands::translate_with_deepseek,
             commands::translate_audio_segment,
         ])

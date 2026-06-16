@@ -84,6 +84,7 @@ type PetPluginTranslationKeys = {
 };
 
 export const DEFAULT_PET_VARIANT: PetCatalogId = "builtin";
+export const PET_ACTION_EVENT = "july-player:pet-action";
 
 export const DEFAULT_PET_PLUGINS: PetPluginId[] = [
   "openpets.reminders",

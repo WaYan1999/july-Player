@@ -13,9 +13,8 @@ use crate::db::{self, DbState};
 use crate::parser::find_bundled_bin;
 
 const DEEPSEEK_CHAT_COMPLETIONS_URL: &str = "https://api.deepseek.com/chat/completions";
-const DEFAULT_ASR_TRANSCRIPTIONS_URL: &str = "https://api.openai.com/v1/audio/transcriptions";
+const DEEPSEEK_MODELS_URL: &str = "https://api.deepseek.com/models";
 const DEFAULT_DEEPSEEK_MODEL: &str = "deepseek-v4-flash";
-const DEFAULT_ASR_MODEL: &str = "whisper-1";
 const MAX_TRANSLATION_INPUT_CHARS: usize = 4_000;
 const MAX_AUDIO_SECONDS: f64 = 8.0;
 
@@ -32,6 +31,16 @@ struct ChatChoice {
 #[derive(Debug, Deserialize)]
 struct ChatCompletionResponse {
     choices: Vec<ChatChoice>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ModelsResponse {
+    data: Vec<ModelItem>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ModelItem {
+    id: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -59,9 +68,64 @@ pub struct AiAudioTranslation {
     pub duration_seconds: f64,
 }
 
-#[derive(Debug, Deserialize)]
-struct TranscriptionResponse {
-    text: Option<String>,
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiModelOption {
+    pub id: String,
+    pub label: String,
+}
+
+#[tauri::command]
+pub async fn get_ai_models(
+    state: tauri::State<'_, DbState>,
+) -> Result<Vec<AiModelOption>, String> {
+    let settings = load_settings(&state)?;
+    let bearer_token = deepseek_bearer_token(&settings)?;
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|e| format!("Could not create model list client: {e}"))?;
+
+    let response = client
+        .get(deepseek_models_endpoint(&settings))
+        .bearer_auth(bearer_token)
+        .send()
+        .await
+        .map_err(|e| format!("Model list request failed: {e}"))?;
+
+    let status = response.status();
+    let response_text = response
+        .text()
+        .await
+        .map_err(|e| format!("Could not read model list response: {e}"))?;
+
+    if !status.is_success() {
+        return Err(format!(
+            "Model list returned {status}: {}",
+            summarize_deepseek_error(&response_text)
+        ));
+    }
+
+    let parsed: ModelsResponse = serde_json::from_str(&response_text)
+        .map_err(|e| format!("Could not parse model list response: {e}"))?;
+
+    let mut models = parsed
+        .data
+        .into_iter()
+        .map(|model| model.id)
+        .filter(|id| !id.trim().is_empty())
+        .collect::<Vec<_>>();
+    models.sort();
+    models.dedup();
+
+    Ok(models
+        .into_iter()
+        .map(|id| AiModelOption {
+            label: format_model_label(&id),
+            id,
+        })
+        .collect())
 }
 
 #[tauri::command]
@@ -87,11 +151,7 @@ pub async fn translate_with_deepseek(
             .collect::<HashMap<_, _>>()
     };
 
-    let api_key = settings
-        .get("ai_deepseek_api_key")
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| "DeepSeek API key is not configured".to_string())?;
+    let bearer_token = deepseek_bearer_token(&settings)?;
 
     let model = settings
         .get("ai_deepseek_model")
@@ -124,8 +184,8 @@ pub async fn translate_with_deepseek(
         .map_err(|e| format!("Could not create DeepSeek client: {e}"))?;
 
     let response = client
-        .post(DEEPSEEK_CHAT_COMPLETIONS_URL)
-        .bearer_auth(api_key)
+        .post(deepseek_endpoint(&settings))
+        .bearer_auth(bearer_token)
         .json(&body)
         .send()
         .await
@@ -169,14 +229,8 @@ pub async fn translate_audio_segment(
     let duration_seconds = duration_seconds.clamp(1.0, MAX_AUDIO_SECONDS);
     let settings = load_settings(&state)?;
 
-    let transcript = transcribe_audio_segment(
-        &app,
-        &settings,
-        &video_path,
-        start_seconds,
-        duration_seconds,
-    )
-    .await?;
+    let transcript = transcribe_audio_segment(&app, &video_path, start_seconds, duration_seconds)
+        .await?;
     if transcript.trim().is_empty() {
         return Ok(AiAudioTranslation {
             transcript,
@@ -199,82 +253,218 @@ pub async fn translate_audio_segment(
 
 async fn transcribe_audio_segment(
     app: &tauri::AppHandle,
-    settings: &HashMap<String, String>,
     video_path: &str,
     start_seconds: f64,
     duration_seconds: f64,
 ) -> Result<String, String> {
-    let asr_api_key = settings
-        .get("ai_asr_api_key")
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| "Audio recognition API key is not configured".to_string())?;
-
-    let asr_model = settings
-        .get("ai_asr_model")
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .unwrap_or(DEFAULT_ASR_MODEL);
-
-    let asr_endpoint = settings
-        .get("ai_asr_endpoint")
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .unwrap_or(DEFAULT_ASR_TRANSCRIPTIONS_URL);
-
     let input = PathBuf::from(video_path);
     if !input.is_file() {
         return Err("Video file was not found".to_string());
     }
 
     let audio_path = extract_audio_segment(app, &input, start_seconds, duration_seconds)?;
-    let audio_bytes =
-        fs::read(&audio_path).map_err(|e| format!("Could not read audio segment: {e}"))?;
-    let _ = fs::remove_file(&audio_path);
+    let runtime = prepare_asr_runtime(app)?;
 
-    let file_name = audio_path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("segment.wav")
-        .to_string();
-    let audio_part = reqwest::multipart::Part::bytes(audio_bytes)
-        .file_name(file_name)
-        .mime_str("audio/wav")
-        .map_err(|e| format!("Could not prepare audio upload: {e}"))?;
-    let form = reqwest::multipart::Form::new()
-        .text("model", asr_model.to_string())
-        .part("file", audio_part);
+    let transcript = tauri::async_runtime::spawn_blocking(move || {
+        let result =
+            transcribe_wav_with_whisper_cli(&runtime.whisper_bin, &runtime.model_path, &audio_path);
+        let _ = fs::remove_file(&audio_path);
+        result
+    })
+    .await
+    .map_err(|e| format!("Offline speech recognition task failed: {e}"))??;
 
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(45))
-        .build()
-        .map_err(|e| format!("Could not create audio recognition client: {e}"))?;
+    Ok(transcript)
+}
 
-    let response = client
-        .post(asr_endpoint)
-        .bearer_auth(asr_api_key)
-        .multipart(form)
-        .send()
-        .await
-        .map_err(|e| format!("Audio recognition request failed: {e}"))?;
+struct AsrRuntime {
+    whisper_bin: PathBuf,
+    model_path: PathBuf,
+}
 
-    let status = response.status();
-    let response_text = response
-        .text()
-        .await
-        .map_err(|e| format!("Could not read audio recognition response: {e}"))?;
+fn prepare_asr_runtime(app: &tauri::AppHandle) -> Result<AsrRuntime, String> {
+    let source_dir = resolve_asr_resource_dir(app)?;
+    let runtime_dir = app
+        .path()
+        .app_cache_dir()
+        .or_else(|_| app.path().app_data_dir())
+        .map_err(|e| format!("Could not resolve ASR runtime directory: {e}"))?
+        .join("asr-runtime");
 
-    if !status.is_success() {
-        return Err(format!(
-            "Audio recognition returned {status}: {}",
-            summarize_deepseek_error(&response_text)
-        ));
+    fs::create_dir_all(&runtime_dir)
+        .map_err(|e| format!("Could not create ASR runtime directory: {e}"))?;
+
+    for file_name in ASR_RUNTIME_FILES {
+        let source = source_dir.join(file_name);
+        if !source.is_file() {
+            return Err(format!("Offline ASR resource is missing: {file_name}"));
+        }
+
+        let destination = runtime_dir.join(file_name);
+        let needs_copy = fs::metadata(&destination)
+            .and_then(|dest| {
+                fs::metadata(&source).map(|src| dest.len() != src.len())
+            })
+            .unwrap_or(true);
+
+        if needs_copy {
+            fs::copy(&source, &destination)
+                .map_err(|e| format!("Could not stage offline ASR resource {file_name}: {e}"))?;
+        }
     }
 
-    let parsed: TranscriptionResponse = serde_json::from_str(&response_text)
-        .map_err(|e| format!("Could not parse audio recognition response: {e}"))?;
+    Ok(AsrRuntime {
+        whisper_bin: runtime_dir.join(asr_engine_file_name()),
+        model_path: runtime_dir.join("ggml-tiny.bin"),
+    })
+}
 
-    Ok(parsed.text.unwrap_or_default().trim().to_string())
+fn transcribe_wav_with_whisper_cli(
+    whisper_bin: &Path,
+    model_path: &Path,
+    wav_path: &Path,
+) -> Result<String, String> {
+    let output_base = wav_path.with_extension("asr");
+    let output_txt = output_base.with_extension("asr.txt");
+    let _ = fs::remove_file(&output_txt);
+
+    let mut cmd = Command::new(whisper_bin);
+    cmd.arg("-m")
+        .arg(model_path)
+        .arg("-l")
+        .arg("auto")
+        .arg("-t")
+        .arg(default_asr_thread_count().to_string())
+        .arg("-np")
+        .arg("-nt")
+        .arg("-otxt")
+        .arg("-of")
+        .arg(&output_base)
+        .arg("-f")
+        .arg(wav_path);
+
+    if let Some(parent) = whisper_bin.parent() {
+        cmd.current_dir(parent);
+    }
+    hide_console_window(&mut cmd);
+
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Could not run offline ASR engine: {e}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Offline ASR engine failed: {stderr}"));
+    }
+
+    let mut transcript = fs::read_to_string(&output_txt)
+        .or_else(|_| Ok::<_, std::io::Error>(String::from_utf8_lossy(&output.stdout).to_string()))
+        .map_err(|e| format!("Could not read offline ASR result: {e}"))?;
+    let _ = fs::remove_file(&output_txt);
+
+    transcript = transcript
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    Ok(transcript.trim().to_string())
+}
+
+#[cfg(target_os = "windows")]
+const ASR_RUNTIME_FILES: &[&str] = &[
+    "whisper-cli.exe",
+    "ggml-tiny.bin",
+    "whisper.dll",
+    "ggml.dll",
+    "ggml-base.dll",
+    "ggml-cpu.dll",
+    "SDL2.dll",
+];
+
+#[cfg(not(target_os = "windows"))]
+const ASR_RUNTIME_FILES: &[&str] = &["whisper-cli", "ggml-tiny.bin"];
+
+fn asr_engine_file_name() -> &'static str {
+    #[cfg(target_os = "windows")]
+    {
+        "whisper-cli.exe"
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        "whisper-cli"
+    }
+}
+
+fn resolve_asr_resource_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let engine_path = resolve_asr_engine_path(app)?;
+    engine_path
+        .parent()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| "Offline ASR resource directory could not be resolved".to_string())
+}
+
+fn resolve_asr_engine_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let mut candidates = Vec::new();
+    let engine_name = asr_engine_file_name();
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        candidates.push(resource_dir.join("resources").join("asr").join(engine_name));
+        candidates.push(resource_dir.join("asr").join(engine_name));
+        candidates.push(resource_dir.join(engine_name));
+    }
+
+    if let Ok(current_dir) = std::env::current_dir() {
+        candidates.push(
+            current_dir
+                .join("src-tauri")
+                .join("resources")
+                .join("asr")
+                .join(engine_name),
+        );
+        #[cfg(target_os = "windows")]
+        {
+            candidates.push(
+                current_dir
+                    .join("src-tauri")
+                    .join("binaries")
+                    .join("whisper-cli-x86_64-pc-windows-msvc.exe"),
+            );
+            candidates.push(
+                current_dir
+                    .join("binaries")
+                    .join("whisper-cli-x86_64-pc-windows-msvc.exe"),
+            );
+        }
+        #[cfg(target_os = "macos")]
+        candidates.push(
+            current_dir
+                .join("src-tauri")
+                .join("binaries")
+                .join("whisper-cli-universal-apple-darwin"),
+        );
+        #[cfg(target_os = "macos")]
+        candidates.push(
+            current_dir
+                .join("binaries")
+                .join("whisper-cli-universal-apple-darwin"),
+        );
+    }
+
+    candidates
+        .into_iter()
+        .find(|path| path.is_file())
+        .ok_or_else(|| {
+            "Offline ASR engine is missing. Please rebuild the app with whisper-cli bundled."
+                .to_string()
+        })
+}
+
+fn default_asr_thread_count() -> usize {
+    std::thread::available_parallelism()
+        .map(|count| count.get().clamp(1, 4))
+        .unwrap_or(2)
 }
 
 fn extract_audio_segment(
@@ -353,11 +543,7 @@ async fn translate_text_with_settings(
         return Ok(String::new());
     }
 
-    let api_key = settings
-        .get("ai_deepseek_api_key")
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| "DeepSeek API key is not configured".to_string())?;
+    let bearer_token = deepseek_bearer_token(settings)?;
 
     let model = settings
         .get("ai_deepseek_model")
@@ -390,8 +576,8 @@ async fn translate_text_with_settings(
         .map_err(|e| format!("Could not create DeepSeek client: {e}"))?;
 
     let response = client
-        .post(DEEPSEEK_CHAT_COMPLETIONS_URL)
-        .bearer_auth(api_key)
+        .post(deepseek_endpoint(settings))
+        .bearer_auth(bearer_token)
         .json(&body)
         .send()
         .await
@@ -431,10 +617,108 @@ fn summarize_deepseek_error(response_text: &str) -> String {
         .unwrap_or_else(|| response_text.chars().take(240).collect())
 }
 
+fn deepseek_bearer_token(settings: &HashMap<String, String>) -> Result<&str, String> {
+    settings
+        .get("ai_deepseek_proxy_token")
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            settings
+                .get("ai_deepseek_api_key")
+                .map(|value| value.trim())
+                .filter(|value| !value.is_empty())
+        })
+        .ok_or_else(|| "DeepSeek API key or proxy token is not configured".to_string())
+}
+
+fn deepseek_endpoint(settings: &HashMap<String, String>) -> String {
+    let Some(proxy_url) = settings
+        .get("ai_deepseek_proxy_url")
+        .map(|value| value.trim().trim_end_matches('/'))
+        .filter(|value| !value.is_empty())
+    else {
+        return DEEPSEEK_CHAT_COMPLETIONS_URL.to_string();
+    };
+
+    if proxy_url.ends_with("/chat/completions") {
+        return proxy_url.to_string();
+    }
+    if proxy_url.ends_with("/v1") {
+        return format!("{proxy_url}/chat/completions");
+    }
+    format!("{proxy_url}/v1/chat/completions")
+}
+
+fn deepseek_models_endpoint(settings: &HashMap<String, String>) -> String {
+    let Some(api_url) = api_base_url(settings) else {
+        return DEEPSEEK_MODELS_URL.to_string();
+    };
+
+    if api_url.ends_with("/models") {
+        return api_url.to_string();
+    }
+    if api_url.ends_with("/chat/completions") {
+        return format!(
+            "{}/models",
+            api_url
+                .trim_end_matches("/chat/completions")
+                .trim_end_matches('/')
+        );
+    }
+    if api_url.ends_with("/v1") {
+        return format!("{api_url}/models");
+    }
+    format!("{api_url}/v1/models")
+}
+
+fn api_base_url(settings: &HashMap<String, String>) -> Option<&str> {
+    settings
+        .get("ai_deepseek_proxy_url")
+        .map(|value| value.trim().trim_end_matches('/'))
+        .filter(|value| !value.is_empty())
+}
+
+fn format_model_label(id: &str) -> String {
+    id.split(['-', '_', '.'])
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn language_name(value: &str) -> &'static str {
     match value.trim().to_lowercase().as_str() {
         "zh" | "zh-cn" | "chinese" => "Simplified Chinese",
+        "ja" | "jp" | "japanese" => "Japanese",
+        "ko" | "kr" | "korean" => "Korean",
         "fr" | "fr-fr" | "french" => "French",
+        "de" | "german" => "German",
+        "es" | "spanish" => "Spanish",
+        "pt" | "portuguese" => "Portuguese",
+        "it" | "italian" => "Italian",
+        "ru" | "russian" => "Russian",
+        "ar" | "arabic" => "Arabic",
+        "hi" | "hindi" => "Hindi",
+        "id" | "indonesian" => "Indonesian",
+        "th" | "thai" => "Thai",
+        "vi" | "vietnamese" => "Vietnamese",
+        "tr" | "turkish" => "Turkish",
+        "nl" | "dutch" => "Dutch",
+        "pl" | "polish" => "Polish",
+        "uk" | "ukrainian" => "Ukrainian",
+        "el" | "greek" => "Greek",
+        "sv" | "swedish" => "Swedish",
+        "da" | "danish" => "Danish",
+        "no" | "norwegian" => "Norwegian",
+        "fi" | "finnish" => "Finnish",
+        "cs" | "czech" => "Czech",
+        "hu" | "hungarian" => "Hungarian",
         _ => "English",
     }
 }

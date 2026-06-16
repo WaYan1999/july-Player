@@ -6,6 +6,69 @@ export const LANGUAGE_OPTIONS: { value: AppLanguage; label: string }[] = [
   { value: "fr", label: "Fran\u00e7ais" },
 ];
 
+export type TranslationLanguage =
+  | "zh"
+  | "en"
+  | "ja"
+  | "ko"
+  | "fr"
+  | "de"
+  | "es"
+  | "pt"
+  | "it"
+  | "ru"
+  | "ar"
+  | "hi"
+  | "id"
+  | "th"
+  | "vi"
+  | "tr"
+  | "nl"
+  | "pl"
+  | "uk"
+  | "el"
+  | "sv"
+  | "da"
+  | "no"
+  | "fi"
+  | "cs"
+  | "hu";
+
+export const DEFAULT_TRANSLATION_LANGUAGE: TranslationLanguage = "zh";
+
+export const TRANSLATION_LANGUAGE_OPTIONS: { value: TranslationLanguage; label: string }[] = [
+  { value: "zh", label: "\u4e2d\u6587" },
+  { value: "en", label: "English" },
+  { value: "ja", label: "\u65e5\u672c\u8a9e" },
+  { value: "ko", label: "\ud55c\uad6d\uc5b4" },
+  { value: "fr", label: "Fran\u00e7ais" },
+  { value: "de", label: "Deutsch" },
+  { value: "es", label: "Espa\u00f1ol" },
+  { value: "pt", label: "Portugu\u00eas" },
+  { value: "it", label: "Italiano" },
+  { value: "ru", label: "\u0420\u0443\u0441\u0441\u043a\u0438\u0439" },
+  { value: "ar", label: "\u0627\u0644\u0639\u0631\u0628\u064a\u0629" },
+  { value: "hi", label: "\u0939\u093f\u0928\u094d\u0926\u0940" },
+  { value: "id", label: "Bahasa Indonesia" },
+  { value: "th", label: "\u0e44\u0e17\u0e22" },
+  { value: "vi", label: "Ti\u1ebfng Vi\u1ec7t" },
+  { value: "tr", label: "T\u00fcrk\u00e7e" },
+  { value: "nl", label: "Nederlands" },
+  { value: "pl", label: "Polski" },
+  { value: "uk", label: "\u0423\u043a\u0440\u0430\u0457\u043d\u0441\u044c\u043a\u0430" },
+  { value: "el", label: "\u0395\u03bb\u03bb\u03b7\u03bd\u03b9\u03ba\u03ac" },
+  { value: "sv", label: "Svenska" },
+  { value: "da", label: "Dansk" },
+  { value: "no", label: "Norsk" },
+  { value: "fi", label: "Suomi" },
+  { value: "cs", label: "\u010ce\u0161tina" },
+  { value: "hu", label: "Magyar" },
+];
+
+export function isTranslationLanguage(value: string | undefined): value is TranslationLanguage {
+  return TRANSLATION_LANGUAGE_OPTIONS.some((option) => option.value === value);
+}
+
 const en = {
   nav: {
     navigation: "Navigation",
@@ -126,18 +189,35 @@ const en = {
   },
   ai: {
     title: "AI Module",
-    subtitle: "Configure live audio recognition and DeepSeek translation",
-    deepseekConfig: "DeepSeek configuration",
+    subtitle: "Configure built-in speech recognition and AI translation",
+    deepseekConfig: "API configuration",
     configured: "Configured",
     notConfigured: "Not configured",
-    apiKey: "API key",
+    apiUrl: "API address",
+    apiUrlHint: "Root URL, /v1, or full /chat/completions addresses are supported.",
+    apiKey: "API Key",
+    apiKeyHint: "Used for translation and loading the upstream model list. Speech recognition runs offline.",
+    proxyUrl: "API address",
+    proxyUrlHint: "Root URL, /v1, or full /chat/completions address are supported.",
+    proxyToken: "API Key",
+    proxyTokenPlaceholder: "Optional token",
+    proxyTokenHint: "Used as the request token for the configured API address.",
     model: "Model",
+    modelPlaceholder: "Select a model",
+    modelHint: "Models are loaded from the configured upstream /models endpoint.",
+    loadingModels: "Loading models...",
+    refreshModels: "Refresh models",
+    modelLoadFailed: "Could not load models",
     speechRecognition: "Speech recognition",
+    builtIn: "Built in",
+    speechBuiltinHint: "Speech recognition is built into the player with an offline ASR model. No separate speech key or endpoint is required.",
     speechApiKey: "Speech API key",
     speechModel: "Speech model",
     speechEndpoint: "Speech endpoint",
-    speechEndpointHint: "Use an OpenAI Whisper compatible /audio/transcriptions endpoint. DeepSeek is still used for translation.",
+    speechEndpointHint: "Offline ASR is bundled with the player. The API address is only used for translating recognized text.",
     targetLanguage: "Translation language",
+    languagePlaceholder: "Select language",
+    languageHint: "26 translation languages are available for subtitles and live speech translation.",
     savedKey: "Saved key",
     saved: "Configuration saved",
     unsaved: "Unsaved changes",
@@ -145,9 +225,14 @@ const en = {
     saving: "Saving...",
     saveFailed: "Could not save",
     testTranslation: "Test translation",
-    playerHint: "The player AI button works after DeepSeek and speech recognition are both configured.",
+    playerHint: "After API address and API Key are saved, the player AI button can translate speech recognized by the offline ASR model.",
     test: "Test",
     testing: "Testing...",
+    julyApiTitle: "July API relay",
+    julyApiDescription: "Need a relay address or token? Open July API to configure a compatible AI gateway.",
+    julyResDescription: "Open July Res for resources and compatible service information.",
+    julyApiButton: "Open July API",
+    openLink: "Open",
   },
   pets: {
     title: "Pets",
@@ -379,7 +464,7 @@ const en = {
     noSubtitles: "No subtitles found for this lesson.",
     aiTranslate: "AI Translate",
     aiVoiceTranslate: "AI Voice Translate",
-    aiTranslateUnavailable: "Configure DeepSeek and speech recognition in AI Module first.",
+    aiTranslateUnavailable: "Configure API address and API Key in AI Module first.",
     aiListening: "Listening to audio...",
     aiUsingSubtitle: "Translating current subtitle",
     aiNoSource: "No speech was recognized in this audio segment.",
@@ -536,31 +621,53 @@ export const UI_TRANSLATIONS: Record<AppLanguage, AppTranslations> = {
       typeToConfirm: "输入 {phrase} 以确认",
     },
     ai: {
-      title: "AI 模块",
-      subtitle: "配置实时语音识别和 DeepSeek 翻译",
-      deepseekConfig: "DeepSeek 配置",
-      configured: "已配置",
-      notConfigured: "未配置",
+      title: "AI \u6a21\u5757",
+      subtitle: "\u914d\u7f6e\u5185\u7f6e\u8bed\u97f3\u8bc6\u522b\u548c AI \u7ffb\u8bd1",
+      deepseekConfig: "API \u914d\u7f6e",
+      configured: "\u5df2\u914d\u7f6e",
+      notConfigured: "\u672a\u914d\u7f6e",
+      apiUrl: "API \u5730\u5740",
+      apiUrlHint: "\u652f\u6301\u6839\u5730\u5740\u3001/v1 \u6216\u5b8c\u6574 /chat/completions \u5730\u5740\u3002",
       apiKey: "API Key",
-      model: "模型",
-      speechRecognition: "语音识别",
-      speechApiKey: "语音识别 API Key",
-      speechModel: "语音模型",
-      speechEndpoint: "语音识别接口",
-      speechEndpointHint: "支持 OpenAI Whisper 兼容的 /audio/transcriptions 接口。DeepSeek 仍用于翻译识别出的文字。",
-      targetLanguage: "翻译语言",
-      savedKey: "已保存",
-      saved: "配置已保存",
-      unsaved: "有未保存的更改",
-      saveConfig: "保存配置",
-      saving: "正在保存...",
-      saveFailed: "保存失败",
-      testTranslation: "测试翻译",
-      playerHint: "同时配置 DeepSeek 和语音识别后，播放器里才能打开 AI 识别翻译。",
-      test: "测试",
-      testing: "测试中...",
+      apiKeyHint: "\u7528\u4e8e\u7ffb\u8bd1\u548c\u83b7\u53d6\u4e0a\u6e38\u6a21\u578b\u5217\u8868\uff0c\u8bed\u97f3\u8bc6\u522b\u4f7f\u7528\u672c\u5730\u79bb\u7ebf\u6a21\u578b\u3002",
+      proxyUrl: "API \u5730\u5740",
+      proxyUrlHint: "\u652f\u6301\u6839\u5730\u5740\u3001/v1 \u6216\u5b8c\u6574 /chat/completions \u5730\u5740\u3002",
+      proxyToken: "API Key",
+      proxyTokenPlaceholder: "\u586b\u5199 API Key",
+      proxyTokenHint: "\u4f5c\u4e3a\u5f53\u524d API \u5730\u5740\u7684\u8bf7\u6c42\u4ee4\u724c\u4f7f\u7528\u3002",
+      model: "\u6a21\u578b",
+      modelPlaceholder: "\u9009\u62e9\u6a21\u578b",
+      modelHint: "\u6a21\u578b\u4f1a\u4ece\u5f53\u524d\u4e0a\u6e38 /models \u63a5\u53e3\u81ea\u52a8\u83b7\u53d6\u3002",
+      loadingModels: "\u6b63\u5728\u83b7\u53d6\u6a21\u578b...",
+      refreshModels: "\u5237\u65b0\u6a21\u578b",
+      modelLoadFailed: "\u6a21\u578b\u83b7\u53d6\u5931\u8d25",
+      speechRecognition: "\u8bed\u97f3\u8bc6\u522b",
+      builtIn: "\u5df2\u5185\u7f6e",
+      speechBuiltinHint: "\u8bed\u97f3\u8bc6\u522b\u5df2\u5185\u7f6e\u79bb\u7ebf ASR \u6a21\u578b\uff0c\u4e0d\u9700\u8981\u5355\u72ec\u914d\u7f6e\u8bed\u97f3\u63a5\u53e3\u6216\u5bc6\u94a5\u3002",
+      speechApiKey: "\u8bed\u97f3\u8bc6\u522b API Key",
+      speechModel: "\u8bed\u97f3\u6a21\u578b",
+      speechEndpoint: "\u8bed\u97f3\u8bc6\u522b\u63a5\u53e3",
+      speechEndpointHint: "\u64ad\u653e\u5668\u5df2\u5185\u7f6e\u79bb\u7ebf ASR\uff0cAPI \u5730\u5740\u53ea\u7528\u4e8e\u7ffb\u8bd1\u8bc6\u522b\u540e\u7684\u6587\u5b57\u3002",
+      targetLanguage: "\u7ffb\u8bd1\u8bed\u8a00",
+      languagePlaceholder: "\u9009\u62e9\u8bed\u8a00",
+      languageHint: "\u652f\u6301 26 \u4e2a\u56fd\u5bb6\u8bed\u8a00\uff0c\u7528\u4e8e\u5b57\u5e55\u7ffb\u8bd1\u548c\u5b9e\u65f6\u8bed\u97f3\u7ffb\u8bd1\u3002",
+      savedKey: "\u5df2\u4fdd\u5b58",
+      saved: "\u914d\u7f6e\u5df2\u4fdd\u5b58",
+      unsaved: "\u6709\u672a\u4fdd\u5b58\u7684\u66f4\u6539",
+      saveConfig: "\u4fdd\u5b58\u914d\u7f6e",
+      saving: "\u6b63\u5728\u4fdd\u5b58...",
+      saveFailed: "\u4fdd\u5b58\u5931\u8d25",
+      testTranslation: "\u6d4b\u8bd5\u7ffb\u8bd1",
+      playerHint: "\u586b\u597d API \u5730\u5740\u548c API Key \u540e\uff0c\u64ad\u653e\u5668\u91cc\u5373\u53ef\u6253\u5f00 AI \u8bc6\u522b\u7ffb\u8bd1\u3002",
+      test: "\u6d4b\u8bd5",
+      testing: "\u6d4b\u8bd5\u4e2d...",
+      julyApiTitle: "July API \u4e2d\u8f6c",
+      julyApiDescription: "\u9700\u8981 API \u5730\u5740\u6216 API Key \u65f6\uff0c\u53ef\u4ee5\u6253\u5f00 July API \u914d\u7f6e\u517c\u5bb9\u7684 AI \u7f51\u5173\u3002",
+      julyResDescription: "\u6253\u5f00 July Res \u67e5\u770b\u8d44\u6e90\u548c\u517c\u5bb9\u670d\u52a1\u4fe1\u606f\u3002",
+      julyApiButton: "\u6253\u5f00 July API",
+      openLink: "\u6253\u5f00",
     },
-    pets: {
+        pets: {
       title: "宠物",
       subtitle: "选择一个常驻播放器的小伙伴",
       residentPet: "常驻宠物",
@@ -789,7 +896,7 @@ export const UI_TRANSLATIONS: Record<AppLanguage, AppTranslations> = {
       noSubtitles: "本课时未找到字幕。",
       aiTranslate: "AI 翻译",
       aiVoiceTranslate: "AI 语音翻译",
-      aiTranslateUnavailable: "请先在 AI 模块配置 DeepSeek 和语音识别。",
+      aiTranslateUnavailable: "请先在 AI 模块配置 API 地址和 API Key。",
       aiListening: "正在识别音频...",
       aiUsingSubtitle: "正在翻译当前字幕",
       aiNoSource: "当前音频片段没有识别到语音。",
@@ -938,18 +1045,35 @@ export const UI_TRANSLATIONS: Record<AppLanguage, AppTranslations> = {
     },
     ai: {
       title: "Module IA",
-      subtitle: "Configurez la reconnaissance audio en direct et la traduction DeepSeek",
-      deepseekConfig: "Configuration DeepSeek",
+      subtitle: "Configurez la reconnaissance vocale integree et la traduction IA",
+      deepseekConfig: "Configuration API",
       configured: "Configure",
       notConfigured: "Non configure",
+      apiUrl: "Adresse API",
+      apiUrlHint: "URL racine, /v1 ou adresse /chat/completions complete.",
       apiKey: "Cle API",
+      apiKeyHint: "Utilisee pour la traduction et la liste des modeles en amont. La reconnaissance vocale fonctionne hors ligne.",
+      proxyUrl: "Adresse API",
+      proxyUrlHint: "URL racine, /v1 ou adresse /chat/completions complete.",
+      proxyToken: "Cle API",
+      proxyTokenPlaceholder: "Cle API",
+      proxyTokenHint: "Utilisee comme jeton de requete pour l'adresse API configuree.",
       model: "Modele",
+      modelPlaceholder: "Choisir un modele",
+      modelHint: "Les modeles sont charges depuis l'endpoint /models en amont.",
+      loadingModels: "Chargement des modeles...",
+      refreshModels: "Actualiser les modeles",
+      modelLoadFailed: "Chargement des modeles impossible",
       speechRecognition: "Reconnaissance vocale",
+      builtIn: "Integree",
+      speechBuiltinHint: "La reconnaissance vocale utilise un modele ASR hors ligne integre au lecteur. Aucune cle ou endpoint vocal separe n'est requis.",
       speechApiKey: "Cle API vocale",
       speechModel: "Modele vocal",
       speechEndpoint: "Endpoint vocal",
-      speechEndpointHint: "Utilisez un endpoint /audio/transcriptions compatible OpenAI Whisper. DeepSeek reste utilise pour la traduction.",
+      speechEndpointHint: "L'ASR hors ligne est integre au lecteur. L'adresse API sert seulement a traduire le texte reconnu.",
       targetLanguage: "Langue de traduction",
+      languagePlaceholder: "Choisir une langue",
+      languageHint: "26 langues sont disponibles pour les sous-titres et la traduction vocale en direct.",
       savedKey: "Cle enregistree",
       saved: "Configuration enregistree",
       unsaved: "Modifications non enregistrees",
@@ -957,11 +1081,16 @@ export const UI_TRANSLATIONS: Record<AppLanguage, AppTranslations> = {
       saving: "Enregistrement...",
       saveFailed: "Enregistrement impossible",
       testTranslation: "Tester la traduction",
-      playerHint: "Le bouton IA du lecteur fonctionne apres configuration de DeepSeek et de la reconnaissance vocale.",
+      playerHint: "Le bouton IA du lecteur fonctionne apres configuration de l'adresse API et de la cle API.",
       test: "Tester",
       testing: "Test...",
+      julyApiTitle: "Relais July API",
+      julyApiDescription: "Besoin d'une adresse API ou d'une cle ? Ouvrez July API pour configurer une passerelle IA compatible.",
+      julyResDescription: "Ouvrez July Res pour consulter les ressources et services compatibles.",
+      julyApiButton: "Ouvrir July API",
+      openLink: "Ouvrir",
     },
-    pets: {
+        pets: {
       title: "Compagnons",
       subtitle: "Choisissez le petit compagnon qui reste avec le lecteur",
       residentPet: "Compagnon resident",
@@ -1191,7 +1320,7 @@ export const UI_TRANSLATIONS: Record<AppLanguage, AppTranslations> = {
       noSubtitles: "Aucun sous-titre trouve pour cette lecon.",
       aiTranslate: "Traduction IA",
       aiVoiceTranslate: "Traduction vocale IA",
-      aiTranslateUnavailable: "Configurez DeepSeek et la reconnaissance vocale dans le module IA.",
+      aiTranslateUnavailable: "Configurez l'adresse API et la cle API dans le module IA.",
       aiListening: "Ecoute de l'audio...",
       aiUsingSubtitle: "Traduction du sous-titre actuel",
       aiNoSource: "Aucune parole reconnue dans ce segment audio.",

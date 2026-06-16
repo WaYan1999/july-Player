@@ -4,7 +4,6 @@ import {
   BellRingingIcon,
   CalendarCheckIcon,
   CheckCircleIcon,
-  CoffeeIcon,
   CookieIcon,
   DropIcon,
   ForkKnifeIcon,
@@ -16,17 +15,18 @@ import {
   PuzzlePieceIcon,
   QuestionIcon,
   RocketLaunchIcon,
-  ShieldCheckIcon,
   SmileyIcon,
   TimerIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { EASE_OUT } from "@/lib/constants";
 import { useI18n } from "@/hooks/useI18n";
 import { useSettings } from "@/hooks/useSettings";
 import {
   PET_CATALOG,
+  PET_ACTION_EVENT,
   PET_PLUGINS,
   serializePetPlugins,
   type PetCatalogId,
@@ -41,6 +41,14 @@ interface PetsProps {
 
 type FilterId = "all" | "official" | "catalog";
 type PetMood = "idle" | "thinking" | "wave" | "hop";
+type FeedbackTone = "info" | "success";
+type FeedbackState = {
+  title: string;
+  detail: string;
+  tone: FeedbackTone;
+  nonce: number;
+  pluginId?: PetPluginId;
+};
 
 const COPY = {
   en: {
@@ -57,10 +65,18 @@ const COPY = {
     official: "Official",
     catalog: "Catalog",
     selected: "Selected",
+    previewing: "Previewing",
     selectPet: "Use pet",
+    petApplied: "{name} is now your resident pet",
+    petAppliedWithAction: "{name} is active. Action: {action}",
+    petPreviewed: "Previewing {name}",
+    actionPreviewed: "Previewing {action}",
+    previewReset: "Preview reset",
+    applying: "Applying...",
     protected: "Protected",
     currentCompanion: "Current companion",
     preview: "Preview",
+    idle: "Idle",
     thinking: "Thinking",
     happy: "Happy",
     wave: "Wave",
@@ -70,6 +86,11 @@ const COPY = {
     moduleTitle: "Official pet modules",
     moduleDescription: "OpenPets-style features are grouped here so the pet stays playful without black control boxes.",
     activeModules: "{count} active",
+    latestFeedback: "Pet feedback",
+    useModule: "Use",
+    lastResult: "Last result",
+    noResultYet: "Tap Use to run this module.",
+    moduleDisabledHint: "Turn this module on first, then click Use.",
     bundled: "Bundled",
     optional: "Optional",
     virtualStats: "Virtual pet stats",
@@ -97,6 +118,30 @@ const COPY = {
     launchReady: "Checklist mode available",
     fortuneStatus: "Tiny fortunes",
     fortuneReady: "Ask for a fun answer from the pet",
+    residentEnabled: "Resident pet enabled",
+    residentDisabled: "Resident pet hidden",
+    pluginEnabled: "{name} enabled",
+    pluginDisabled: "{name} disabled",
+    moduleRequired: "Enable {name} first",
+    statUpdated: "{name} updated",
+    focusStarted: "Focus timer started",
+    focusPaused: "Focus timer paused",
+    focusResetDone: "Focus timer reset",
+    statusReady: "{name} is ready",
+    moduleUsed: "{name} completed",
+    virtualPetResult: "The pet played with you. Play and bond increased.",
+    focusAlreadyRunning: "Focus timer is already running.",
+    waterLogged: "Water check logged at {time}.",
+    routineChecked: "Morning and evening routine checked.",
+    moodChecked: "Mood check-in recorded. The pet is watching your pace.",
+    launchChecked: "Launch checklist prepared: title, assets, package, release notes.",
+    magicAnswerA: "The pet says yes, but test it once first.",
+    magicAnswerB: "The answer is almost there. Wait one minute.",
+    magicAnswerC: "Ask again after the next video scene.",
+    fortuneAnswerA: "Small progress still counts today.",
+    fortuneAnswerB: "A clear release note saves future trouble.",
+    fortuneAnswerC: "Drink water, then ship the next small fix.",
+    actionFailed: "Action failed. Please try again.",
     noPets: "No pets match your search.",
     remindersPlugin: "Reminders",
     remindersPluginDescription: "Quick due and missed reminders with snooze and done actions.",
@@ -131,10 +176,18 @@ const COPY = {
     official: "官方",
     catalog: "目录",
     selected: "已选择",
+    previewing: "预览中",
     selectPet: "使用宠物",
+    petApplied: "已切换为 {name}",
+    petAppliedWithAction: "已使用 {name}，动作：{action}",
+    petPreviewed: "正在预览 {name}",
+    actionPreviewed: "正在预览{action}",
+    previewReset: "预览已重置",
+    applying: "应用中...",
     protected: "受保护",
     currentCompanion: "当前宠物",
     preview: "动作预览",
+    idle: "默认",
     thinking: "思考",
     happy: "开心",
     wave: "挥手",
@@ -144,6 +197,11 @@ const COPY = {
     moduleTitle: "官方宠物功能",
     moduleDescription: "把 OpenPets 风格功能集中放在这里，宠物保持轻量可玩，不再出现黑色控制框。",
     activeModules: "已启用 {count} 个",
+    latestFeedback: "宠物反馈",
+    useModule: "使用",
+    lastResult: "最近结果",
+    noResultYet: "点击使用后，这里会显示结果。",
+    moduleDisabledHint: "请先打开这个模块，再点击使用。",
     bundled: "内置",
     optional: "可选",
     virtualStats: "虚拟宠物状态",
@@ -171,6 +229,30 @@ const COPY = {
     launchReady: "清单模式可用",
     fortuneStatus: "趣味回答",
     fortuneReady: "可以向宠物提问或抽签",
+    residentEnabled: "常驻宠物已开启",
+    residentDisabled: "常驻宠物已隐藏",
+    pluginEnabled: "已开启 {name}",
+    pluginDisabled: "已关闭 {name}",
+    moduleRequired: "请先开启 {name}",
+    statUpdated: "{name} 已生效",
+    focusStarted: "专注计时已开始",
+    focusPaused: "专注计时已暂停",
+    focusResetDone: "专注计时已重置",
+    statusReady: "{name} 已准备好",
+    moduleUsed: "{name} 已执行",
+    virtualPetResult: "宠物和你互动了一下，玩耍和羁绊提升了。",
+    focusAlreadyRunning: "专注计时正在运行中。",
+    waterLogged: "{time} 已记录一次喝水。",
+    routineChecked: "早晚日常已检查。",
+    moodChecked: "情绪自检已记录，宠物会陪你放慢一点。",
+    launchChecked: "发布清单已准备：标题、素材、安装包、更新说明。",
+    magicAnswerA: "宠物说可以，但先本地测试一次。",
+    magicAnswerB: "答案快出现了，再等一分钟。",
+    magicAnswerC: "下一段视频之后再问一次。",
+    fortuneAnswerA: "今天的小进度也算数。",
+    fortuneAnswerB: "写清楚更新说明，以后会少很多麻烦。",
+    fortuneAnswerC: "先喝口水，再发下一个小版本。",
+    actionFailed: "操作失败，请再试一次",
     noPets: "没有找到匹配的宠物。",
     remindersPlugin: "提醒",
     remindersPluginDescription: "提供到期和错过提醒，支持稍后提醒与完成操作。",
@@ -205,10 +287,18 @@ const COPY = {
     official: "Officiels",
     catalog: "Catalogue",
     selected: "Selectionne",
+    previewing: "Apercu",
     selectPet: "Utiliser",
+    petApplied: "{name} est maintenant votre compagnon",
+    petAppliedWithAction: "{name} est actif. Action : {action}",
+    petPreviewed: "Apercu de {name}",
+    actionPreviewed: "Apercu : {action}",
+    previewReset: "Apercu reinitialise",
+    applying: "Application...",
     protected: "Protege",
     currentCompanion: "Compagnon actuel",
     preview: "Apercu",
+    idle: "Repos",
     thinking: "Reflexion",
     happy: "Heureux",
     wave: "Salut",
@@ -218,6 +308,11 @@ const COPY = {
     moduleTitle: "Modules officiels",
     moduleDescription: "Les fonctions type OpenPets sont regroupees ici, sans panneau noir autour du compagnon.",
     activeModules: "{count} actifs",
+    latestFeedback: "Retour du compagnon",
+    useModule: "Utiliser",
+    lastResult: "Dernier resultat",
+    noResultYet: "Cliquez sur Utiliser pour lancer ce module.",
+    moduleDisabledHint: "Activez d'abord ce module, puis cliquez sur Utiliser.",
     bundled: "Integre",
     optional: "Optionnel",
     virtualStats: "Etat virtuel",
@@ -245,6 +340,30 @@ const COPY = {
     launchReady: "Mode checklist disponible",
     fortuneStatus: "Fortunes",
     fortuneReady: "Demandez une reponse amusante",
+    residentEnabled: "Compagnon resident active",
+    residentDisabled: "Compagnon resident masque",
+    pluginEnabled: "{name} active",
+    pluginDisabled: "{name} desactive",
+    moduleRequired: "Activez d'abord {name}",
+    statUpdated: "{name} mis a jour",
+    focusStarted: "Minuteur demarre",
+    focusPaused: "Minuteur en pause",
+    focusResetDone: "Minuteur reinitialise",
+    statusReady: "{name} est pret",
+    moduleUsed: "{name} termine",
+    virtualPetResult: "Le compagnon a joue avec vous. Jeu et lien augmentent.",
+    focusAlreadyRunning: "Le minuteur est deja en cours.",
+    waterLogged: "Hydratation notee a {time}.",
+    routineChecked: "Routine matin et soir verifiee.",
+    moodChecked: "Check-in d'humeur note. Le compagnon suit le rythme.",
+    launchChecked: "Checklist preparee : titre, assets, package, notes.",
+    magicAnswerA: "Le compagnon dit oui, mais testez une fois.",
+    magicAnswerB: "La reponse arrive. Attendez une minute.",
+    magicAnswerC: "Redemandez apres la prochaine scene.",
+    fortuneAnswerA: "Un petit progres compte aussi.",
+    fortuneAnswerB: "Une note claire evite des soucis plus tard.",
+    fortuneAnswerC: "Buvez de l'eau, puis livrez le prochain correctif.",
+    actionFailed: "Action impossible. Reessayez.",
     noPets: "Aucun compagnon ne correspond.",
     remindersPlugin: "Rappels",
     remindersPluginDescription: "Rappels rapides avec actions repousser et terminer.",
@@ -355,13 +474,36 @@ export function Pets({ className }: PetsProps) {
   const copy = COPY[language];
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterId>("all");
+  const [previewPetId, setPreviewPetId] = useState<PetCatalogId>(settings.pet_variant);
   const [previewMood, setPreviewMood] = useState<PetMood>("idle");
+  const [applyingPet, setApplyingPet] = useState(false);
   const [focusRunning, setFocusRunning] = useState(false);
   const [focusSeconds, setFocusSeconds] = useState(25 * 60);
   const [petStats, setPetStats] = useState({ food: 78, energy: 64, play: 71, bond: 86 });
+  const [lastFeedback, setLastFeedback] = useState<FeedbackState | null>(null);
+  const [moduleResults, setModuleResults] = useState<Partial<Record<PetPluginId, string>>>({});
 
   const activePluginIds = settings.pet_plugins_enabled;
-  const selectedPet = PET_CATALOG.find((pet) => pet.id === settings.pet_variant) ?? PET_CATALOG[0];
+  const currentPet = PET_CATALOG.find((pet) => pet.id === settings.pet_variant) ?? PET_CATALOG[0];
+  const previewPet = PET_CATALOG.find((pet) => pet.id === previewPetId) ?? currentPet;
+  const activeFeedback =
+    lastFeedback ??
+    ({
+      title: copy.statusReady.replace("{name}", currentPet.displayName),
+      detail: copy.moduleDescription,
+      tone: "info",
+      nonce: 0,
+    } satisfies FeedbackState);
+  const FeedbackIcon = activeFeedback.pluginId ? PLUGIN_ICONS[activeFeedback.pluginId] : PawPrintIcon;
+  const previewIsApplied = previewPet.id === settings.pet_variant;
+  const selectedActionLabel =
+    previewMood === "thinking"
+      ? copy.thinking
+      : previewMood === "hop"
+        ? copy.happy
+        : previewMood === "wave"
+          ? copy.wave
+          : copy.idle;
 
   const pets = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -396,25 +538,303 @@ export function Pets({ className }: PetsProps) {
     return () => window.clearInterval(timer);
   }, [focusEnabled, focusRunning]);
 
-  const selectPet = (petId: PetCatalogId) => {
-    void update("pet_variant", petId);
-    if (!settings.pet_enabled) void update("pet_enabled", "true");
-    setPreviewMood("wave");
+  useEffect(() => {
+    if (pets.some((pet) => pet.id === previewPetId)) return;
+    setPreviewPetId(currentPet.id);
+  }, [currentPet.id, previewPetId, pets]);
+
+  const previewPetChoice = (petId: PetCatalogId) => {
+    const nextPet = PET_CATALOG.find((pet) => pet.id === petId);
+    setPreviewPetId(petId);
+    if (nextPet) {
+      toast.message(copy.petPreviewed.replace("{name}", nextPet.displayName));
+    }
   };
 
-  const togglePlugin = (pluginId: PetPluginId, enabled: boolean) => {
+  const dispatchPetAction = (mood: PetMood) => {
+    setPreviewMood(mood);
+    window.dispatchEvent(new CustomEvent(PET_ACTION_EVENT, { detail: mood }));
+  };
+
+  const pushFeedback = ({
+    title,
+    detail,
+    mood = "wave",
+    pluginId,
+    tone = "success",
+  }: {
+    title: string;
+    detail: string;
+    mood?: PetMood;
+    pluginId?: PetPluginId;
+    tone?: FeedbackTone;
+  }) => {
+    setLastFeedback({
+      title,
+      detail,
+      tone,
+      pluginId,
+      nonce: Date.now(),
+    });
+
+    if (pluginId) {
+      setModuleResults((current) => ({ ...current, [pluginId]: detail }));
+    }
+
+    dispatchPetAction(mood);
+    if (tone === "success") {
+      toast.success(title, { description: detail });
+    } else {
+      toast.message(title, { description: detail });
+    }
+  };
+
+  const applyPreviewPet = async () => {
+    if (applyingPet) return;
+
+    setApplyingPet(true);
+    try {
+      if (!previewIsApplied) await update("pet_variant", previewPet.id);
+      if (!settings.pet_enabled) await update("pet_enabled", "true");
+
+      pushFeedback({
+        title: copy.petAppliedWithAction
+          .replace("{name}", previewPet.displayName)
+          .replace("{action}", selectedActionLabel),
+        detail: copy.residentEnabled,
+        mood: previewMood === "idle" ? "wave" : previewMood,
+      });
+    } catch {
+      toast.error(copy.actionFailed);
+    } finally {
+      setApplyingPet(false);
+    }
+  };
+
+  const togglePlugin = async (pluginId: PetPluginId, enabled: boolean) => {
+    const plugin = PET_PLUGINS.find((item) => item.id === pluginId);
+    const pluginName = plugin ? copy[plugin.nameKey] : pluginId;
     const next = enabled
-      ? [...activePluginIds, pluginId]
+      ? [...new Set([...activePluginIds, pluginId])]
       : activePluginIds.filter((id) => id !== pluginId);
-    void update("pet_plugins_enabled", serializePetPlugins(next));
+
+    try {
+      await update("pet_plugins_enabled", serializePetPlugins(next));
+      pushFeedback({
+        title: (enabled ? copy.pluginEnabled : copy.pluginDisabled).replace("{name}", pluginName),
+        detail: enabled ? copy.noResultYet : copy.moduleDisabledHint,
+        mood: enabled ? "wave" : "idle",
+        pluginId,
+      });
+    } catch {
+      toast.error(copy.actionFailed);
+    }
   };
 
-  const bumpStat = (key: keyof typeof petStats, amount: number) => {
+  const requireModule = (enabled: boolean, moduleName: string) => {
+    if (enabled) return true;
+    pushFeedback({
+      title: copy.moduleRequired.replace("{name}", moduleName),
+      detail: copy.moduleDisabledHint,
+      mood: "thinking",
+      tone: "info",
+    });
+    return false;
+  };
+
+  const playPreviewAction = (mood: PetMood, label: string) => {
+    pushFeedback({
+      title: copy.actionPreviewed.replace("{action}", label),
+      detail: copy.currentCompanion,
+      mood,
+      tone: "info",
+    });
+  };
+
+  const resetPreviewAction = () => {
+    pushFeedback({
+      title: copy.previewReset,
+      detail: copy.idle,
+      mood: "idle",
+      tone: "info",
+    });
+  };
+
+  const bumpStat = (key: keyof typeof petStats, amount: number, label: string) => {
+    if (!requireModule(virtualPetEnabled, copy.virtualPetPlugin)) return;
+
     setPetStats((current) => ({
       ...current,
       [key]: Math.min(100, current[key] + amount),
     }));
-    setPreviewMood(key === "energy" ? "idle" : "hop");
+    pushFeedback({
+      title: copy.statUpdated.replace("{name}", label),
+      detail: copy.virtualPetResult,
+      mood: key === "energy" ? "idle" : "hop",
+      pluginId: "openpets.virtual-pet",
+    });
+  };
+
+  const toggleResidentPet = async (enabled: boolean) => {
+    try {
+      await update("pet_enabled", String(enabled));
+      pushFeedback({
+        title: enabled ? copy.residentEnabled : copy.residentDisabled,
+        detail: copy.residentPetDescription,
+        mood: enabled ? "wave" : "idle",
+      });
+    } catch {
+      toast.error(copy.actionFailed);
+    }
+  };
+
+  const startFocus = () => {
+    if (!requireModule(focusEnabled, copy.focusBuddyPlugin)) return;
+    setFocusRunning(true);
+    pushFeedback({
+      title: copy.focusStarted,
+      detail: formatTimer(focusSeconds),
+      mood: "thinking",
+      pluginId: "openpets.focus-buddy",
+    });
+  };
+
+  const pauseFocus = () => {
+    if (!requireModule(focusEnabled, copy.focusBuddyPlugin)) return;
+    setFocusRunning(false);
+    pushFeedback({
+      title: copy.focusPaused,
+      detail: formatTimer(focusSeconds),
+      mood: "wave",
+      pluginId: "openpets.focus-buddy",
+    });
+  };
+
+  const resetFocus = () => {
+    if (!requireModule(focusEnabled, copy.focusBuddyPlugin)) return;
+    setFocusRunning(false);
+    setFocusSeconds(25 * 60);
+    pushFeedback({
+      title: copy.focusResetDone,
+      detail: formatTimer(25 * 60),
+      mood: "idle",
+      pluginId: "openpets.focus-buddy",
+    });
+  };
+
+  const runPluginAction = (pluginId: PetPluginId) => {
+    const plugin = PET_PLUGINS.find((item) => item.id === pluginId);
+    const pluginName = plugin ? copy[plugin.nameKey] : pluginId;
+    if (!requireModule(activePluginIds.includes(pluginId), pluginName)) return;
+
+    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    switch (pluginId) {
+      case "openpets.reminders":
+        pushFeedback({
+          title: copy.moduleUsed.replace("{name}", pluginName),
+          detail: copy.reminderSoon,
+          mood: "wave",
+          pluginId,
+        });
+        break;
+      case "openpets.virtual-pet":
+        setPetStats((current) => ({
+          ...current,
+          play: Math.min(100, current.play + 5),
+          bond: Math.min(100, current.bond + 5),
+        }));
+        pushFeedback({
+          title: copy.moduleUsed.replace("{name}", pluginName),
+          detail: copy.virtualPetResult,
+          mood: "hop",
+          pluginId,
+        });
+        break;
+      case "openpets.focus-buddy":
+        if (!focusRunning) {
+          setFocusRunning(true);
+          pushFeedback({
+            title: copy.focusStarted,
+            detail: formatTimer(focusSeconds),
+            mood: "thinking",
+            pluginId,
+          });
+        } else {
+          pushFeedback({
+            title: copy.focusAlreadyRunning,
+            detail: formatTimer(focusSeconds),
+            mood: "thinking",
+            pluginId,
+          });
+        }
+        break;
+      case "openpets.water-reminder":
+        setPetStats((current) => ({
+          ...current,
+          energy: Math.min(100, current.energy + 3),
+        }));
+        pushFeedback({
+          title: copy.moduleUsed.replace("{name}", pluginName),
+          detail: copy.waterLogged.replace("{time}", now),
+          mood: "hop",
+          pluginId,
+        });
+        break;
+      case "openpets.day-routine":
+        pushFeedback({
+          title: copy.moduleUsed.replace("{name}", pluginName),
+          detail: copy.routineChecked,
+          mood: "wave",
+          pluginId,
+        });
+        break;
+      case "openpets.mood-check-in":
+        pushFeedback({
+          title: copy.moduleUsed.replace("{name}", pluginName),
+          detail: copy.moodChecked,
+          mood: "thinking",
+          pluginId,
+        });
+        break;
+      case "openpets.launch-buddy":
+        pushFeedback({
+          title: copy.moduleUsed.replace("{name}", pluginName),
+          detail: copy.launchChecked,
+          mood: "thinking",
+          pluginId,
+        });
+        break;
+      case "openpets.magic-8-ball": {
+        const answers = [copy.magicAnswerA, copy.magicAnswerB, copy.magicAnswerC];
+        const detail = answers[Math.floor(Math.random() * answers.length)];
+        pushFeedback({
+          title: copy.moduleUsed.replace("{name}", pluginName),
+          detail,
+          mood: "wave",
+          pluginId,
+        });
+        break;
+      }
+      case "openpets.fortune-cookie": {
+        const answers = [copy.fortuneAnswerA, copy.fortuneAnswerB, copy.fortuneAnswerC];
+        const detail = answers[Math.floor(Math.random() * answers.length)];
+        pushFeedback({
+          title: copy.moduleUsed.replace("{name}", pluginName),
+          detail,
+          mood: "hop",
+          pluginId,
+        });
+        break;
+      }
+      default:
+        pushFeedback({
+          title: copy.statusReady.replace("{name}", pluginName),
+          detail: copy.noResultYet,
+          mood: "wave",
+          pluginId,
+        });
+    }
   };
 
   return (
@@ -458,7 +878,7 @@ export function Pets({ className }: PetsProps) {
             </span>
             <Toggle
               checked={settings.pet_enabled}
-              onChange={(value) => void update("pet_enabled", String(value))}
+              onChange={(value) => void toggleResidentPet(value)}
             />
           </div>
         </div>
@@ -506,16 +926,17 @@ export function Pets({ className }: PetsProps) {
 
           <div className="grid max-h-[640px] grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-3 overflow-y-auto p-5">
             {pets.map((pet) => {
-              const selected = settings.pet_variant === pet.id;
+              const applied = settings.pet_variant === pet.id;
+              const previewing = previewPetId === pet.id;
 
               return (
                 <button
                   key={pet.id}
                   type="button"
-                  onClick={() => selectPet(pet.id)}
+                  onClick={() => previewPetChoice(pet.id)}
                   className={cn(
                     "group relative min-h-48 rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70",
-                    selected
+                    previewing
                       ? "border-primary/70 bg-primary/10"
                       : "border-border bg-secondary/20 hover:border-muted-foreground/35 hover:bg-secondary/40",
                   )}
@@ -524,10 +945,10 @@ export function Pets({ className }: PetsProps) {
                     <span className="rounded-full border border-border/70 bg-background/70 px-2 py-1 text-[11px] font-semibold text-muted-foreground">
                       {sourceLabel(pet, copy)}
                     </span>
-                    {selected && (
+                    {(applied || previewing) && (
                       <span className="flex items-center gap-1 rounded-full bg-primary/15 px-2 py-1 text-[11px] font-semibold text-primary">
                         <CheckCircleIcon className="size-3.5" weight="fill" />
-                        {copy.selected}
+                        {applied ? copy.selected : copy.previewing}
                       </span>
                     )}
                   </div>
@@ -556,7 +977,7 @@ export function Pets({ className }: PetsProps) {
                     <div className="relative flex h-28 w-24 shrink-0 items-end justify-center">
                       <PetSprite
                         variantId={pet.id}
-                        state={selected ? "wave" : "idle"}
+                        state={previewing ? "wave" : "idle"}
                         width={86}
                         className="absolute bottom-0 left-1/2 -translate-x-1/2 transition-transform duration-200 group-hover:scale-105"
                       />
@@ -581,20 +1002,20 @@ export function Pets({ className }: PetsProps) {
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <h3 className="truncate font-heading text-xl font-bold text-foreground">
-                  {selectedPet.displayName}
+                  {previewPet.displayName}
                 </h3>
-                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{selectedPet.description}</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{previewPet.description}</p>
               </div>
               <span className="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-                {sourceLabel(selectedPet, copy)}
+                {sourceLabel(previewPet, copy)}
               </span>
             </div>
           </div>
 
           <div className="flex min-h-72 items-end justify-center bg-[radial-gradient(circle_at_50%_30%,rgba(200,241,53,0.13),transparent_38%)] p-8">
             <PetSprite
-              key={`${selectedPet.id}-${previewMood}`}
-              variantId={selectedPet.id}
+              key={`${previewPet.id}-${previewMood}`}
+              variantId={previewPet.id}
               state={previewMood === "hop" ? "hop" : previewMood}
               width={154}
             />
@@ -605,7 +1026,7 @@ export function Pets({ className }: PetsProps) {
               <h4 className="font-heading text-sm font-bold text-foreground">{copy.preview}</h4>
               <button
                 type="button"
-                onClick={() => setPreviewMood("idle")}
+                onClick={resetPreviewAction}
                 className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                 aria-label={copy.resetFocus}
               >
@@ -617,7 +1038,7 @@ export function Pets({ className }: PetsProps) {
                 <button
                   key={action.key}
                   type="button"
-                  onClick={() => setPreviewMood(action.mood)}
+                  onClick={() => playPreviewAction(action.mood, copy[action.key])}
                   className={cn(
                     "rounded-lg border px-3 py-2 text-xs font-semibold transition-colors",
                     previewMood === action.mood
@@ -631,10 +1052,16 @@ export function Pets({ className }: PetsProps) {
             </div>
             <button
               type="button"
-              onClick={() => selectPet(selectedPet.id)}
-              className="mt-4 flex h-10 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90"
+              onClick={() => void applyPreviewPet()}
+              disabled={applyingPet}
+              className={cn(
+                "mt-4 flex h-10 w-full items-center justify-center rounded-lg px-4 text-sm font-bold transition-colors",
+                applyingPet
+                  ? "cursor-wait bg-secondary text-muted-foreground"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90",
+              )}
             >
-              {copy.selectPet}
+              {applyingPet ? copy.applying : copy.selectPet}
             </button>
           </div>
         </aside>
@@ -658,17 +1085,45 @@ export function Pets({ className }: PetsProps) {
           </div>
         </div>
 
+        <div
+          key={activeFeedback.nonce}
+          className={cn(
+            "mx-5 mt-5 flex items-start gap-3 rounded-lg border p-4",
+            activeFeedback.tone === "success"
+              ? "border-primary/45 bg-primary/10"
+              : "border-border bg-secondary/25",
+          )}
+          style={{ animation: `card-in 220ms ${EASE_OUT} both` }}
+        >
+          <div
+            className={cn(
+              "flex size-9 shrink-0 items-center justify-center rounded-lg",
+              activeFeedback.tone === "success" ? "bg-primary text-primary-foreground" : "bg-secondary text-primary",
+            )}
+          >
+            <FeedbackIcon className="size-4.5" weight="fill" />
+          </div>
+          <div className="min-w-0">
+            <p className="mb-1 text-[11px] font-semibold text-muted-foreground">
+              {copy.latestFeedback}
+            </p>
+            <h4 className="text-sm font-bold text-foreground">{activeFeedback.title}</h4>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{activeFeedback.detail}</p>
+          </div>
+        </div>
+
         <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.72fr)]">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {PET_PLUGINS.map((plugin) => {
               const Icon = PLUGIN_ICONS[plugin.id];
               const checked = activePluginIds.includes(plugin.id);
+              const result = moduleResults[plugin.id] ?? copy.noResultYet;
 
               return (
                 <article
                   key={plugin.id}
                   className={cn(
-                    "rounded-xl border p-4 transition-colors",
+                    "flex min-h-48 flex-col rounded-xl border p-4 transition-colors",
                     checked ? "border-primary/45 bg-primary/8" : "border-border bg-secondary/20",
                   )}
                 >
@@ -686,11 +1141,39 @@ export function Pets({ className }: PetsProps) {
                         </p>
                       </div>
                     </div>
-                    <Toggle checked={checked} onChange={(value) => togglePlugin(plugin.id, value)} />
+                    <Toggle checked={checked} onChange={(value) => void togglePlugin(plugin.id, value)} />
                   </div>
                   <p className="text-xs leading-relaxed text-muted-foreground">
                     {copy[plugin.descriptionKey]}
                   </p>
+                  <div className="mt-auto pt-4">
+                    <div
+                      className={cn(
+                        "mb-3 rounded-lg border px-3 py-2",
+                        checked ? "border-primary/20 bg-background/55" : "border-border/70 bg-background/35",
+                      )}
+                    >
+                      <p className="mb-1 text-[11px] font-semibold text-muted-foreground">
+                        {copy.lastResult}
+                      </p>
+                      <p className="line-clamp-2 min-h-8 text-xs leading-relaxed text-foreground/85">
+                        {checked ? result : copy.moduleDisabledHint}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => runPluginAction(plugin.id)}
+                      className={cn(
+                        "flex h-9 w-full items-center justify-center gap-2 rounded-lg text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70",
+                        checked
+                          ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                          : "border border-border bg-background/60 text-muted-foreground hover:bg-secondary hover:text-foreground",
+                      )}
+                    >
+                      <PlayIcon className="size-3.5" weight={checked ? "fill" : "regular"} />
+                      {copy.useModule}
+                    </button>
+                  </div>
                 </article>
               );
             })}
@@ -711,33 +1194,45 @@ export function Pets({ className }: PetsProps) {
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  disabled={!virtualPetEnabled}
-                  onClick={() => bumpStat("food", 8)}
-                  className="rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-disabled={!virtualPetEnabled}
+                  onClick={() => bumpStat("food", 8, copy.feed)}
+                  className={cn(
+                    "rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary",
+                    !virtualPetEnabled && "cursor-not-allowed opacity-60",
+                  )}
                 >
                   {copy.feed}
                 </button>
                 <button
                   type="button"
-                  disabled={!virtualPetEnabled}
-                  onClick={() => bumpStat("play", 8)}
-                  className="rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-disabled={!virtualPetEnabled}
+                  onClick={() => bumpStat("play", 8, copy.playGame)}
+                  className={cn(
+                    "rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary",
+                    !virtualPetEnabled && "cursor-not-allowed opacity-60",
+                  )}
                 >
                   {copy.playGame}
                 </button>
                 <button
                   type="button"
-                  disabled={!virtualPetEnabled}
-                  onClick={() => bumpStat("bond", 6)}
-                  className="rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-disabled={!virtualPetEnabled}
+                  onClick={() => bumpStat("bond", 6, copy.pet)}
+                  className={cn(
+                    "rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary",
+                    !virtualPetEnabled && "cursor-not-allowed opacity-60",
+                  )}
                 >
                   {copy.pet}
                 </button>
                 <button
                   type="button"
-                  disabled={!virtualPetEnabled}
-                  onClick={() => bumpStat("energy", 10)}
-                  className="rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-disabled={!virtualPetEnabled}
+                  onClick={() => bumpStat("energy", 10, copy.nap)}
+                  className={cn(
+                    "rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary",
+                    !virtualPetEnabled && "cursor-not-allowed opacity-60",
+                  )}
                 >
                   {copy.nap}
                 </button>
@@ -755,30 +1250,36 @@ export function Pets({ className }: PetsProps) {
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
-                  disabled={!focusEnabled}
-                  onClick={() => setFocusRunning(true)}
-                  className="flex items-center justify-center gap-1 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-disabled={!focusEnabled}
+                  onClick={startFocus}
+                  className={cn(
+                    "flex items-center justify-center gap-1 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground",
+                    !focusEnabled && "cursor-not-allowed opacity-60",
+                  )}
                 >
                   <PlayIcon className="size-3.5" weight="fill" />
                   {copy.startFocus}
                 </button>
                 <button
                   type="button"
-                  disabled={!focusEnabled}
-                  onClick={() => setFocusRunning(false)}
-                  className="flex items-center justify-center gap-1 rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-disabled={!focusEnabled}
+                  onClick={pauseFocus}
+                  className={cn(
+                    "flex items-center justify-center gap-1 rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground",
+                    !focusEnabled && "cursor-not-allowed opacity-60",
+                  )}
                 >
                   <PauseIcon className="size-3.5" weight="fill" />
                   {copy.pauseFocus}
                 </button>
                 <button
                   type="button"
-                  disabled={!focusEnabled}
-                  onClick={() => {
-                    setFocusRunning(false);
-                    setFocusSeconds(25 * 60);
-                  }}
-                  className="flex items-center justify-center gap-1 rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-disabled={!focusEnabled}
+                  onClick={resetFocus}
+                  className={cn(
+                    "flex items-center justify-center gap-1 rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground",
+                    !focusEnabled && "cursor-not-allowed opacity-60",
+                  )}
                 >
                   <ArrowCounterClockwiseIcon className="size-3.5" />
                   {copy.resetFocus}
@@ -786,30 +1287,21 @@ export function Pets({ className }: PetsProps) {
               </div>
             </div>
 
-            <div className="grid gap-2">
-              {[
-                { icon: BellRingingIcon, label: copy.reminderQueue, text: copy.reminderSoon, enabled: activePluginIds.includes("openpets.reminders") },
-                { icon: DropIcon, label: copy.waterStatus, text: copy.waterSoon, enabled: activePluginIds.includes("openpets.water-reminder") },
-                { icon: SmileyIcon, label: copy.moodStatus, text: copy.moodGood, enabled: activePluginIds.includes("openpets.mood-check-in") },
-                { icon: CalendarCheckIcon, label: copy.routineStatus, text: copy.routineReady, enabled: activePluginIds.includes("openpets.day-routine") },
-                { icon: RocketLaunchIcon, label: copy.launchStatus, text: copy.launchReady, enabled: activePluginIds.includes("openpets.launch-buddy") },
-                { icon: CoffeeIcon, label: copy.fortuneStatus, text: copy.fortuneReady, enabled: activePluginIds.includes("openpets.fortune-cookie") || activePluginIds.includes("openpets.magic-8-ball") },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg border border-border bg-secondary/20 px-3 py-2",
-                    !item.enabled && "opacity-50",
-                  )}
-                >
-                  <item.icon className="size-4 shrink-0 text-primary" weight={item.enabled ? "fill" : "regular"} />
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-foreground">{item.label}</p>
-                    <p className="truncate text-[11px] text-muted-foreground">{item.text}</p>
-                  </div>
-                  {item.enabled && <ShieldCheckIcon className="ml-auto size-4 shrink-0 text-primary" weight="fill" />}
-                </div>
-              ))}
+            <div className="rounded-xl border border-border bg-secondary/20 p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <CheckCircleIcon className="size-4 text-primary" weight="fill" />
+                <h4 className="font-heading text-sm font-bold text-foreground">{copy.latestFeedback}</h4>
+              </div>
+              <div
+                key={`side-${activeFeedback.nonce}`}
+                className="rounded-lg border border-border/70 bg-background/55 p-3"
+                style={{ animation: `card-in 220ms ${EASE_OUT} both` }}
+              >
+                <p className="text-sm font-bold text-foreground">{activeFeedback.title}</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  {activeFeedback.detail}
+                </p>
+              </div>
             </div>
           </div>
         </div>

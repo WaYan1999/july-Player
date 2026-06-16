@@ -15,6 +15,7 @@ import type {
   PreparedVideoQuality,
   VideoQuality,
   AiAudioTranslation,
+  AiModelOption,
 } from "@/types";
 
 export async function getCourses(): Promise<Course[]> {
@@ -157,6 +158,10 @@ export async function translateWithDeepSeek(
   targetLanguage: string,
 ): Promise<string> {
   return invoke<string>("translate_with_deepseek", { text, targetLanguage });
+}
+
+export async function getAiModels(): Promise<AiModelOption[]> {
+  return invoke<AiModelOption[]>("get_ai_models");
 }
 
 export async function translateAudioSegment(

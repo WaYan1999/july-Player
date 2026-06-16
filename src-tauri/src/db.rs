@@ -1019,9 +1019,11 @@ fn subtitle_base_name(filename: &str) -> String {
         }
     }
 
-    if let Some((base, lang_part)) = name.rsplit_once('.') {
-        if is_subtitle_language_suffix(lang_part) && !base.is_empty() {
-            return base.to_string();
+    for separator in ['.', '_'] {
+        if let Some((base, lang_part)) = name.rsplit_once(separator) {
+            if is_subtitle_language_suffix(lang_part) && !base.is_empty() {
+                return base.to_string();
+            }
         }
     }
 

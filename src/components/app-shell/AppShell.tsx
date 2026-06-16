@@ -8,7 +8,6 @@ import {
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { AnimatedThemeToggler } from "@/components/ui/animatedThemeToggle";
-import logo from "@/assets/icons/july-player.png";
 import { spring, navigationItems, appItems } from "./constants";
 import { SquircleClipDefs } from "./SquircleClipDefs";
 import { useBreadcrumbs } from "./useBreadcrumbs";
@@ -79,54 +78,20 @@ function AppShellInner({ children }: AppShellProps) {
             transition: `width ${spring()}`,
           }}
         >
-          {isSmallScreen ? (
-            <div className="flex w-full items-center justify-center">
-              <img src={logo} alt="七月播放器 logo" className="h-7" />
-            </div>
-          ) : (
-            <div className={cn(
-              "flex w-full items-center",
-              effectiveCollapsed ? "justify-center" : ""
-            )}>
-              <div
-                className="flex items-center gap-2.5 overflow-hidden"
-                style={{
-                  opacity: effectiveCollapsed ? 0 : 1,
-                  width: effectiveCollapsed ? 0 : 160,
-                  transition: `opacity ${spring()}, width ${spring()}`,
-                }}
+          <div className={cn("flex h-10 w-full items-center", effectiveCollapsed ? "justify-center" : "")}>
+            {!isSmallScreen && (
+              <button
+                onClick={() => setCollapsed((value) => !value)}
+                className={cn(
+                  "squircle flex size-9 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                  !effectiveCollapsed && "ml-auto",
+                )}
+                aria-label={effectiveCollapsed ? "展开侧边栏" : "收起侧边栏"}
               >
-                <img src={logo} alt="七月播放器 logo" className="h-7 shrink-0" />
-                <span className="shrink-0 font-heading text-lg font-bold text-sidebar-foreground">
-                  <span className="text-sidebar-primary">七月</span>播放器
-                </span>
-              </div>
-              {effectiveCollapsed ? (
-                <button
-                  onClick={() => setCollapsed(false)}
-                  className="group relative flex size-10 shrink-0 items-center justify-center"
-                >
-                  <img
-                    src={logo}
-                    alt="七月播放器 logo"
-                    className="h-7 transition-opacity duration-200 group-hover:opacity-0"
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                    <div className="squircle flex size-10 items-center justify-center bg-sidebar-accent text-sidebar-foreground">
-                      <SquareHalf className="size-4 -scale-x-100" />
-                    </div>
-                  </div>
-                </button>
-              ) : (
-                <button
-                  onClick={() => setCollapsed(true)}
-                  className="squircle ml-auto flex size-9 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                >
-                  <SquareHalf className="size-4" />
-                </button>
-              )}
-            </div>
-          )}
+                <SquareHalf className={cn("size-4", effectiveCollapsed && "-scale-x-100")} />
+              </button>
+            )}
+          </div>
         </div>
 
         <div data-tauri-drag-region className="flex flex-1 items-center px-6 gap-4">
