@@ -37,4 +37,9 @@ export type { AppSettings } from "./settings";
 
 export type { NavItem, BreadcrumbItem, SectionMemory } from "./navigation";
 
-export type { VideoPlayerHandle, VideoQuality, PreparedVideoQuality } from "./video";
+export type {
+  VideoPlayerHandle,
+  VideoQuality,
+  PreparedVideoQuality,
+  AiAudioTranslation,
+} from "./video";

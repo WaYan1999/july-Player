@@ -65,6 +65,7 @@ pub fn run() {
             commands::delete_custom_category,
             commands::search_content,
             commands::translate_with_deepseek,
+            commands::translate_audio_segment,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

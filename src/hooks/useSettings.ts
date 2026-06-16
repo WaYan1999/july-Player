@@ -2,6 +2,12 @@ import { createContext, useContext, useState, useEffect, useCallback } from "rea
 import { getAllSettings, setSetting } from "@/lib/store";
 import type { AppSettings } from "@/types";
 import { isAppLanguage } from "@/lib/i18n";
+import {
+  DEFAULT_PET_PLUGINS,
+  DEFAULT_PET_VARIANT,
+  isPetVariantId,
+  parsePetPlugins,
+} from "@/lib/pets";
 
 const DEFAULTS: AppSettings = {
   language: "en",
@@ -13,7 +19,13 @@ const DEFAULTS: AppSettings = {
   skip_backward_secs: 10,
   ai_deepseek_api_key: "",
   ai_deepseek_model: "deepseek-v4-flash",
+  ai_asr_api_key: "",
+  ai_asr_model: "whisper-1",
+  ai_asr_endpoint: "https://api.openai.com/v1/audio/transcriptions",
   ai_translation_target: "zh",
+  pet_enabled: true,
+  pet_variant: DEFAULT_PET_VARIANT,
+  pet_plugins_enabled: DEFAULT_PET_PLUGINS,
 };
 
 function parseAiTarget(value: string | undefined): AppSettings["ai_translation_target"] {
@@ -31,7 +43,13 @@ function parse(raw: Record<string, string>): AppSettings {
     skip_backward_secs: Number(raw.skip_backward_secs) || 10,
     ai_deepseek_api_key: raw.ai_deepseek_api_key ?? "",
     ai_deepseek_model: raw.ai_deepseek_model || "deepseek-v4-flash",
+    ai_asr_api_key: raw.ai_asr_api_key ?? "",
+    ai_asr_model: raw.ai_asr_model || "whisper-1",
+    ai_asr_endpoint: raw.ai_asr_endpoint || "https://api.openai.com/v1/audio/transcriptions",
     ai_translation_target: parseAiTarget(raw.ai_translation_target),
+    pet_enabled: raw.pet_enabled !== "false",
+    pet_variant: isPetVariantId(raw.pet_variant) ? raw.pet_variant : DEFAULT_PET_VARIANT,
+    pet_plugins_enabled: parsePetPlugins(raw.pet_plugins_enabled),
   };
 }
 

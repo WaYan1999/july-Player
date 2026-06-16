@@ -3,6 +3,7 @@ import {
   CheckCircleIcon as CheckCircle,
   FloppyDiskIcon as FloppyDisk,
   KeyIcon as Key,
+  MicrophoneIcon as Microphone,
   SpinnerGapIcon as SpinnerGap,
   SparkleIcon as Sparkle,
   TranslateIcon as Translate,
@@ -35,16 +36,24 @@ export function AiModule({ className }: AiModuleProps) {
   const [form, setForm] = useState({
     apiKey: settings.ai_deepseek_api_key,
     model: settings.ai_deepseek_model,
+    asrApiKey: settings.ai_asr_api_key,
+    asrModel: settings.ai_asr_model,
+    asrEndpoint: settings.ai_asr_endpoint,
     targetLanguage: settings.ai_translation_target,
   });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  const configured = settings.ai_deepseek_api_key.trim().length > 0;
+  const configured =
+    settings.ai_deepseek_api_key.trim().length > 0 &&
+    settings.ai_asr_api_key.trim().length > 0;
   const hasChanges =
     form.apiKey !== settings.ai_deepseek_api_key ||
     form.model !== settings.ai_deepseek_model ||
+    form.asrApiKey !== settings.ai_asr_api_key ||
+    form.asrModel !== settings.ai_asr_model ||
+    form.asrEndpoint !== settings.ai_asr_endpoint ||
     form.targetLanguage !== settings.ai_translation_target;
   const maskedKey = useMemo(() => {
     const key = settings.ai_deepseek_api_key.trim();
@@ -56,11 +65,17 @@ export function AiModule({ className }: AiModuleProps) {
     setForm({
       apiKey: settings.ai_deepseek_api_key,
       model: settings.ai_deepseek_model,
+      asrApiKey: settings.ai_asr_api_key,
+      asrModel: settings.ai_asr_model,
+      asrEndpoint: settings.ai_asr_endpoint,
       targetLanguage: settings.ai_translation_target,
     });
   }, [
     settings.ai_deepseek_api_key,
     settings.ai_deepseek_model,
+    settings.ai_asr_api_key,
+    settings.ai_asr_model,
+    settings.ai_asr_endpoint,
     settings.ai_translation_target,
   ]);
 
@@ -72,6 +87,9 @@ export function AiModule({ className }: AiModuleProps) {
     try {
       await update("ai_deepseek_api_key", form.apiKey);
       await update("ai_deepseek_model", form.model);
+      await update("ai_asr_api_key", form.asrApiKey);
+      await update("ai_asr_model", form.asrModel);
+      await update("ai_asr_endpoint", form.asrEndpoint);
       await update("ai_translation_target", form.targetLanguage);
       setSaveSuccess(true);
       return true;
@@ -220,6 +238,79 @@ export function AiModule({ className }: AiModuleProps) {
                   </span>
                 </div>
               )}
+
+              <div className="mt-2 rounded-xl border border-border/70 bg-secondary/35 p-3">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Microphone className="size-4 text-info" weight="bold" />
+                    <h4 className="font-heading text-xs font-bold text-foreground">
+                      {t.ai.speechRecognition}
+                    </h4>
+                  </div>
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-1 font-sans text-[11px] font-semibold",
+                      form.asrApiKey.trim()
+                        ? "bg-info/10 text-info"
+                        : "bg-background text-muted-foreground",
+                    )}
+                  >
+                    {form.asrApiKey.trim() ? t.ai.configured : t.ai.notConfigured}
+                  </span>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="font-sans text-xs font-medium text-muted-foreground">
+                      {t.ai.speechApiKey}
+                    </span>
+                    <input
+                      type="password"
+                      value={form.asrApiKey}
+                      onChange={(e) =>
+                        setForm((current) => ({ ...current, asrApiKey: e.target.value }))
+                      }
+                      placeholder="sk-..."
+                      className="rounded-lg border border-border bg-background px-3 py-2 font-sans text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary/60"
+                    />
+                  </label>
+
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="font-sans text-xs font-medium text-muted-foreground">
+                        {t.ai.speechModel}
+                      </span>
+                      <input
+                        value={form.asrModel}
+                        onChange={(e) =>
+                          setForm((current) => ({ ...current, asrModel: e.target.value }))
+                        }
+                        placeholder="whisper-1"
+                        className="rounded-lg border border-border bg-background px-3 py-2 font-sans text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary/60"
+                      />
+                    </label>
+
+                    <label className="flex flex-col gap-1.5">
+                      <span className="font-sans text-xs font-medium text-muted-foreground">
+                        {t.ai.speechEndpoint}
+                      </span>
+                      <input
+                        value={form.asrEndpoint}
+                        onChange={(e) =>
+                          setForm((current) => ({ ...current, asrEndpoint: e.target.value }))
+                        }
+                        placeholder="https://api.openai.com/v1/audio/transcriptions"
+                        className="rounded-lg border border-border bg-background px-3 py-2 font-sans text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-primary/60"
+                      />
+                    </label>
+                  </div>
+
+                  <p className="font-sans text-xs leading-relaxed text-muted-foreground">
+                    {t.ai.speechEndpointHint}
+                  </p>
+                </div>
+              </div>
+
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="font-sans text-xs text-muted-foreground">
                   {saveSuccess && !hasChanges ? t.ai.saved : hasChanges ? t.ai.unsaved : t.ai.saved}

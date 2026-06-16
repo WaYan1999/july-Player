@@ -14,6 +14,7 @@ import type {
   SearchResult,
   PreparedVideoQuality,
   VideoQuality,
+  AiAudioTranslation,
 } from "@/types";
 
 export async function getCourses(): Promise<Course[]> {
@@ -156,6 +157,20 @@ export async function translateWithDeepSeek(
   targetLanguage: string,
 ): Promise<string> {
   return invoke<string>("translate_with_deepseek", { text, targetLanguage });
+}
+
+export async function translateAudioSegment(
+  videoPath: string,
+  startSeconds: number,
+  durationSeconds: number,
+  targetLanguage: string,
+): Promise<AiAudioTranslation> {
+  return invoke<AiAudioTranslation>("translate_audio_segment", {
+    videoPath,
+    startSeconds,
+    durationSeconds,
+    targetLanguage,
+  });
 }
 
 export async function getAllSettings(): Promise<Record<string, string>> {

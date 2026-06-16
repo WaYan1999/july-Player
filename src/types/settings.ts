@@ -1,3 +1,5 @@
+import type { PetCatalogId, PetPluginId } from "@/lib/pets";
+
 export interface AppSettings {
   language: "en" | "zh" | "fr";
   autoplay_next: boolean;
@@ -8,5 +10,11 @@ export interface AppSettings {
   skip_backward_secs: number;
   ai_deepseek_api_key: string;
   ai_deepseek_model: string;
+  ai_asr_api_key: string;
+  ai_asr_model: string;
+  ai_asr_endpoint: string;
   ai_translation_target: "en" | "zh" | "fr";
+  pet_enabled: boolean;
+  pet_variant: PetCatalogId;
+  pet_plugins_enabled: PetPluginId[];
 }

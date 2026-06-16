@@ -17,6 +17,7 @@ import { NavSection } from "./NavSection";
 import { SidebarSearch } from "./SidebarSearch";
 import { useI18n } from "@/hooks/useI18n";
 import { AppWindowTitleBar } from "./AppWindowTitleBar";
+import { ResidentPet } from "@/components/ResidentPet";
 
 interface AppShellProps {
   children: ReactNode;
@@ -203,7 +204,7 @@ function AppShellInner({ children }: AppShellProps) {
         </aside>
 
         <main
-          className="flex-1 overflow-y-auto rounded-tl-2xl bg-background px-6 py-8 [scrollbar-gutter:stable]"
+          className="flex-1 overflow-y-auto rounded-tl-2xl bg-background px-6 pb-8 pt-8 [scrollbar-gutter:stable]"
           style={{
             backgroundImage:
               "radial-gradient(ellipse 80% 60% at 10% 0%, var(--gradient-spot) 0%, transparent 70%)",
@@ -212,6 +213,8 @@ function AppShellInner({ children }: AppShellProps) {
           {children}
         </main>
       </div>
+
+      <ResidentPet />
     </div>
   );
 }

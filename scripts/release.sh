@@ -25,7 +25,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 if [[ -n "$(git status --porcelain)" ]]; then
-  echo "error: working tree is dirty — commit or stash first" >&2
+  echo "error: working tree is dirty; commit or stash first" >&2
   exit 1
 fi
 
@@ -80,5 +80,5 @@ cat <<EOF
 Release $TAG pushed. The Build & Release workflow will draft a GitHub
 Release with installers + latest.json. Review and publish it here:
 
-  https://github.com/redaantar/ckourse/releases
+  https://github.com/WaYan1999/july-Player/releases
 EOF

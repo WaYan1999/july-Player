@@ -43,7 +43,7 @@ Add two secrets to the repo (Settings → Secrets and variables → Actions):
    - platform installers (`.dmg`, `.msi`, `.exe`)
    - `latest.json` (the update manifest the app polls)
    - `.sig` signature files
-4. Review the draft release on GitHub, then **publish** it. Publishing makes `https://github.com/redaantar/ckourse/releases/latest/download/latest.json` resolve, which is the endpoint the app checks.
+4. Review the draft release on GitHub, then **publish** it. Publishing makes `https://github.com/WaYan1999/july-Player/releases/latest/download/latest.json` resolve, which is the endpoint the app checks.
 
 ## How clients update
 

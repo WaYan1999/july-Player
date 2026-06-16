@@ -294,3 +294,56 @@
     transform: translateY(0) scale(1);
   }
 }
+
+.openpets-ai-pet-sprite {
+  width: var(--openpets-render-width);
+  height: var(--openpets-render-height);
+  display: block;
+  overflow: hidden;
+  background-image: var(--openpets-sprite-url);
+  background-repeat: no-repeat;
+  background-size: var(--openpets-bg-width) var(--openpets-bg-height);
+  animation: openpets-ai-pet-frames var(--openpets-duration) steps(var(--openpets-frames)) var(--openpets-iterations);
+  filter: var(--openpets-filter, drop-shadow(0 12px 13px rgb(0 0 0 / 0.34)));
+  image-rendering: auto;
+}
+
+.resident-pet {
+  contain: layout paint;
+  -webkit-app-region: no-drag;
+}
+
+.resident-pet-sprite {
+  position: absolute;
+  inset: auto auto 0 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.resident-pet-shadow {
+  position: absolute;
+  right: 15px;
+  bottom: 4px;
+  left: 15px;
+  z-index: 0;
+  height: 10px;
+  border-radius: 999px;
+  background: radial-gradient(ellipse at center, rgb(0 0 0 / 0.42), transparent 68%);
+  pointer-events: none;
+  transform: scaleX(1.05);
+}
+
+@keyframes openpets-ai-pet-frames {
+  from {
+    background-position: 0 var(--openpets-row-y);
+  }
+  to {
+    background-position: var(--openpets-end-x) var(--openpets-row-y);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .openpets-ai-pet-sprite {
+    animation: none;
+  }
+}

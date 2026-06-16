@@ -9,6 +9,7 @@ import { Progress } from "@/pages/Progress";
 import { Notes } from "@/pages/Notes";
 import { Settings } from "@/pages/Settings";
 import { AiModule } from "@/pages/AiModule";
+import { Pets } from "@/pages/Pets";
 import { ActivePathContext } from "@/hooks/usePageVisible";
 import { sectionMemory } from "@/hooks/useSectionMemory";
 import { SettingsContext, useSettingsProvider } from "@/hooks/useSettings";
@@ -87,6 +88,7 @@ function KeepAliveRoutes() {
             <Route path="/notes" element={<Notes />} />
             <Route path="/ai" element={<AiModule />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/pets" element={<Pets />} />
             <Route path="/course/:courseId" element={<CourseDetail />} />
           </Routes>
         </div>

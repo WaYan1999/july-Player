@@ -1,5 +1,4 @@
 import {
-  useMemo,
   useRef,
   useState,
   useCallback,
@@ -27,12 +26,11 @@ import {
   CaretRightIcon as CaretRight,
   GearSixIcon as GearSix,
   SparkleIcon as Sparkle,
-  XIcon as X,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { formatVideoTime } from "@/lib/format";
 import type { Lesson, Subtitle, VideoPlayerHandle, VideoQuality } from "@/types";
-import { getSubtitleVtt, prepareVideoQuality, translateWithDeepSeek } from "@/lib/store";
+import { getSubtitleVtt, prepareVideoQuality, translateAudioSegment } from "@/lib/store";
 import { EASE_OUT } from "@/lib/constants";
 import type { PlayerTranslationKey } from "@/lib/i18n";
 import { useI18n } from "@/hooks/useI18n";
@@ -96,34 +94,6 @@ interface SubtitleStyle {
   color: string;
   bgOpacity: number;
   bottomPct: number;
-}
-
-type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
-
-interface SpeechRecognitionLike {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((event: { error?: string }) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-}
-
-interface SpeechRecognitionEventLike {
-  resultIndex?: number;
-  results: ArrayLike<{
-    isFinal: boolean;
-    0: { transcript: string };
-  }>;
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition?: SpeechRecognitionConstructor;
-    webkitSpeechRecognition?: SpeechRecognitionConstructor;
-  }
 }
 
 const SUB_STYLE_KEY = "ckourse:subtitle-style";
@@ -218,25 +188,14 @@ function getPreferredSubtitleKey(idx: number, subtitles: Subtitle[]): string {
   return subtitles[idx] ? getSubtitleLanguageKey(subtitles[idx]) : SUBTITLE_OFF_KEY;
 }
 
-function subtitleHtmlToText(html: string): string {
-  return html
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/?[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join("\n")
-    .trim();
-}
-
-function getSpeechRecognitionLang(targetLanguage: string): string {
-  return targetLanguage === "en" ? "zh-CN" : "en-US";
+function textToSubtitleHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/\n/g, "<br/>");
 }
 
 export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function VideoPlayer({
@@ -266,10 +225,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const seekBarRef = useRef<HTMLDivElement>(null);
   const pendingQualityRestoreRef = useRef<{ time: number; shouldPlay: boolean } | null>(null);
   const activeVideoPathRef = useRef<string | undefined>(undefined);
-  const aiTranslationCacheRef = useRef<Map<string, string>>(new Map());
   const aiTranslateRequestRef = useRef(0);
-  const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  const speechTranscriptRef = useRef("");
+  const aiSegmentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const aiSegmentInFlightRef = useRef(false);
+  const aiLastSegmentStartRef = useRef<number | null>(null);
 
   useImperativeHandle(ref, () => ({
     seekTo(seconds: number) {
@@ -315,17 +274,14 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   );
   const [autoSkipRemaining, setAutoSkipRemaining] = useState(AUTO_SKIP_SECONDS);
   const [autoSkipCancelled, setAutoSkipCancelled] = useState(false);
-  const [aiSourceText, setAiSourceText] = useState("");
   const [aiTranslatedText, setAiTranslatedText] = useState("");
   const [aiStatus, setAiStatus] = useState("");
   const [aiError, setAiError] = useState("");
   const [isAiTranslating, setIsAiTranslating] = useState(false);
   const hasSubtitles = subtitles.length > 0;
-  const aiConfigured = settings.ai_deepseek_api_key.trim().length > 0;
-  const speechRecognitionSupported = useMemo(
-    () => Boolean(window.SpeechRecognition || window.webkitSpeechRecognition),
-    [],
-  );
+  const aiConfigured =
+    settings.ai_deepseek_api_key.trim().length > 0 &&
+    settings.ai_asr_api_key.trim().length > 0;
 
   // Auto-skip countdown when video ends
   const autoSkipFiredRef = useRef(false);
@@ -534,76 +490,26 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       : activeCueText
         ? [activeCueText]
         : [];
-  const aiSubtitleSourceText = subtitleCueTexts
-    .map(subtitleHtmlToText)
-    .filter(Boolean)
-    .join("\n");
-  const aiHasSubtitleSource =
-    activeSubtitleIdx >= 0 || activeSubtitleIdx === BILINGUAL_SUBTITLE_IDX;
-  const aiFallbackStatus = aiHasSubtitleSource
-    ? t.aiUsingSubtitle
-    : speechRecognitionSupported
-      ? t.aiListening
-      : t.aiNoSource;
+  const aiSubtitleCueText =
+    showAiPanel && (aiError || aiTranslatedText || isAiTranslating || aiStatus)
+      ? textToSubtitleHtml(
+          aiError ||
+            aiTranslatedText ||
+            (isAiTranslating ? t.aiTranslating : aiStatus || t.aiListening),
+        )
+      : null;
+  const displaySubtitleCueTexts = aiSubtitleCueText
+    ? [aiSubtitleCueText]
+    : subtitleCueTexts;
 
-  const stopSpeechRecognition = useCallback(() => {
-    const recognition = speechRecognitionRef.current;
-    if (recognition) {
-      recognition.onresult = null;
-      recognition.onerror = null;
-      recognition.onend = null;
-      try {
-        recognition.stop();
-      } catch {
-        // Already stopped.
-      }
-      speechRecognitionRef.current = null;
+  const stopAiAudioTranslation = useCallback(() => {
+    if (aiSegmentTimerRef.current) {
+      clearTimeout(aiSegmentTimerRef.current);
+      aiSegmentTimerRef.current = null;
     }
-    speechTranscriptRef.current = "";
+    aiSegmentInFlightRef.current = false;
+    aiLastSegmentStartRef.current = null;
   }, []);
-
-  const translateAiText = useCallback(
-    async (text: string, sourceStatus: string) => {
-      const sourceText = text.trim();
-      if (!sourceText || !aiConfigured) return;
-
-      const cacheKey = `${settings.ai_translation_target}:${sourceText}`;
-      const requestId = aiTranslateRequestRef.current + 1;
-      aiTranslateRequestRef.current = requestId;
-
-      setAiSourceText(sourceText);
-      setAiError("");
-      setAiStatus(sourceStatus);
-
-      const cached = aiTranslationCacheRef.current.get(cacheKey);
-      if (cached) {
-        setAiTranslatedText(cached);
-        setIsAiTranslating(false);
-        return;
-      }
-
-      setIsAiTranslating(true);
-      try {
-        const translated = await translateWithDeepSeek(
-          sourceText,
-          settings.ai_translation_target,
-        );
-        if (aiTranslateRequestRef.current !== requestId) return;
-        aiTranslationCacheRef.current.set(cacheKey, translated);
-        setAiTranslatedText(translated);
-      } catch (err) {
-        if (aiTranslateRequestRef.current !== requestId) return;
-        setAiError(err instanceof Error ? err.message : t.aiTranslationFailed);
-        setAiTranslatedText("");
-        setAiStatus(t.aiTranslationFailed);
-      } finally {
-        if (aiTranslateRequestRef.current === requestId) {
-          setIsAiTranslating(false);
-        }
-      }
-    },
-    [aiConfigured, settings.ai_translation_target, t.aiTranslationFailed],
-  );
 
   const handleAiTranslateClick = useCallback(
     (e: ReactMouseEvent<HTMLButtonElement>) => {
@@ -626,128 +532,111 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   useEffect(() => {
     if (aiConfigured || !showAiPanel) return;
     setShowAiPanel(false);
-    stopSpeechRecognition();
-  }, [aiConfigured, showAiPanel, stopSpeechRecognition]);
+    stopAiAudioTranslation();
+  }, [aiConfigured, showAiPanel, stopAiAudioTranslation]);
 
   useEffect(() => {
     aiTranslateRequestRef.current += 1;
     setShowAiPanel(false);
-    setAiSourceText("");
     setAiTranslatedText("");
     setAiStatus("");
     setAiError("");
     setIsAiTranslating(false);
-    stopSpeechRecognition();
-  }, [lesson?.id, stopSpeechRecognition]);
+    stopAiAudioTranslation();
+  }, [lesson?.id, stopAiAudioTranslation]);
 
   useEffect(() => {
-    if (!showAiPanel || !aiConfigured) return;
-
-    if (aiSubtitleSourceText) {
-      stopSpeechRecognition();
-      void translateAiText(aiSubtitleSourceText, t.aiUsingSubtitle);
+    if (!showAiPanel || !aiConfigured || !activeVideoPath) {
+      stopAiAudioTranslation();
       return;
     }
 
-    stopSpeechRecognition();
-    setAiSourceText("");
-    setAiTranslatedText("");
+    const requestId = aiTranslateRequestRef.current + 1;
+    aiTranslateRequestRef.current = requestId;
+    let cancelled = false;
     setAiError("");
-    setAiStatus(aiFallbackStatus);
-  }, [
-    showAiPanel,
-    aiConfigured,
-    aiFallbackStatus,
-    aiHasSubtitleSource,
-    aiSubtitleSourceText,
-    speechRecognitionSupported,
-    stopSpeechRecognition,
-    translateAiText,
-    t.aiListening,
-    t.aiNoSource,
-    t.aiUsingSubtitle,
-  ]);
-
-  useEffect(() => {
-    if (
-      !showAiPanel ||
-      !aiConfigured ||
-      aiSubtitleSourceText ||
-      aiHasSubtitleSource ||
-      !speechRecognitionSupported
-    ) {
-      if (speechRecognitionRef.current) stopSpeechRecognition();
-      return;
-    }
-
-    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!Recognition) {
-      setAiStatus(t.aiNoSource);
-      return;
-    }
-
-    const recognition = new Recognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = getSpeechRecognitionLang(settings.ai_translation_target);
-    speechRecognitionRef.current = recognition;
-    speechTranscriptRef.current = "";
     setAiStatus(t.aiListening);
-    setAiError("");
 
-    recognition.onresult = (event) => {
-      let interimText = "";
-      let finalText = "";
-      const startIdx = event.resultIndex ?? 0;
+    const runSegment = async () => {
+      if (cancelled || !videoRef.current) return;
+      const video = videoRef.current;
 
-      for (let i = startIdx; i < event.results.length; i += 1) {
-        const result = event.results[i];
-        const transcript = result[0]?.transcript.trim() ?? "";
-        if (!transcript) continue;
-        if (result.isFinal) {
-          finalText = `${finalText} ${transcript}`.trim();
+      if (video.paused || video.ended || !Number.isFinite(video.currentTime)) {
+        setIsAiTranslating(false);
+        setAiStatus(t.aiListening);
+        aiSegmentTimerRef.current = setTimeout(runSegment, 900);
+        return;
+      }
+
+      if (aiSegmentInFlightRef.current) {
+        aiSegmentTimerRef.current = setTimeout(runSegment, 500);
+        return;
+      }
+      const durationSeconds = 4;
+      const startSeconds = Math.max(0, video.currentTime - durationSeconds);
+      const roundedStart = Math.floor(startSeconds * 2) / 2;
+      if (
+        aiLastSegmentStartRef.current !== null &&
+        Math.abs(aiLastSegmentStartRef.current - roundedStart) < 2
+      ) {
+        aiSegmentTimerRef.current = setTimeout(runSegment, 1000);
+        return;
+      }
+
+      aiLastSegmentStartRef.current = roundedStart;
+      aiSegmentInFlightRef.current = true;
+      setIsAiTranslating(true);
+      setAiStatus(t.aiListening);
+
+      try {
+        const segmentDuration = Math.max(
+          1,
+          Math.min(durationSeconds, video.currentTime - roundedStart),
+        );
+        const result = await translateAudioSegment(
+          activeVideoPath,
+          roundedStart,
+          segmentDuration,
+          settings.ai_translation_target,
+        );
+        if (cancelled || aiTranslateRequestRef.current !== requestId) return;
+        if (result.translation.trim()) {
+          setAiTranslatedText(result.translation.trim());
+          setAiError("");
+          setAiStatus("");
+        } else if (result.transcript.trim()) {
+          setAiTranslatedText(result.transcript.trim());
+          setAiStatus("");
         } else {
-          interimText = `${interimText} ${transcript}`.trim();
+          setAiStatus(t.aiNoSource);
+        }
+      } catch (err) {
+        if (cancelled || aiTranslateRequestRef.current !== requestId) return;
+        setAiError(err instanceof Error ? err.message : t.aiTranslationFailed);
+        setAiTranslatedText("");
+        setAiStatus(t.aiTranslationFailed);
+      } finally {
+        if (!cancelled && aiTranslateRequestRef.current === requestId) {
+          aiSegmentInFlightRef.current = false;
+          setIsAiTranslating(false);
+          aiSegmentTimerRef.current = setTimeout(runSegment, 1200);
         }
       }
-
-      if (interimText) {
-        setAiSourceText(interimText);
-      }
-
-      if (finalText) {
-        const combined = `${speechTranscriptRef.current} ${finalText}`.trim();
-        speechTranscriptRef.current = combined.split(/\s+/).slice(-80).join(" ");
-        void translateAiText(speechTranscriptRef.current, t.aiListening);
-      }
     };
 
-    recognition.onerror = (event) => {
-      setAiStatus(t.aiNoSource);
-      setAiError(event.error ? `${t.aiTranslationFailed} (${event.error})` : t.aiNoSource);
+    aiSegmentTimerRef.current = setTimeout(runSegment, 250);
+
+    return () => {
+      cancelled = true;
+      stopAiAudioTranslation();
     };
-
-    recognition.onend = () => {
-      setAiStatus(t.aiNoSource);
-    };
-
-    try {
-      recognition.start();
-    } catch (err) {
-      setAiStatus(t.aiNoSource);
-      setAiError(err instanceof Error ? err.message : t.aiNoSource);
-    }
-
-    return () => stopSpeechRecognition();
   }, [
     showAiPanel,
     aiConfigured,
-    aiHasSubtitleSource,
-    aiSubtitleSourceText,
-    speechRecognitionSupported,
+    activeVideoPath,
+    isPlaying,
     settings.ai_translation_target,
-    stopSpeechRecognition,
-    translateAiText,
+    stopAiAudioTranslation,
     t.aiListening,
     t.aiNoSource,
     t.aiTranslationFailed,
@@ -1180,13 +1069,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
               v.play().catch(() => {});
             }
           }
-          console.log("[video] loadedmetadata", {
-            src: v.currentSrc,
-            duration: v.duration,
-            readyState: v.readyState,
-            videoWidth: v.videoWidth,
-            videoHeight: v.videoHeight,
-          });
         }}
         onStalled={() => console.warn("[video] stalled", videoSrc)}
         onAbort={() => console.warn("[video] abort", videoSrc)}
@@ -1207,12 +1089,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         }}
       />
 
-      {subtitleCueTexts.length > 0 && (
+      {displaySubtitleCueTexts.length > 0 && (
         <div
           className="pointer-events-none absolute inset-x-0 flex flex-col items-center gap-1.5 px-8"
           style={{ bottom: `${subStyle.bottomPct}%` }}
         >
-          {subtitleCueTexts.map((cueText, idx) => (
+          {displaySubtitleCueTexts.map((cueText, idx) => (
             <span
               key={`${idx}-${cueText}`}
               className="inline-block max-w-[80%] rounded px-3 py-1.5 text-center font-sans leading-relaxed"
@@ -1231,78 +1113,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
             />
           ))}
         </div>
-      )}
-
-      {showAiPanel && (
-        <aside
-          className="absolute bottom-20 left-3 top-3 z-20 flex w-80 max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-xl border border-white/10 bg-black/85 text-white shadow-xl backdrop-blur-md"
-          onClick={(e) => e.stopPropagation()}
-          style={{ animation: `fadeInUp 180ms ${EASE_OUT} both` }}
-        >
-          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2.5">
-            <div className="flex min-w-0 items-center gap-2">
-              <Sparkle className="size-4 shrink-0 text-primary" weight="bold" />
-              <h3 className="truncate font-sans text-sm font-semibold">
-                {t.aiTranslate}
-              </h3>
-            </div>
-            <button
-              onClick={() => setShowAiPanel(false)}
-              className="rounded-md p-1 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
-              title={t.aiTranslate}
-            >
-              <X className="size-4" />
-            </button>
-          </div>
-
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
-            {!aiConfigured ? (
-              <div className="flex h-full flex-col items-start justify-center gap-3">
-                <p className="font-sans text-sm leading-relaxed text-white/65">
-                  {t.aiTranslateUnavailable}
-                </p>
-                <button
-                  onClick={() => navigate("/ai")}
-                  className="rounded-lg bg-primary px-3 py-2 font-sans text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
-                >
-                  {t.aiOpenModule}
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center gap-2 rounded-lg bg-white/5 px-2.5 py-2">
-                  <span
-                    className={cn(
-                      "size-1.5 shrink-0 rounded-full",
-                      isAiTranslating ? "animate-pulse bg-primary" : "bg-white/35",
-                    )}
-                  />
-                  <p className="truncate font-sans text-xs text-white/55">
-                    {isAiTranslating ? t.aiTranslating : aiStatus || t.aiListening}
-                  </p>
-                </div>
-
-                {aiError && (
-                  <p className="rounded-lg bg-red-500/10 px-2.5 py-2 font-sans text-xs leading-relaxed text-red-200">
-                    {aiError}
-                  </p>
-                )}
-
-                <div className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
-                  <p className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-white/75">
-                    {aiSourceText || t.aiNoSource}
-                  </p>
-                </div>
-
-                <div className="rounded-lg border border-primary/25 bg-primary/10 p-3">
-                  <p className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-white">
-                    {aiTranslatedText || (isAiTranslating ? t.aiTranslating : t.aiListening)}
-                  </p>
-                </div>
-              </>
-            )}
-          </div>
-        </aside>
       )}
 
       {hasEnded && (
@@ -1515,6 +1325,15 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
 
           <div className="flex-1" />
 
+          <ControlButton
+            onClick={handleAiTranslateClick}
+            tooltip={aiConfigured ? t.aiVoiceTranslate : t.aiTranslateUnavailable}
+            active={showAiPanel}
+            muted={!aiConfigured}
+          >
+            <Sparkle className="size-4" weight={showAiPanel ? "fill" : "regular"} />
+          </ControlButton>
+
           <div className="relative">
             <ControlButton
               onClick={(e) => {
@@ -1522,7 +1341,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                 setShowSpeedMenu((s) => !s);
                 setShowQualityMenu(false);
                 setShowSubtitleMenu(false);
-                setShowAiPanel(false);
               }}
               tooltip={t.playbackSpeed}
               active={playbackSpeed !== 1}
@@ -1569,7 +1387,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                 setShowQualityMenu((s) => !s);
                 setShowSpeedMenu(false);
                 setShowSubtitleMenu(false);
-                setShowAiPanel(false);
               }}
               tooltip={t.quality}
               active={selectedQuality !== "1080p" || isPreparingQuality}
@@ -1625,7 +1442,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                   });
                   setShowSpeedMenu(false);
                   setShowQualityMenu(false);
-                  setShowAiPanel(false);
                 }}
                 tooltip={`${t.subtitles} (C)`}
                 active={activeSubtitleIdx !== -1}
@@ -1791,15 +1607,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                 </PopupMenu>
               )}
             </div>
-
-          <ControlButton
-            onClick={handleAiTranslateClick}
-            tooltip={aiConfigured ? t.aiTranslate : t.aiTranslateUnavailable}
-            active={showAiPanel}
-            muted={!aiConfigured}
-          >
-            <Sparkle className="size-4" weight={showAiPanel ? "fill" : "regular"} />
-          </ControlButton>
 
           <ControlButton onClick={togglePiP} tooltip={`${t.pictureInPicture} (P)`}>
             <PictureInPicture className="size-4" />

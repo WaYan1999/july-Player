@@ -46,6 +46,7 @@ function getRouteTitle(pathname: string, t: ReturnType<typeof useI18n>["t"]): st
     "/progress": t.nav.progress,
     "/notes": t.nav.notes,
     "/settings": t.nav.settings,
+    "/pets": t.nav.pets,
     "/ai": t.nav.aiModule,
     "/import": t.nav.importCourse,
   };

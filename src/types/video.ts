@@ -12,3 +12,10 @@ export interface PreparedVideoQuality {
   targetHeight: number;
   converted: boolean;
 }
+
+export interface AiAudioTranslation {
+  transcript: string;
+  translation: string;
+  startSeconds: number;
+  durationSeconds: number;
+}

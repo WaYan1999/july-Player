@@ -5,6 +5,7 @@ import {
   NotepadIcon as Notepad,
   GearSixIcon as GearSix,
   SparkleIcon as Sparkle,
+  PawPrintIcon as PawPrint,
 } from "@phosphor-icons/react";
 import { EASE } from "@/lib/constants";
 import type { NavItem } from "@/types";
@@ -24,6 +25,7 @@ export const navigationItems: NavItem[] = [
 export const appItems: NavItem[] = [
   { icon: Sparkle, key: "aiModule", label: "AI Module", path: "/ai" },
   { icon: GearSix, key: "settings", label: "Settings", path: "/settings" },
+  { icon: PawPrint, key: "pets", label: "Pets", path: "/pets" },
 ];
 
 export const routeTitles: Record<string, string> = {
@@ -32,6 +34,7 @@ export const routeTitles: Record<string, string> = {
   "/progress": "Progress",
   "/notes": "Notes",
   "/settings": "Settings",
+  "/pets": "Pets",
   "/ai": "AI Module",
   "/import": "Import Course",
 };
