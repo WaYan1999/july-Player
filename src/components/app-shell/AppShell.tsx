@@ -16,6 +16,7 @@ import { NavSection } from "./NavSection";
 import { SidebarSearch } from "./SidebarSearch";
 import { useI18n } from "@/hooks/useI18n";
 import { useSettings } from "@/hooks/useSettings";
+import { isDesktopPetOpen } from "@/lib/store";
 import { AppWindowTitleBar } from "./AppWindowTitleBar";
 import { ResidentPet } from "@/components/ResidentPet";
 
@@ -34,7 +35,7 @@ export function AppShell({ children }: AppShellProps) {
 function AppShellInner({ children }: AppShellProps) {
   const breadcrumbs = useBreadcrumbs();
   const { t } = useI18n();
-  const { settings } = useSettings();
+  const { settings, update } = useSettings();
   const [collapsed, setCollapsed] = useState(false);
   const [isSmallScreen, setIsSmallScreen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -63,6 +64,35 @@ function AppShellInner({ children }: AppShellProps) {
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
   }, []);
+
+  useEffect(() => {
+    if (!settings.pet_desktop_enabled) return;
+
+    let cancelled = false;
+
+    const syncDesktopPetState = async () => {
+      try {
+        const open = await isDesktopPetOpen();
+        if (!cancelled && !open) {
+          await update("pet_desktop_enabled", "false");
+        }
+      } catch {
+        if (!cancelled) {
+          await update("pet_desktop_enabled", "false").catch(() => {});
+        }
+      }
+    };
+
+    void syncDesktopPetState();
+    const interval = window.setInterval(() => void syncDesktopPetState(), 5000);
+    window.addEventListener("focus", syncDesktopPetState);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", syncDesktopPetState);
+    };
+  }, [settings.pet_desktop_enabled, update]);
 
   const effectiveCollapsed = isSmallScreen || collapsed;
 

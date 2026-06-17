@@ -180,6 +180,10 @@ export async function closeDesktopPet(): Promise<void> {
   return invoke("close_desktop_pet");
 }
 
+export async function isDesktopPetOpen(): Promise<boolean> {
+  return invoke<boolean>("is_desktop_pet_open");
+}
+
 export async function getAiModels(): Promise<AiModelOption[]> {
   return invoke<AiModelOption[]>("get_ai_models");
 }

@@ -54,8 +54,11 @@ export function DesktopPetWindow() {
   }, [refreshPetName]);
 
   const closeWindow = async () => {
-    await update("pet_desktop_enabled", "false");
-    await closeDesktopPet();
+    try {
+      await update("pet_desktop_enabled", "false");
+    } finally {
+      await closeDesktopPet();
+    }
   };
 
   return (

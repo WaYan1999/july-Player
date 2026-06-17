@@ -104,29 +104,38 @@ function KeepAliveRoutes() {
   );
 }
 
-function App() {
+function DesktopPetApp() {
+  const settingsCtx = useSettingsProvider();
+
+  return (
+    <SettingsContext.Provider value={settingsCtx}>
+      <DesktopPetWindow />
+    </SettingsContext.Provider>
+  );
+}
+
+function MainApp() {
   const settingsCtx = useSettingsProvider();
   const updaterCtx = useUpdaterProvider();
-  const location = useLocation();
-  const isDesktopPetWindow = location.pathname === "/desktop-pet";
   useStartupUpdateCheck(updaterCtx);
 
   return (
     <SettingsContext.Provider value={settingsCtx}>
       <UpdaterContext.Provider value={updaterCtx}>
-        {isDesktopPetWindow ? (
-          <DesktopPetWindow />
-        ) : (
-          <>
-            <AppShell>
-              <KeepAliveRoutes />
-            </AppShell>
-            <UpdateBanner />
-          </>
-        )}
+        <AppShell>
+          <KeepAliveRoutes />
+        </AppShell>
+        <UpdateBanner />
       </UpdaterContext.Provider>
     </SettingsContext.Provider>
   );
+}
+
+function App() {
+  const location = useLocation();
+  const isDesktopPetWindow = location.pathname === "/desktop-pet";
+
+  return isDesktopPetWindow ? <DesktopPetApp /> : <MainApp />;
 }
 
 export default App;

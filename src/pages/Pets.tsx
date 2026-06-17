@@ -1942,8 +1942,8 @@ export function Pets({ className }: PetsProps) {
     try {
       if (enabled) {
         await update("pet_enabled", "true");
-        await update("pet_desktop_enabled", "true");
         await openDesktopPet();
+        await update("pet_desktop_enabled", "true");
         pushFeedback({
           title: copy.desktopPetOpened,
           detail: copy.desktopPetDescription,
@@ -1958,8 +1958,13 @@ export function Pets({ className }: PetsProps) {
           mood: "wave",
         });
       }
-    } catch {
+    } catch (error) {
+      if (enabled) {
+        await update("pet_desktop_enabled", "false").catch(() => {});
+        await closeDesktopPet().catch(() => {});
+      }
       pushFailureFeedback(copy.desktopPet);
+      console.warn("Desktop pet toggle failed", error);
       await reloadSettings();
     } finally {
       setDesktopPetPending(false);

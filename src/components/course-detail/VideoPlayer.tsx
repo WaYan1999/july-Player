@@ -193,6 +193,14 @@ function getDefaultSubtitleIndex(subtitles: Subtitle[]): number {
   return subtitles.findIndex((sub) => getSubtitleLanguageKey(sub) === "zh");
 }
 
+function getTranslationSourceSubtitleIndex(subtitles: Subtitle[]): number {
+  const englishIdx = subtitles.findIndex((sub) => getSubtitleLanguageKey(sub) === "en");
+  if (englishIdx >= 0) return englishIdx;
+
+  const nonChineseIdx = subtitles.findIndex((sub) => getSubtitleLanguageKey(sub) !== "zh");
+  return nonChineseIdx >= 0 ? nonChineseIdx : subtitles.length > 0 ? 0 : -1;
+}
+
 function getBilingualSubtitleIndexes(subtitles: Subtitle[]): [number, number] | null {
   const chineseIdx = subtitles.findIndex((sub) => getSubtitleLanguageKey(sub) === "zh");
   if (chineseIdx < 0) return null;
@@ -534,6 +542,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       : activeCueText
         ? [activeCueText]
         : [];
+  const hasSelectedSubtitleSource =
+    activeSubtitleIdx === BILINGUAL_SUBTITLE_IDX
+      ? Boolean(bilingualSubtitleIndexes)
+      : activeSubtitleIdx >= 0;
   const aiSubtitleCueText =
     showAiPanel && (aiError || aiTranslatedText || isAiTranslating || aiStatus)
       ? aiError ||
@@ -543,6 +555,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const displaySubtitleCueTexts = aiSubtitleCueText
     ? [aiSubtitleCueText]
     : subtitleCueTexts;
+  const sourceSubtitleTextForAi = normalizeLiveSubtitleText(subtitleCueTexts.join("\n"));
+  const shouldTranslateVisibleSubtitle =
+    showAiPanel &&
+    aiConfigured &&
+    Boolean(sourceSubtitleTextForAi) &&
+    sourceSubtitleTextForAi !== normalizeLiveSubtitleText(aiTranslatedText);
 
   const stopAiAudioTranslation = useCallback(() => {
     if (aiSegmentTimerRef.current) {
@@ -567,10 +585,88 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         return;
       }
 
-      setShowAiPanel((open) => !open);
+      setShowAiPanel((open) => {
+        const nextOpen = !open;
+        if (nextOpen && !sourceSubtitleTextForAi && subtitles.length > 0) {
+          const sourceIdx = getTranslationSourceSubtitleIndex(subtitles);
+          if (sourceIdx >= 0) {
+            setActiveSubtitleIdx(sourceIdx);
+            preferredSubLangRef.current = getPreferredSubtitleKey(sourceIdx, subtitles);
+          }
+        }
+        return nextOpen;
+      });
     },
-    [aiConfigured, navigate],
+    [aiConfigured, navigate, sourceSubtitleTextForAi, subtitles],
   );
+
+  useEffect(() => {
+    if (!shouldTranslateVisibleSubtitle) return;
+
+    const sourceText = sourceSubtitleTextForAi;
+    const requestId = aiTranslateRequestRef.current + 1;
+    aiTranslateRequestRef.current = requestId;
+    const translationKey = `${settings.ai_translation_target}:${sourceText.toLowerCase()}`;
+    const cachedTranslation = aiTranslationCacheRef.current.get(translationKey);
+    if (cachedTranslation) {
+      updateAiSubtitleText(cachedTranslation);
+      setAiError("");
+      setAiStatus("");
+      setIsAiTranslating(false);
+      return;
+    }
+
+    setAiError("");
+    updateAiSubtitleText("");
+    setAiStatus(t.aiUsingSubtitle);
+    setIsAiTranslating(true);
+
+    let cancelled = false;
+    translateLiveSubtitleText(sourceText, settings.ai_translation_target)
+      .then((translation) => {
+        if (cancelled || aiTranslateRequestRef.current !== requestId) return;
+        const normalizedTranslation = normalizeLiveSubtitleText(translation);
+        if (normalizedTranslation) {
+          setLimitedCacheValue(
+            aiTranslationCacheRef.current,
+            translationKey,
+            normalizedTranslation,
+          );
+          updateAiSubtitleText(normalizedTranslation);
+          setAiStatus("");
+        } else {
+          updateAiSubtitleText("");
+          setAiStatus(t.aiTranslationFailed);
+        }
+      })
+      .catch((err) => {
+        if (cancelled || aiTranslateRequestRef.current !== requestId) return;
+        const message =
+          err instanceof Error
+            ? err.message
+            : typeof err === "string" && err.trim()
+              ? err
+              : t.aiTranslationFailed;
+        setAiError("");
+        setAiStatus(message);
+      })
+      .finally(() => {
+        if (!cancelled && aiTranslateRequestRef.current === requestId) {
+          setIsAiTranslating(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    shouldTranslateVisibleSubtitle,
+    sourceSubtitleTextForAi,
+    settings.ai_translation_target,
+    t.aiTranslationFailed,
+    t.aiUsingSubtitle,
+    updateAiSubtitleText,
+  ]);
 
   useEffect(() => {
     if (aiConfigured || !showAiPanel) return;
@@ -595,7 +691,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   }, [lesson?.id, stopAiAudioTranslation, updateAiSubtitleText]);
 
   useEffect(() => {
-    if (!showAiPanel || !aiConfigured || !activeVideoPath) {
+    if (!showAiPanel || !aiConfigured || !activeVideoPath || hasSelectedSubtitleSource) {
       stopAiAudioTranslation();
       return;
     }
@@ -786,6 +882,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     showAiPanel,
     aiConfigured,
     activeVideoPath,
+    hasSelectedSubtitleSource,
     settings.ai_translation_target,
     stopAiAudioTranslation,
     updateAiSubtitleText,
@@ -1486,7 +1583,13 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
 
           <ControlButton
             onClick={handleAiTranslateClick}
-            tooltip={aiConfigured ? t.aiVoiceTranslate : t.aiTranslateUnavailable}
+            tooltip={
+              aiConfigured
+                ? sourceSubtitleTextForAi
+                  ? t.aiUsingSubtitle
+                  : t.aiVoiceTranslate
+                : t.aiTranslateUnavailable
+            }
             active={showAiPanel}
             muted={!aiConfigured}
           >
