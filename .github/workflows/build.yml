@@ -10,7 +10,22 @@ permissions:
   contents: write
 
 jobs:
+  prepare-release:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Remove previous release assets for this version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          gh release delete "v${VERSION}" --yes || true
+
   build:
+    needs: prepare-release
     strategy:
       fail-fast: false
       matrix:
