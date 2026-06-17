@@ -11,16 +11,18 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentProps,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
+  type ReactElement,
 } from "react";
+import { Button } from "@heroui/react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/hooks/useI18n";
 import { useSettings } from "@/hooks/useSettings";
 import {
   applyPetCareAction,
   getPetCareState,
-  getPetVitals,
   PET_CARE_ACTIONS,
   PET_CARE_UPDATED_EVENT,
   type PetCareActionId,
@@ -38,7 +40,10 @@ import {
 const PET_POSITION_KEY = "july-player:resident-pet-position";
 const PET_SIZE = { width: 82, height: 88 };
 const PET_MARGIN = 12;
-const WHEEL_SIZE = 188;
+const WHEEL_ARC_SIZE = { width: 154, height: 188 };
+const PetWheelButton = Button as (
+  props: ComponentProps<typeof Button> & { title?: string },
+) => ReactElement;
 
 type Point = { x: number; y: number };
 type SpeechState = Required<Pick<PetSpeechPayload, "message" | "tone">> &
@@ -160,8 +165,8 @@ const CARE_WHEEL_ACTIONS: {
   mood: PetState;
   labelKey: "feed" | "play" | "pet" | "nap";
   messageKey: "fedMessage" | "playMessage" | "petMessage" | "napMessage";
-  left: number;
-  top: number;
+  x: number;
+  y: number;
 }[] = [
   {
     id: "feed",
@@ -169,8 +174,8 @@ const CARE_WHEEL_ACTIONS: {
     mood: "hop",
     labelKey: "feed",
     messageKey: "fedMessage",
-    left: 66,
-    top: 4,
+    x: 26,
+    y: 4,
   },
   {
     id: "play",
@@ -178,8 +183,8 @@ const CARE_WHEEL_ACTIONS: {
     mood: "hop",
     labelKey: "play",
     messageKey: "playMessage",
-    left: 126,
-    top: 62,
+    x: 86,
+    y: 43,
   },
   {
     id: "pet",
@@ -187,8 +192,8 @@ const CARE_WHEEL_ACTIONS: {
     mood: "wave",
     labelKey: "pet",
     messageKey: "petMessage",
-    left: 66,
-    top: 120,
+    x: 86,
+    y: 99,
   },
   {
     id: "nap",
@@ -196,8 +201,8 @@ const CARE_WHEEL_ACTIONS: {
     mood: "thinking",
     labelKey: "nap",
     messageKey: "napMessage",
-    left: 8,
-    top: 62,
+    x: 26,
+    y: 137,
   },
 ];
 
@@ -241,6 +246,10 @@ function formatRemainingSeconds(ms = 0) {
   return String(Math.max(1, Math.ceil(ms / 1000)));
 }
 
+function formatPetTransform(point: Point) {
+  return `translate3d(${Math.round(point.x)}px, ${Math.round(point.y)}px, 0)`;
+}
+
 function formatActionMeta(
   copy: Pick<ResidentPetCopy, "careCost" | "careFree">,
   action: PetCareActionId,
@@ -275,7 +284,6 @@ export function ResidentPet() {
   const [speech, setSpeech] = useState<SpeechState | null>(null);
   const [wheelOpen, setWheelOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<PetCareActionId | null>(null);
-  const [vitals, setVitals] = useState<PetVitals | null>(null);
   const [petName, setPetName] = useState("");
   const positionRef = useRef(position);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -290,11 +298,22 @@ export function ResidentPet() {
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const speechTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wheelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dragFrameRef = useRef<number | null>(null);
+  const pendingPositionRef = useRef<Point | null>(null);
   const pendingActionRef = useRef<PetCareActionId | null>(null);
   const suppressClickRef = useRef(false);
   const bubbleOnRight = typeof window !== "undefined" && position.x < window.innerWidth / 2;
-  const wheelOnRight = typeof window !== "undefined" && position.x < window.innerWidth - WHEEL_SIZE - PET_SIZE.width;
-  const wheelAbove = typeof window !== "undefined" && position.y > WHEEL_SIZE + 16;
+  const wheelOnRight =
+    typeof window !== "undefined" &&
+    position.x < window.innerWidth - WHEEL_ARC_SIZE.width - PET_SIZE.width - PET_MARGIN;
+  const wheelTop = useMemo(() => {
+    const centeredTop = (PET_SIZE.height - WHEEL_ARC_SIZE.height) / 2;
+    if (typeof window === "undefined") return centeredTop;
+
+    const minTop = PET_MARGIN - position.y;
+    const maxTop = window.innerHeight - PET_MARGIN - position.y - WHEEL_ARC_SIZE.height;
+    return Math.min(Math.max(centeredTop, minTop), maxTop);
+  }, [position.y]);
 
   const spriteStyle = useMemo(
     () => createPetSpriteStyle(petState, settings.pet_variant, PET_SIZE.width),
@@ -312,6 +331,32 @@ export function ResidentPet() {
     } catch {
       // Ignore storage failures.
     }
+  }, []);
+
+  const schedulePositionCommit = useCallback((point: Point) => {
+    positionRef.current = point;
+    pendingPositionRef.current = point;
+
+    if (dragFrameRef.current !== null) return;
+    dragFrameRef.current = window.requestAnimationFrame(() => {
+      dragFrameRef.current = null;
+      const nextPosition = pendingPositionRef.current;
+      if (!nextPosition) return;
+      pendingPositionRef.current = null;
+      if (rootRef.current) {
+        rootRef.current.style.transform = formatPetTransform(nextPosition);
+      }
+    });
+  }, []);
+
+  const flushPositionCommit = useCallback((point: Point) => {
+    if (dragFrameRef.current !== null) {
+      window.cancelAnimationFrame(dragFrameRef.current);
+      dragFrameRef.current = null;
+    }
+    pendingPositionRef.current = null;
+    positionRef.current = point;
+    setPosition(point);
   }, []);
 
   const showSpeech = useCallback((payload: PetSpeechPayload) => {
@@ -356,10 +401,8 @@ export function ResidentPet() {
   const refreshVitals = useCallback(async () => {
     try {
       const state = await getPetCareState(settings.pet_variant);
-      setVitals(getPetVitals(state, settings.pet_variant));
       setPetName(state.petName);
     } catch {
-      setVitals(null);
       setPetName("");
     }
   }, [settings.pet_variant]);
@@ -371,7 +414,12 @@ export function ResidentPet() {
     setPendingAction(action.id);
     setPetState(action.mood);
     setAnimationNonce((current) => current + 1);
-    closeWheel();
+    showSpeech({
+      title: copy[action.labelKey],
+      message: formatActionMeta(copy, action.id),
+      tone: "info",
+      durationMs: 1600,
+    });
 
     try {
       const result = await applyPetCareAction({
@@ -379,7 +427,6 @@ export function ResidentPet() {
         petId: settings.pet_variant,
         label: copy[action.labelKey],
       });
-      setVitals(result.vitals);
       if (result.skipped) {
         showSpeech({
           title: copy.careBlocked,
@@ -412,6 +459,7 @@ export function ResidentPet() {
     } finally {
       pendingActionRef.current = null;
       setPendingAction(null);
+      closeWheel();
     }
   };
 
@@ -427,7 +475,7 @@ export function ResidentPet() {
       moved: false,
     };
     closeWheel();
-    setPosition(nextPosition);
+    flushPositionCommit(nextPosition);
     setIsDragging(true);
     setPetState("walk");
   };
@@ -443,8 +491,7 @@ export function ResidentPet() {
       x: event.clientX - drag.offsetX,
       y: event.clientY - drag.offsetY,
     });
-    positionRef.current = nextPosition;
-    setPosition(nextPosition);
+    schedulePositionCommit(nextPosition);
   };
 
   const finishDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -459,7 +506,7 @@ export function ResidentPet() {
     const moved = drag.moved;
     suppressClickRef.current = moved;
     const finalPosition = clampPosition(positionRef.current);
-    setPosition(finalPosition);
+    flushPositionCommit(finalPosition);
     persistPosition(finalPosition);
     setIsDragging(false);
     setPetState(moved ? "hop" : "wave");
@@ -468,6 +515,7 @@ export function ResidentPet() {
   };
 
   useEffect(() => {
+    if (dragRef.current) return;
     positionRef.current = position;
   }, [position]);
 
@@ -543,6 +591,9 @@ export function ResidentPet() {
       if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
       if (speechTimerRef.current) clearTimeout(speechTimerRef.current);
       if (wheelTimerRef.current) clearTimeout(wheelTimerRef.current);
+      if (dragFrameRef.current !== null) {
+        window.cancelAnimationFrame(dragFrameRef.current);
+      }
     },
     [],
   );
@@ -554,8 +605,9 @@ export function ResidentPet() {
       ref={rootRef}
       className="resident-pet fixed z-[80] border-0 bg-transparent p-0"
       style={{
-        left: position.x,
-        top: position.y,
+        left: 0,
+        top: 0,
+        transform: formatPetTransform(position),
         width: PET_SIZE.width,
         height: PET_SIZE.height,
       }}
@@ -564,31 +616,29 @@ export function ResidentPet() {
         <div
           className={cn(
             "resident-pet-wheel absolute z-20",
-            wheelOnRight ? "left-[78px]" : "right-[78px]",
-            wheelAbove ? "bottom-[-18px]" : "top-[-18px]",
+            wheelOnRight ? "resident-pet-wheel-right left-[68px]" : "resident-pet-wheel-left right-[68px]",
           )}
+          style={{ top: wheelTop }}
           role="menu"
           aria-label={copy.wheelTitle}
         >
-          <div className="resident-pet-wheel-center">
-            <span>{copy.wheelTitle}</span>
-            {vitals && (
-              <small>
-                {copy.food} {vitals.food}%
-              </small>
-            )}
-          </div>
           {CARE_WHEEL_ACTIONS.map((action, index) => {
             const IconComponent = action.icon;
             const running = pendingAction === action.id;
             return (
-              <button
+              <PetWheelButton
                 key={action.id}
                 type="button"
-                role="menuitem"
-                disabled={Boolean(pendingAction)}
+                variant="ghost"
+                isDisabled={Boolean(pendingAction)}
                 className={cn("resident-pet-wheel-item", running && "is-running")}
-                style={{ left: action.left, top: action.top, "--pet-wheel-index": index } as CSSProperties}
+                style={
+                  {
+                    "--pet-wheel-x": `${action.x}px`,
+                    "--pet-wheel-y": `${action.y}px`,
+                    "--pet-wheel-index": index,
+                  } as CSSProperties
+                }
                 onClick={(event) => {
                   event.stopPropagation();
                   void runCareAction(action);
@@ -597,7 +647,7 @@ export function ResidentPet() {
               >
                 <IconComponent className="size-4.5" weight={running ? "fill" : "regular"} />
                 <span>{copy[action.labelKey]}</span>
-              </button>
+              </PetWheelButton>
             );
           })}
         </div>

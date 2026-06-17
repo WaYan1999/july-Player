@@ -1,15 +1,9 @@
 import { PlusIcon as Plus } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { SquircleButton } from "@/components/ui/SquircleButton";
-import emptyAnimation from "@/assets/lotties/empty.json";
+import { LoadingOrbit } from "@/components/ui/LoadingOrbit";
 import { EASE_OUT } from "@/lib/constants";
-import LottieLib from "lottie-react";
 import { useI18n } from "@/hooks/useI18n";
-
-// Handle CJS/ESM default export interop: in some Vite/Rollup build modes
-// lottie-react resolves to the module namespace object rather than the component
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const Lottie: React.ComponentType<{ animationData: unknown; loop?: boolean }> = (LottieLib as any).default ?? LottieLib;
 
 interface EmptyLibraryProps {
   onImport: () => void;
@@ -28,14 +22,14 @@ export function EmptyLibrary({ onImport, className }: EmptyLibraryProps) {
         animation: `card-in 500ms ${EASE_OUT} both`,
       }}
     >
-      <div className="-mb-32 size-90">
-        <Lottie animationData={emptyAnimation} loop />
+      <div className="mb-7 flex size-32 items-center justify-center rounded-xl border border-border/70 bg-card/60 shadow-[0_8px_14px_rgb(0_0_0/0.12)]">
+        <LoadingOrbit size="md" />
       </div>
 
       <h3 className="font-heading text-xl font-bold text-foreground">
         {t.dashboard.noCoursesYet}
       </h3>
-      <p className="mt-2 max-w-xs font-sans text-sm text-muted-foreground">
+      <p className="mt-2 max-w-sm font-sans text-sm leading-6 text-muted-foreground">
         {t.dashboard.emptyDescription}
       </p>
 

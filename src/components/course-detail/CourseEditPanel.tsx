@@ -8,6 +8,7 @@ import {
   WarningIcon as Warning,
   FolderOpenIcon as FolderOpen,
 } from "@phosphor-icons/react";
+import { Button, Input } from "@heroui/react";
 import { cn } from "@/lib/utils";
 import { SquircleButton } from "@/components/ui/SquircleButton";
 import { EASE_OUT, SNAPPY } from "@/lib/constants";
@@ -103,22 +104,24 @@ export function CourseEditPanel({
   };
 
   return (
-    <div className={cn("mx-auto max-w-3xl", className)}>
+    <div className={cn("july-page-narrow", className)}>
       <div
         className="mb-4"
         style={{
           opacity: mounted ? 1 : 0,
           transform: mounted ? "translateY(0)" : "translateY(8px)",
-          transition: `opacity 500ms ${EASE_OUT}, transform 500ms ${EASE_OUT}`,
+          transition: `opacity 220ms ${EASE_OUT}, transform 220ms ${EASE_OUT}`,
         }}
       >
-        <button
+        <Button
+          type="button"
+          variant="ghost"
           onClick={onBack}
-          className="inline-flex items-center gap-1.5 font-sans text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          className="july-heroui-button min-h-8 gap-1.5 border-0 bg-transparent px-0 text-xs text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-3.5" />
           {t.courseEdit.backToCourse}
-        </button>
+        </Button>
       </div>
 
       <div
@@ -126,7 +129,7 @@ export function CourseEditPanel({
         style={{
           opacity: mounted ? 1 : 0,
           transform: mounted ? "translateY(0)" : "translateY(12px)",
-          transition: `opacity 600ms ${EASE_OUT} 40ms, transform 600ms ${EASE_OUT} 40ms`,
+          transition: `opacity 240ms ${EASE_OUT} 30ms, transform 240ms ${EASE_OUT} 30ms`,
         }}
       >
         <h2 className="font-heading text-2xl font-bold text-foreground">
@@ -142,7 +145,7 @@ export function CourseEditPanel({
         style={{
           opacity: mounted ? 1 : 0,
           transform: mounted ? "translateY(0)" : "translateY(12px)",
-          transition: `opacity 600ms ${EASE_OUT} 80ms, transform 600ms ${EASE_OUT} 80ms`,
+          transition: `opacity 240ms ${EASE_OUT} 50ms, transform 240ms ${EASE_OUT} 50ms`,
         }}
       >
         <div className="group relative">
@@ -163,7 +166,7 @@ export function CourseEditPanel({
           style={{
             opacity: mounted ? 1 : 0,
             transform: mounted ? "translateY(0)" : "translateY(12px)",
-            transition: `opacity 600ms ${EASE_OUT} 120ms, transform 600ms ${EASE_OUT} 120ms`,
+            transition: `opacity 240ms ${EASE_OUT} 70ms, transform 240ms ${EASE_OUT} 70ms`,
           }}
         >
           <h3 className="font-heading text-base font-bold text-foreground">
@@ -171,22 +174,22 @@ export function CourseEditPanel({
           </h3>
 
           <FieldGroup label={t.courseEdit.title}>
-            <input
+            <Input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder={t.courseEdit.titlePlaceholder}
-              className="w-full bg-transparent font-sans text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none"
+              className="min-h-0 w-full border-0 bg-transparent px-0 py-0 font-sans text-sm text-foreground placeholder:text-muted-foreground/40 shadow-none focus:outline-none"
             />
           </FieldGroup>
 
           <FieldGroup label={t.courseEdit.author}>
-            <input
+            <Input
               type="text"
               value={author}
               onChange={(e) => setAuthor(e.target.value)}
               placeholder={t.courseEdit.authorPlaceholder}
-              className="w-full bg-transparent font-sans text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none"
+              className="min-h-0 w-full border-0 bg-transparent px-0 py-0 font-sans text-sm text-foreground placeholder:text-muted-foreground/40 shadow-none focus:outline-none"
             />
           </FieldGroup>
 
@@ -204,16 +207,20 @@ export function CourseEditPanel({
             </label>
             <div className="flex flex-wrap gap-2">
               {accentColors.map((color) => (
-                <button
+                <Button
+                  type="button"
+                  variant="ghost"
+                  isIconOnly
                   key={color}
                   onClick={() => setAccentColor(color)}
                   className={cn(
-                    "size-7 rounded-full border-2 transition-transform duration-150",
+                    "july-heroui-button size-7 min-h-7 min-w-7 rounded-full border-2 p-0 transition-transform duration-150",
                     accentColor === color
                       ? "scale-110 border-foreground"
                       : "border-transparent hover:scale-105",
                   )}
                   style={{ backgroundColor: color }}
+                  aria-label={color}
                 />
               ))}
             </div>
@@ -241,7 +248,7 @@ export function CourseEditPanel({
           style={{
             opacity: mounted ? 1 : 0,
             transform: mounted ? "translateY(0)" : "translateY(12px)",
-            transition: `opacity 600ms ${EASE_OUT} 160ms, transform 600ms ${EASE_OUT} 160ms`,
+            transition: `opacity 240ms ${EASE_OUT} 90ms, transform 240ms ${EASE_OUT} 90ms`,
           }}
         >
           <h3 className="font-heading text-base font-bold text-foreground">
@@ -261,28 +268,34 @@ export function CourseEditPanel({
                   {t.courseEdit.resetDescription}
                 </p>
                 {!confirmReset ? (
-                  <button
+                  <Button
+                    type="button"
+                    variant="secondary"
                     onClick={() => setConfirmReset(true)}
-                    className="mt-3 rounded-md border border-border px-3 py-1.5 font-sans text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                    className="july-heroui-button mt-3 min-h-8 px-3 py-1.5 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
                     style={{ transitionTimingFunction: SNAPPY }}
                   >
                     {t.courseEdit.resetProgress}
-                  </button>
+                  </Button>
                 ) : (
                   <div className="mt-3 flex items-center gap-2">
-                    <button
+                    <Button
+                      type="button"
+                      variant="secondary"
                       onClick={handleResetProgress}
-                      className="rounded-md bg-info/15 px-3 py-1.5 font-sans text-xs font-medium text-info transition-colors hover:bg-info/25"
+                      className="july-heroui-button min-h-8 rounded-md bg-info/15 px-3 py-1.5 text-xs text-info hover:bg-info/25"
                       style={{ transitionTimingFunction: SNAPPY }}
                     >
                       {t.courseEdit.confirmReset}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
                       onClick={() => setConfirmReset(false)}
-                      className="rounded-md px-3 py-1.5 font-sans text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                      className="july-heroui-button min-h-8 rounded-md border-0 bg-transparent px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
                     >
                       {t.common.cancel}
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
@@ -302,13 +315,15 @@ export function CourseEditPanel({
                   {t.courseEdit.deleteDescription}
                 </p>
                 {!confirmDelete ? (
-                  <button
+                  <Button
+                    type="button"
+                    variant="danger"
                     onClick={() => setConfirmDelete(true)}
-                    className="mt-3 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-1.5 font-sans text-xs font-medium text-destructive transition-colors hover:bg-destructive/20"
+                    className="july-heroui-button july-heroui-button-danger mt-3 min-h-8 rounded-md px-3 py-1.5 text-xs"
                     style={{ transitionTimingFunction: SNAPPY }}
                   >
-                    Delete Course
-                  </button>
+                    {t.courseEdit.deleteCourse}
+                  </Button>
                 ) : (
                   <div className="mt-3">
                     <div className="mb-3 flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2">
@@ -321,19 +336,23 @@ export function CourseEditPanel({
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button
+                      <Button
+                        type="button"
+                        variant="danger"
                         onClick={handleDelete}
-                        className="rounded-md bg-destructive px-3 py-1.5 font-sans text-xs font-medium text-white transition-colors hover:bg-destructive/90"
+                        className="july-heroui-button july-heroui-button-danger min-h-8 rounded-md px-3 py-1.5 text-xs"
                         style={{ transitionTimingFunction: SNAPPY }}
                       >
                         {t.courseEdit.yesDelete}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
                         onClick={() => setConfirmDelete(false)}
-                        className="rounded-md px-3 py-1.5 font-sans text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                        className="july-heroui-button min-h-8 rounded-md border-0 bg-transparent px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
                       >
                         {t.common.cancel}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -396,11 +415,13 @@ function CategoryPicker({
       </label>
       <div className="flex flex-wrap gap-1.5">
         {builtinCategories.map((cat) => (
-          <button
+          <Button
+            type="button"
+            variant="ghost"
             key={cat.value}
             onClick={() => onCategoryChange(cat.value)}
             className={cn(
-              "rounded-full border px-3 py-1.5 font-sans text-xs font-medium transition-colors duration-150",
+              "july-heroui-button min-h-8 rounded-full px-3 py-1.5 text-xs duration-150",
               category === cat.value
                 ? "border-primary/25 bg-primary/15 text-primary"
                 : "border-border/50 bg-secondary text-muted-foreground hover:text-foreground",
@@ -408,7 +429,7 @@ function CategoryPicker({
             style={{ transitionTimingFunction: SNAPPY }}
           >
             {cat.label}
-          </button>
+          </Button>
         ))}
         {customCategories.map((name) => (
           <div
@@ -421,20 +442,31 @@ function CategoryPicker({
             )}
             style={{ transitionTimingFunction: SNAPPY }}
           >
-            <button onClick={() => onCategoryChange(name)}>{name}</button>
-            <button
+            <Button
+              type="button"
+              variant="ghost"
+              className="min-h-0 border-0 bg-transparent px-0 py-0 text-xs shadow-none"
+              onClick={() => onCategoryChange(name)}
+            >
+              {name}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              isIconOnly
               onClick={() => handleDelete(name)}
-              className="flex items-center justify-center rounded-full p-0.5 opacity-0 transition-opacity hover:bg-black/10 group-hover:opacity-100"
+              className="flex size-5 min-h-5 min-w-5 items-center justify-center rounded-full border-0 bg-transparent p-0.5 opacity-0 shadow-none transition-opacity hover:bg-black/10 group-hover:opacity-100"
+              aria-label={t.common.delete}
             >
               <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
                 <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
-            </button>
+            </Button>
           </div>
         ))}
         {adding ? (
           <div className="flex items-center gap-1 rounded-full border border-primary/25 bg-primary/10 pl-3 pr-1.5 py-1.5">
-            <input
+            <Input
               ref={inputRef}
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
@@ -443,35 +475,45 @@ function CategoryPicker({
                 if (e.key === "Escape") { setAdding(false); setNewName(""); }
               }}
               placeholder={t.categories.categoryName}
-              className="w-24 bg-transparent font-sans text-xs text-primary placeholder:text-primary/50 focus:outline-none"
+              className="min-h-0 w-24 border-0 bg-transparent px-0 py-0 font-sans text-xs text-primary placeholder:text-primary/50 shadow-none focus:outline-none"
             />
-            <button
+            <Button
+              type="button"
+              variant="ghost"
+              isIconOnly
               onMouseDown={(e) => e.preventDefault()}
               onClick={handleAdd}
-              className="flex items-center justify-center rounded-full p-1 text-primary transition-colors hover:bg-primary/20"
+              className="flex size-6 min-h-6 min-w-6 items-center justify-center rounded-full border-0 bg-transparent p-1 text-primary shadow-none transition-colors hover:bg-primary/20"
+              aria-label={t.common.save}
             >
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                 <path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-            </button>
-            <button
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              isIconOnly
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => { setAdding(false); setNewName(""); }}
-              className="flex items-center justify-center rounded-full p-1 text-muted-foreground transition-colors hover:bg-black/10"
+              className="flex size-6 min-h-6 min-w-6 items-center justify-center rounded-full border-0 bg-transparent p-1 text-muted-foreground shadow-none transition-colors hover:bg-black/10"
+              aria-label={t.common.cancel}
             >
               <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
                 <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
-            </button>
+            </Button>
           </div>
         ) : (
-          <button
+          <Button
+            type="button"
+            variant="ghost"
             onClick={() => setAdding(true)}
-            className="rounded-full border border-dashed border-border/50 px-3 py-1.5 font-sans text-xs font-medium text-muted-foreground transition-colors duration-150 hover:border-primary/25 hover:text-primary"
+            className="july-heroui-button min-h-8 rounded-full border-dashed border-border/50 px-3 py-1.5 text-xs text-muted-foreground duration-150 hover:border-primary/25 hover:text-primary"
             style={{ transitionTimingFunction: SNAPPY }}
           >
             {t.categories.custom}
-          </button>
+          </Button>
         )}
       </div>
     </div>

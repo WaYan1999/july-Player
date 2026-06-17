@@ -334,7 +334,7 @@ export function Progress({ className }: ProgressProps) {
   if (!data) return null;
 
   return (
-    <div className={cn("mx-auto max-w-6xl", className)}>
+    <div className={cn("july-page", className)}>
       <div
         className="mb-8"
         style={{ animation: `card-in 350ms ${EASE_OUT} both` }}
@@ -354,14 +354,14 @@ export function Progress({ className }: ProgressProps) {
         <div className="squircle-subtle absolute inset-0 bg-card" />
         <div className="relative p-5">
           {/* Current level header */}
-          <div className="mb-5 flex items-center gap-4">
+          <div className="mb-5 flex min-w-0 items-center gap-4">
             <img
               src={LEVEL_ICONS[data.stats.userLevel] ?? LEVEL_ICONS[1]}
               alt={`Level ${data.stats.userLevel}`}
               className="size-14 object-contain drop-shadow-[0_0_8px_rgba(200,241,53,0.3)]"
             />
-            <div>
-              <div className="flex items-baseline gap-2">
+            <div className="min-w-0">
+              <div className="flex min-w-0 flex-wrap items-baseline gap-2">
                 <span className="font-mono text-2xl font-bold text-foreground">
                   {t.levels.level} {data.stats.userLevel}
                 </span>
@@ -466,7 +466,7 @@ export function Progress({ className }: ProgressProps) {
         style={{ animation: `card-in 350ms ${EASE_OUT} 80ms both` }}
       >
         <div className="squircle-subtle absolute inset-0 bg-card" />
-        <div className="relative grid grid-cols-2 gap-6 p-5 lg:grid-cols-4">
+        <div className="relative grid min-w-0 grid-cols-1 gap-5 p-5 sm:grid-cols-2 lg:grid-cols-4">
           <StatPill
             icon={<Fire className="size-5 text-orange-400" weight="fill" />}
             label={t.progressPage.currentStreak}
@@ -492,7 +492,7 @@ export function Progress({ className }: ProgressProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-4">
         <Section
           title={t.progressPage.activity}
           icon={<CalendarBlank className="size-4 text-muted-foreground" />}

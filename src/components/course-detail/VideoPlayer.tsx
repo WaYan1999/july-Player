@@ -197,7 +197,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const lastControlsWakeRef = useRef(0);
   const seekBarRef = useRef<HTMLDivElement>(null);
+  const seekPreviewFrameRef = useRef<number | null>(null);
+  const pendingSeekPreviewRef = useRef<{ time: number; x: number } | null>(null);
   const pendingQualityRestoreRef = useRef<{ time: number; shouldPlay: boolean } | null>(null);
   const activeVideoPathRef = useRef<string | undefined>(undefined);
   const aiTranslateRequestRef = useRef(0);
@@ -209,6 +212,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const aiPendingTranscriptRef = useRef("");
   const aiVisibleSubtitleRef = useRef("");
   const aiEmptySegmentCountRef = useRef(0);
+  const isSeekingRef = useRef(false);
   const aiSegmentCacheRef = useRef(new Map<string, string>());
   const aiTranslationCacheRef = useRef(new Map<string, string>());
   const aiTranslationPromiseRef = useRef(new Map<string, Promise<string>>());
@@ -272,6 +276,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     settings.ai_deepseek_proxy_url.trim().length > 0 &&
     (settings.ai_deepseek_proxy_token.trim().length > 0 ||
       settings.ai_deepseek_api_key.trim().length > 0);
+
+  useEffect(() => {
+    isSeekingRef.current = isSeeking;
+  }, [isSeeking]);
 
   // Auto-skip countdown when video ends
   const autoSkipFiredRef = useRef(false);
@@ -508,7 +516,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         ? getAiSourceSubtitleCueText(subtitles[activeSubtitleIdx], activeCueText)
         : "";
   const isAiSubtitleMode =
-    showAiPanel && aiConfigured && Boolean(sourceSubtitleTextForAi);
+    !isSeeking && showAiPanel && aiConfigured && Boolean(sourceSubtitleTextForAi);
   const currentAiTranslationKey = isAiSubtitleMode
     ? getAiTranslationCacheKey(sourceSubtitleTextForAi, settings.ai_translation_target)
     : "";
@@ -681,7 +689,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   ]);
 
   useEffect(() => {
-    if (!showAiPanel || !aiConfigured || activeSubtitleIdx < 0) return;
+    if (isSeeking || !showAiPanel || !aiConfigured || activeSubtitleIdx < 0) return;
 
     const sourceIdx =
       activeSubtitleIdx === BILINGUAL_SUBTITLE_IDX
@@ -733,6 +741,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     aiConfigured,
     activeSubtitleIdx,
     bilingualSubtitleIndexes,
+    isSeeking,
     parsedTracks,
     subtitles,
     videoTime,
@@ -854,6 +863,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       if (video.paused || video.ended || !Number.isFinite(video.currentTime)) {
         setIsAiTranslating(false);
         setAiStatus(t.aiListening);
+        scheduleNextSegment(LIVE_AI_PAUSED_POLL_MS);
+        return;
+      }
+
+      if (isSeekingRef.current) {
+        setIsAiTranslating(false);
         scheduleNextSegment(LIVE_AI_PAUSED_POLL_MS);
         return;
       }
@@ -991,6 +1006,9 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   }, []);
 
   const handleMouseMove = useCallback(() => {
+    const now = performance.now();
+    if (now - lastControlsWakeRef.current < 250) return;
+    lastControlsWakeRef.current = now;
     resetHideTimer();
   }, [resetHideTimer]);
 
@@ -1006,6 +1024,23 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       }, 800);
     }
   }, []);
+
+  const seekToTime = useCallback(
+    (time: number) => {
+      const video = videoRef.current;
+      if (!video || !Number.isFinite(time)) return;
+      const duration =
+        Number.isFinite(video.duration) && video.duration > 0
+          ? video.duration
+          : videoDuration;
+      const clampedTime =
+        duration > 0 ? Math.max(0, Math.min(time, duration)) : Math.max(0, time);
+      video.currentTime = clampedTime;
+      setVideoTime(clampedTime);
+      onTimeUpdate?.(clampedTime);
+    },
+    [onTimeUpdate, videoDuration],
+  );
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -1035,12 +1070,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
           break;
         case "ArrowLeft":
           e.preventDefault();
-          v.currentTime = Math.max(0, v.currentTime - skipSeconds);
+          seekToTime(v.currentTime - skipSeconds);
           resetHideTimer();
           break;
         case "ArrowRight":
           e.preventDefault();
-          v.currentTime = Math.min(v.duration, v.currentTime + skipSeconds);
+          seekToTime(v.currentTime + skipSeconds);
           resetHideTimer();
           break;
         case "ArrowUp":
@@ -1070,12 +1105,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
           break;
         case "j":
           e.preventDefault();
-          v.currentTime = Math.max(0, v.currentTime - skipSeconds);
+          seekToTime(v.currentTime - skipSeconds);
           resetHideTimer();
           break;
         case "l":
           e.preventDefault();
-          v.currentTime = Math.min(v.duration, v.currentTime + skipSeconds);
+          seekToTime(v.currentTime + skipSeconds);
           resetHideTimer();
           break;
         case "c":
@@ -1107,7 +1142,13 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [playbackSpeed, hasEnded, skipSeconds, resetHideTimer]);
+  }, [
+    hasEnded,
+    playbackSpeed,
+    resetHideTimer,
+    seekToTime,
+    skipSeconds,
+  ]);
 
   const togglePlay = useCallback(() => {
     if (!videoRef.current) return;
@@ -1209,35 +1250,32 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   }, []);
 
   const skipForward = useCallback(() => {
-    if (!videoRef.current) return;
-    videoRef.current.currentTime = Math.min(
-      videoRef.current.duration,
-      videoRef.current.currentTime + skipSeconds,
-    );
+    const video = videoRef.current;
+    if (!video) return;
+    seekToTime(video.currentTime + skipSeconds);
     resetHideTimer();
-  }, [resetHideTimer]);
+  }, [resetHideTimer, seekToTime, skipSeconds]);
 
   const skipBackward = useCallback(() => {
-    if (!videoRef.current) return;
-    videoRef.current.currentTime = Math.max(
-      0,
-      videoRef.current.currentTime - skipSeconds,
-    );
+    const video = videoRef.current;
+    if (!video) return;
+    seekToTime(video.currentTime - skipSeconds);
     resetHideTimer();
-  }, [resetHideTimer]);
+  }, [resetHideTimer, seekToTime, skipSeconds]);
 
   const handleReplay = useCallback(() => {
     if (!videoRef.current) return;
-    videoRef.current.currentTime = 0;
+    seekToTime(0);
     videoRef.current.play();
     setHasEnded(false);
-  }, []);
+  }, [seekToTime]);
 
   const handleDoubleClick = useCallback(() => {
     toggleFullscreen();
   }, [toggleFullscreen]);
 
   const handleTimeUpdate = useCallback(() => {
+    if (isSeekingRef.current) return;
     if (videoRef.current) {
       const t = videoRef.current.currentTime;
       setVideoTime(t);
@@ -1283,39 +1321,51 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     }
   }, []);
 
-  const { scheduleSeekTime, flushSeekTime } = useRafSeek({
+  const { startSeekTime, scheduleSeekTime, flushSeekTime } = useRafSeek({
     videoRef,
     duration: videoDuration,
-    onTimeChange: useCallback(
+    onPreviewTimeChange: useCallback(
       (time: number) => {
         setVideoTime(time);
+      },
+      [],
+    ),
+    onCommitTimeChange: useCallback(
+      (time: number) => {
         onTimeUpdate?.(time);
       },
       [onTimeUpdate],
     ),
+    liveSeekIntervalMs: 110,
   });
 
-  const getSeekRatio = (e: ReactMouseEvent | MouseEvent) => {
-    if (!seekBarRef.current) return 0;
-    const rect = seekBarRef.current.getBoundingClientRect();
+  const getSeekRatioFromClientX = (
+    clientX: number,
+    rect: Pick<DOMRect, "left" | "width">,
+  ) => {
     if (rect.width <= 0) return 0;
-    return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
   };
 
   const handleSeekMouseDown = useCallback(
     (e: ReactMouseEvent<HTMLDivElement>) => {
-      if (!videoRef.current || videoDuration <= 0) return;
+      if (!videoRef.current || !seekBarRef.current || videoDuration <= 0) return;
       e.preventDefault();
+      const seekRect = seekBarRef.current.getBoundingClientRect();
       setIsSeeking(true);
-      scheduleSeekTime(getSeekRatio(e) * videoDuration);
+      isSeekingRef.current = true;
+      startSeekTime(getSeekRatioFromClientX(e.clientX, seekRect) * videoDuration);
 
       const handleMouseMove = (ev: MouseEvent) => {
         ev.preventDefault();
-        scheduleSeekTime(getSeekRatio(ev) * videoDuration);
+        scheduleSeekTime(
+          getSeekRatioFromClientX(ev.clientX, seekRect) * videoDuration,
+        );
       };
 
       const handleMouseUp = () => {
         flushSeekTime();
+        isSeekingRef.current = false;
         setIsSeeking(false);
         window.removeEventListener("mousemove", handleMouseMove);
         window.removeEventListener("mouseup", handleMouseUp);
@@ -1326,7 +1376,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       window.addEventListener("mouseup", handleMouseUp);
       window.addEventListener("blur", handleMouseUp);
     },
-    [flushSeekTime, scheduleSeekTime, videoDuration],
+    [flushSeekTime, scheduleSeekTime, startSeekTime, videoDuration],
   );
 
   const handleSeekHover = useCallback(
@@ -1337,14 +1387,37 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         0,
         Math.min(1, (e.clientX - rect.left) / rect.width),
       );
-      setSeekPreviewTime(ratio * videoDuration);
-      setSeekPreviewX(e.clientX - rect.left);
+      pendingSeekPreviewRef.current = {
+        time: ratio * videoDuration,
+        x: e.clientX - rect.left,
+      };
+      if (seekPreviewFrameRef.current !== null) return;
+      seekPreviewFrameRef.current = window.requestAnimationFrame(() => {
+        seekPreviewFrameRef.current = null;
+        const preview = pendingSeekPreviewRef.current;
+        if (!preview) return;
+        setSeekPreviewTime(preview.time);
+        setSeekPreviewX(preview.x);
+      });
     },
     [videoDuration],
   );
 
   const handleSeekLeave = useCallback(() => {
+    if (seekPreviewFrameRef.current !== null) {
+      window.cancelAnimationFrame(seekPreviewFrameRef.current);
+      seekPreviewFrameRef.current = null;
+    }
+    pendingSeekPreviewRef.current = null;
     setSeekPreviewTime(null);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (seekPreviewFrameRef.current !== null) {
+        window.cancelAnimationFrame(seekPreviewFrameRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -1588,12 +1661,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
           onMouseLeave={handleSeekLeave}
         >
           <div
-            className="absolute inset-y-0 left-0 rounded-full bg-white/15"
-            style={{ width: `${buffered * 100}%` }}
+            className="absolute inset-y-0 left-0 w-full origin-left rounded-full bg-white/15"
+            style={{ transform: `scaleX(${buffered})` }}
           />
           <div
-            className="absolute inset-y-0 left-0 rounded-full bg-primary transition-[width] duration-75"
-            style={{ width: `${progress}%` }}
+            className="absolute inset-y-0 left-0 w-full origin-left rounded-full bg-primary transition-transform duration-75"
+            style={{ transform: `scaleX(${progress / 100})` }}
           />
           <div
             className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary opacity-0 shadow-md transition-opacity group-hover/seek:opacity-100"

@@ -22,6 +22,7 @@ import {
   WarningCircleIcon as WarningCircle,
   XIcon as X,
 } from "@phosphor-icons/react";
+import { Button, Input, ListBox, ListBoxItem, Select as HeroSelect, Slider, Switch } from "@heroui/react";
 import { cn } from "@/lib/utils";
 import type { LibraryStats } from "@/types";
 import { getLibraryStats, deleteAllData } from "@/lib/store";
@@ -38,23 +39,29 @@ interface ToggleProps {
 
 function Toggle({ checked, onChange }: ToggleProps) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={cn(
-        "relative flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200",
-        checked ? "bg-primary" : "bg-border",
-      )}
+    <Switch
+      isSelected={checked}
+      onChange={onChange}
+      className="group"
+      aria-label="toggle"
     >
-      <span
-        className={cn(
-          "block size-4.5 rounded-full bg-background shadow-sm transition-transform duration-200",
-          checked ? "translate-x-[22px]" : "translate-x-[2px]",
-        )}
-      />
-    </button>
+      <Switch.Content className="inline-flex items-center">
+        <Switch.Control
+          className={cn(
+            "relative flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors duration-200",
+            checked ? "border-primary/70 bg-primary" : "border-border bg-secondary",
+            "group-data-[focus-visible=true]:ring-2 group-data-[focus-visible=true]:ring-primary/20",
+          )}
+        >
+          <Switch.Thumb
+            className={cn(
+              "block size-4.5 rounded-full bg-background shadow-sm transition-transform duration-200",
+              checked ? "translate-x-[22px]" : "translate-x-[2px]",
+            )}
+          />
+        </Switch.Control>
+      </Switch.Content>
+    </Switch>
   );
 }
 
@@ -70,30 +77,41 @@ interface SelectProps {
 }
 
 function Select({ value, onChange, options }: SelectProps) {
+  const selectedOption = options.find((option) => option.value === value);
+
   return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+    <HeroSelect
+      selectedKey={value}
+      onSelectionChange={(key) => {
+        if (key) onChange(String(key));
+      }}
+      aria-label={selectedOption?.label ?? "select"}
+      className="min-w-28"
+    >
+      <HeroSelect.Trigger
         className={cn(
-          "appearance-none rounded-lg border border-border bg-secondary px-3 py-1.5",
+          "july-select flex min-h-9 min-w-28 items-center justify-between gap-2 px-3 py-1.5",
           "font-sans text-sm text-foreground outline-none",
-          "cursor-pointer transition-colors hover:border-muted-foreground/30",
-          "pr-8",
         )}
       >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-      <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground">
-        <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
-          <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
-    </div>
+        <HeroSelect.Value>{selectedOption?.label}</HeroSelect.Value>
+        <HeroSelect.Indicator className="size-4 text-muted-foreground transition-transform data-[open=true]:rotate-180" />
+      </HeroSelect.Trigger>
+      <HeroSelect.Popover className="july-popover z-50 max-h-72 min-w-32 overflow-y-auto p-1.5">
+        <ListBox className="outline-none">
+          {options.map((opt) => (
+            <ListBoxItem
+              key={opt.value}
+              id={opt.value}
+              textValue={opt.label}
+              className="flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 font-sans text-sm text-foreground outline-none transition-colors hover:bg-secondary data-[selected=true]:bg-primary/12 data-[selected=true]:text-primary"
+            >
+              {opt.label}
+            </ListBoxItem>
+          ))}
+        </ListBox>
+      </HeroSelect.Popover>
+    </HeroSelect>
   );
 }
 
@@ -107,13 +125,11 @@ interface SectionCardProps {
 function SectionCard({ title, icon, children, index }: SectionCardProps) {
   return (
     <div
-      className="relative"
+      className="july-section-card relative overflow-hidden"
       style={{
         animation: `card-in 350ms ${EASE_OUT} ${index * 60}ms both`,
       }}
     >
-      <div className="squircle-subtle absolute inset-0 bg-border/50" />
-      <div className="squircle-subtle absolute inset-px bg-card" />
       <div className="relative p-5">
         <div className="mb-4 flex items-center gap-2">
           {icon}
@@ -134,19 +150,19 @@ interface SettingRowProps {
 
 function SettingRow({ icon, label, description, children }: SettingRowProps) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg px-2 py-3">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-col gap-3 rounded-lg px-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className="flex min-w-0 items-center gap-3">
         <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
           {icon}
         </div>
-        <div>
+        <div className="min-w-0">
           <div className="font-sans text-sm font-medium text-foreground">{label}</div>
           {description && (
-            <div className="font-sans text-xs text-muted-foreground">{description}</div>
+            <div className="max-w-[52ch] font-sans text-xs leading-5 text-muted-foreground">{description}</div>
           )}
         </div>
       </div>
-      <div className="shrink-0">{children}</div>
+      <div className="flex shrink-0 justify-end">{children}</div>
     </div>
   );
 }
@@ -189,15 +205,19 @@ function DeleteConfirmDialog({
         onClick={onCancel}
       />
       <div
-        className="relative w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl"
+        className="july-dialog relative w-full max-w-md border border-border bg-card p-6"
         style={{ animation: `card-in 250ms ${EASE_OUT} both` }}
       >
-        <button
+        <Button
+          type="button"
           onClick={onCancel}
-          className="absolute right-4 top-4 text-muted-foreground transition-colors hover:text-foreground"
+          variant="ghost"
+          isIconOnly
+          className="july-heroui-button july-heroui-icon-button absolute right-4 top-4 size-8 min-h-8 min-w-8 text-muted-foreground hover:text-foreground"
+          aria-label={t.common.cancel}
         >
           <X className="size-4" />
-        </button>
+        </Button>
 
         <div className="mb-4 flex items-center gap-3">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-destructive/15">
@@ -223,17 +243,16 @@ function DeleteConfirmDialog({
             <span className="font-mono font-bold text-foreground">{CONFIRM_PHRASE}</span>
             {" "}{t.settings.typeToConfirmSuffix}
           </label>
-          <input
+          <Input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={CONFIRM_PHRASE}
             autoFocus
             className={cn(
-              "w-full rounded-lg border bg-secondary px-3 py-2",
-              "font-mono text-sm text-foreground placeholder:text-muted-foreground/40",
-              "outline-none transition-colors",
-              matches ? "border-destructive" : "border-border",
+              "july-heroui-field w-full font-mono",
+              input && !matches && "border-destructive/55",
+              matches && "border-primary/70",
             )}
             onKeyDown={(e) => {
               if (e.key === "Enter" && matches) onConfirm();
@@ -242,25 +261,29 @@ function DeleteConfirmDialog({
           />
         </div>
 
-        <div className="flex justify-end gap-2">
-          <button
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
             onClick={onCancel}
-            className="rounded-lg px-4 py-2 font-sans text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            variant="ghost"
+            className="july-heroui-button px-4 text-muted-foreground hover:text-foreground"
           >
             {t.common.cancel}
-          </button>
-          <button
+          </Button>
+          <Button
+            type="button"
             onClick={onConfirm}
-            disabled={!matches}
+            isDisabled={!matches}
+            variant="danger"
             className={cn(
-              "rounded-lg px-4 py-2 font-sans text-sm font-semibold transition-colors",
+              "july-heroui-button px-4",
               matches
-                ? "bg-destructive text-white hover:bg-destructive/90"
+                ? "july-heroui-button-danger"
                 : "cursor-not-allowed bg-secondary text-muted-foreground/40",
             )}
           >
             {t.settings.deleteEverything}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -338,20 +361,22 @@ function UpdatesSection({ index }: { index: number }) {
         label={t.settings.appUpdates}
         description={description}
       >
-        <button
+        <Button
+          type="button"
           onClick={onClick}
-          disabled={isChecking || isDownloading}
+          isDisabled={isChecking || isDownloading}
+          aria-busy={isChecking || isDownloading}
+          variant={hasUpdate ? "primary" : "secondary"}
           className={cn(
-            "shrink-0 rounded-lg px-4 py-2",
-            "font-sans text-sm font-semibold transition-colors",
+            "july-heroui-button shrink-0 px-4",
             hasUpdate
-              ? "bg-primary text-primary-foreground hover:opacity-90"
-              : "border border-border bg-secondary text-foreground hover:bg-secondary/70",
+              ? "july-heroui-button-primary"
+              : "bg-secondary/60 text-foreground hover:bg-secondary",
             (isChecking || isDownloading) && "cursor-not-allowed opacity-60",
           )}
         >
           {buttonLabel}
-        </button>
+        </Button>
       </SettingRow>
       {isDownloading && (
         <div className="px-2 pb-2">
@@ -406,7 +431,7 @@ export function Settings({ className }: SettingsProps) {
   }
 
   return (
-    <div className={cn("mx-auto max-w-3xl px-6 py-8", className)}>
+    <div className={cn("july-page-narrow", className)}>
       <div
         className="mb-8 flex items-center gap-3"
         style={{ animation: `card-in 350ms ${EASE_OUT} both` }}
@@ -473,15 +498,24 @@ export function Settings({ className }: SettingsProps) {
             icon={<SpeakerHigh className="size-4" />}
             label={t.settings.defaultVolume}
           >
-            <div className="flex items-center gap-2.5">
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={settings.default_volume}
-                onChange={(e) => update("default_volume", e.target.value)}
-                className="h-1.5 w-24 cursor-pointer accent-primary"
-              />
+            <div className="flex items-center gap-3">
+              <Slider
+                minValue={0}
+                maxValue={100}
+                step={1}
+                value={Number(settings.default_volume)}
+                onChange={(value) => {
+                  const nextValue = Array.isArray(value) ? value[0] : value;
+                  update("default_volume", String(nextValue));
+                }}
+                aria-label={t.settings.defaultVolume}
+                className="w-28"
+              >
+                <Slider.Track className="relative h-2 w-full rounded-full bg-secondary">
+                  <Slider.Fill className="absolute h-full rounded-full bg-primary" />
+                  <Slider.Thumb className="top-1/2 size-4 -translate-y-1/2 rounded-full border border-primary/55 bg-background shadow-sm outline-none ring-primary/20 transition-shadow data-[focus-visible=true]:ring-4" />
+                </Slider.Track>
+              </Slider>
               <span className="w-8 font-mono text-xs text-muted-foreground">
                 {settings.default_volume}%
               </span>
@@ -508,7 +542,7 @@ export function Settings({ className }: SettingsProps) {
           index={1}
         >
           {stats && (
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,8.5rem),1fr))] gap-2.5">
               <StatChip
                 icon={<Stack className="size-3.5" />}
                 label={t.settings.courses}
@@ -556,12 +590,12 @@ export function Settings({ className }: SettingsProps) {
           icon={<WarningCircle className="size-4 text-destructive" weight="bold" />}
           index={3}
         >
-          <div className="flex items-center justify-between gap-4 rounded-lg px-2 py-3">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-3 rounded-lg px-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div className="flex min-w-0 items-center gap-3">
               <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
                 <Trash className="size-4" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="font-sans text-sm font-medium text-foreground">
                   {t.settings.deleteAllData}
                 </div>
@@ -570,16 +604,16 @@ export function Settings({ className }: SettingsProps) {
                 </div>
               </div>
             </div>
-            <button
+            <Button
+              type="button"
               onClick={() => setShowDeleteDialog(true)}
+              variant="danger"
               className={cn(
-                "shrink-0 rounded-lg border border-destructive/30 px-4 py-2",
-                "font-sans text-sm font-semibold text-destructive",
-                "transition-colors hover:bg-destructive/10",
+                "july-heroui-button july-heroui-button-danger shrink-0 self-end px-4 sm:self-auto",
               )}
             >
               {t.settings.deleteAll}
-            </button>
+            </Button>
           </div>
         </SectionCard>
       </div>

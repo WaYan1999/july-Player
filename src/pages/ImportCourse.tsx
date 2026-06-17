@@ -1,11 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import LottieLib from "lottie-react";
-
-// Handle CJS/ESM default export interop: in some Vite/Rollup build modes
-// lottie-react resolves to the module namespace object rather than the component
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const Lottie: React.ComponentType<{ animationData: unknown; loop?: boolean; className?: string }> = (LottieLib as any).default ?? LottieLib;
 import {
   FolderOpenIcon as FolderOpen,
   UploadSimpleIcon as UploadSimple,
@@ -20,6 +14,7 @@ import {
   DotsSixVerticalIcon as DotsSixVertical,
   PencilSimpleIcon as PencilSimple,
 } from "@phosphor-icons/react";
+import { Button, Input } from "@heroui/react";
 import {
   DndContext,
   PointerSensor,
@@ -37,9 +32,9 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import loadingAnimation from "@/assets/lotties/loading.json";
 import { cn } from "@/lib/utils";
 import { SquircleButton } from "@/components/ui/SquircleButton";
+import { LoadingOrbit } from "@/components/ui/LoadingOrbit";
 import type { CourseCategory, ParsedCourse, ParsedSection, ParsedLesson } from "@/types";
 import { selectCourseFolder, parseCourseFolder } from "@/lib/courseParser";
 import { importCourse, getCustomCategories, addCustomCategory, deleteCustomCategory } from "@/lib/store";
@@ -232,11 +227,7 @@ export function ImportCourse({ className }: ImportCourseProps) {
   if (isImporting) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
-        <Lottie
-          animationData={loadingAnimation}
-          loop
-          className="size-40"
-        />
+        <LoadingOrbit size="lg" />
         <p className="mt-2 font-sans text-sm font-semibold text-foreground">
           {t.importCourse.importingCourse}
         </p>
@@ -248,7 +239,7 @@ export function ImportCourse({ className }: ImportCourseProps) {
   }
 
   return (
-    <div className={cn("mx-auto max-w-5xl", className)}>
+    <div className={cn("july-page", className)}>
       <button
         onClick={() => (step === "configure" ? setStep("select") : navigate("/"))}
         className="mb-6 flex items-center gap-1.5 font-sans text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -352,11 +343,7 @@ function FolderSelectStep({
         <div className="relative flex flex-col items-center gap-4 px-6 py-16">
           {isLoading ? (
             <>
-              <Lottie
-                animationData={loadingAnimation}
-                loop
-                className="size-28"
-              />
+              <LoadingOrbit size="md" />
               <div className="text-center">
                 <p className="font-sans text-sm font-semibold text-foreground">
                   {t.importCourse.scanningFolder}
@@ -370,7 +357,7 @@ function FolderSelectStep({
             <>
               <div
                 className={cn(
-                  "flex size-16 items-center justify-center rounded-2xl transition-colors",
+                  "flex size-16 items-center justify-center rounded-xl transition-[background-color,color,transform]",
                   isDragOver ? "bg-primary/20 text-primary" : "bg-secondary text-muted-foreground"
                 )}
               >
@@ -550,22 +537,22 @@ function ConfigureStep({
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <FieldGroup label={t.importCourse.titleLabel}>
-              <input
+              <Input
                 type="text"
                 value={title}
                 onChange={(e) => onTitleChange(e.target.value)}
                 placeholder={t.importCourse.titlePlaceholder}
-                className="w-full bg-transparent font-sans text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none"
+                className="min-h-0 w-full border-0 bg-transparent px-0 py-0 font-sans text-sm text-foreground placeholder:text-muted-foreground/40 shadow-none focus:outline-none"
               />
             </FieldGroup>
 
             <FieldGroup label={t.importCourse.authorLabel}>
-              <input
+              <Input
                 type="text"
                 value={author}
                 onChange={(e) => onAuthorChange(e.target.value)}
                 placeholder={t.importCourse.authorPlaceholder}
-                className="w-full bg-transparent font-sans text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none"
+                className="min-h-0 w-full border-0 bg-transparent px-0 py-0 font-sans text-sm text-foreground placeholder:text-muted-foreground/40 shadow-none focus:outline-none"
               />
             </FieldGroup>
           </div>
@@ -585,16 +572,20 @@ function ConfigureStep({
               </label>
               <div className="flex flex-wrap gap-2">
                 {accentColors.map((color) => (
-                  <button
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    isIconOnly
                     key={color}
                     onClick={() => onAccentColorChange(color)}
                     className={cn(
-                      "size-7 rounded-full border-2 transition-transform duration-150",
+                      "july-heroui-button size-7 min-h-7 min-w-7 rounded-full border-2 p-0 transition-transform duration-150",
                       accentColor === color
                         ? "scale-110 border-foreground"
                         : "border-transparent hover:scale-105"
                     )}
                     style={{ backgroundColor: color }}
+                    aria-label={color}
                   />
                 ))}
               </div>
@@ -738,18 +729,20 @@ function CategoryPicker({
       </label>
       <div className="flex flex-wrap gap-1.5">
         {builtinCategories.map((cat) => (
-          <button
+          <Button
+            type="button"
+            variant="ghost"
             key={cat.value}
             onClick={() => onCategoryChange(cat.value)}
             className={cn(
-              "rounded-full border px-3 py-1.5 font-sans text-xs font-medium transition-colors duration-150",
+              "july-heroui-button min-h-8 rounded-full px-3 py-1.5 text-xs duration-150",
               category === cat.value
                 ? "border-primary/25 bg-primary/15 text-primary"
                 : "border-border/50 bg-secondary text-muted-foreground hover:text-foreground"
             )}
           >
             {cat.label}
-          </button>
+          </Button>
         ))}
         {customCategories.map((name) => (
           <div
@@ -761,20 +754,31 @@ function CategoryPicker({
                 : "border-border/50 bg-secondary text-muted-foreground hover:text-foreground"
             )}
           >
-            <button onClick={() => onCategoryChange(name)}>{name}</button>
-            <button
+            <Button
+              type="button"
+              variant="ghost"
+              className="min-h-0 border-0 bg-transparent px-0 py-0 text-xs shadow-none"
+              onClick={() => onCategoryChange(name)}
+            >
+              {name}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              isIconOnly
               onClick={() => handleDelete(name)}
-              className="flex items-center justify-center rounded-full p-0.5 opacity-0 transition-opacity hover:bg-black/10 group-hover:opacity-100"
+              className="flex size-5 min-h-5 min-w-5 items-center justify-center rounded-full border-0 bg-transparent p-0.5 opacity-0 shadow-none transition-opacity hover:bg-black/10 group-hover:opacity-100"
+              aria-label={t.common.delete}
             >
               <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor">
                 <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
-            </button>
+            </Button>
           </div>
         ))}
         {adding ? (
           <div className="flex items-center gap-1 rounded-full border border-primary/25 bg-primary/10 pl-3 pr-1.5 py-1.5">
-            <input
+            <Input
               ref={inputRef}
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
@@ -783,34 +787,44 @@ function CategoryPicker({
                 if (e.key === "Escape") { setAdding(false); setNewName(""); }
               }}
               placeholder={t.categories.categoryName}
-              className="w-24 bg-transparent font-sans text-xs text-primary placeholder:text-primary/50 focus:outline-none"
+              className="min-h-0 w-24 border-0 bg-transparent px-0 py-0 font-sans text-xs text-primary placeholder:text-primary/50 shadow-none focus:outline-none"
             />
-            <button
+            <Button
+              type="button"
+              variant="ghost"
+              isIconOnly
               onMouseDown={(e) => e.preventDefault()}
               onClick={handleAdd}
-              className="flex items-center justify-center rounded-full p-1 text-primary transition-colors hover:bg-primary/20"
+              className="flex size-6 min-h-6 min-w-6 items-center justify-center rounded-full border-0 bg-transparent p-1 text-primary shadow-none transition-colors hover:bg-primary/20"
+              aria-label={t.common.save}
             >
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                 <path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-            </button>
-            <button
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              isIconOnly
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => { setAdding(false); setNewName(""); }}
-              className="flex items-center justify-center rounded-full p-1 text-muted-foreground transition-colors hover:bg-black/10"
+              className="flex size-6 min-h-6 min-w-6 items-center justify-center rounded-full border-0 bg-transparent p-1 text-muted-foreground shadow-none transition-colors hover:bg-black/10"
+              aria-label={t.common.cancel}
             >
               <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
                 <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
-            </button>
+            </Button>
           </div>
         ) : (
-          <button
+          <Button
+            type="button"
+            variant="ghost"
             onClick={() => setAdding(true)}
-            className="rounded-full border border-dashed border-border/50 px-3 py-1.5 font-sans text-xs font-medium text-muted-foreground transition-colors duration-150 hover:border-primary/25 hover:text-primary"
+            className="july-heroui-button min-h-8 rounded-full border-dashed border-border/50 px-3 py-1.5 text-xs text-muted-foreground duration-150 hover:border-primary/25 hover:text-primary"
           >
             {t.categories.custom}
-          </button>
+          </Button>
         )}
       </div>
     </div>

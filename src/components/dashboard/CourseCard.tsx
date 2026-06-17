@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { ArrowRightIcon as ArrowRight, BookmarkSimpleIcon as BookmarkSimple, ClockIcon as Clock } from "@phosphor-icons/react";
+import { Button } from "@heroui/react";
 import { useState, useCallback, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import type { Course } from "@/types";
@@ -157,16 +158,20 @@ function BookmarkButton({ bookmarked: initialBookmarked, courseId, onBookmarkCha
   }, [courseId, onBookmarkChange]);
 
   return (
-    <button
+    <Button
+      type="button"
+      variant="ghost"
+      isIconOnly
       onClick={handleClick}
       className={cn(
-        "absolute right-3 top-3 z-10 rounded-md p-1.5 transition-colors",
+        "july-heroui-button july-heroui-icon-button absolute right-3 top-3 z-10 size-8 min-h-8 min-w-8 rounded-md transition-colors",
         bookmarked
           ? "text-primary"
           : "text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground"
       )}
+      aria-label={bookmarked ? "Remove bookmark" : "Add bookmark"}
     >
       <BookmarkSimple className="size-4" weight={bookmarked ? "fill" : "regular"} />
-    </button>
+    </Button>
   );
 }

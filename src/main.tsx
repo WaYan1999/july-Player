@@ -1,12 +1,17 @@
 import ReactDOM from "react-dom/client";
-import { StrictMode } from "react";
+import { StrictMode, lazy, Suspense } from "react";
 import { HashRouter } from "react-router-dom";
-import { PostHogProvider } from "@posthog/react";
 import App from "./App";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@/components/ui/toaster";
+import { LoadingOrbit } from "@/components/ui/LoadingOrbit";
 import "./index.css";
 
+const LazyPostHogProvider = lazy(() =>
+  import("@posthog/react").then((module) => ({
+    default: module.PostHogProvider,
+  })),
+);
 
 const posthogOptions = {
   api_host: import.meta.env.VITE_PUBLIC_POSTHOG_HOST,
@@ -14,15 +19,31 @@ const posthogOptions = {
   exception_autocapture: true,
 } as const;
 
+const posthogApiKey = import.meta.env.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN;
+const appFallback = (
+  <div className="flex h-screen items-center justify-center bg-background">
+    <LoadingOrbit size="sm" />
+  </div>
+);
+const app = (
+  <ErrorBoundary>
+    <HashRouter>
+      <App />
+    </HashRouter>
+    <Toaster />
+  </ErrorBoundary>
+);
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>
-    <PostHogProvider apiKey={import.meta.env.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN} options={posthogOptions}>
-      <ErrorBoundary>
-        <HashRouter>
-          <App />
-        </HashRouter>
-        <Toaster />
-      </ErrorBoundary>
-    </PostHogProvider>
+    {posthogApiKey ? (
+      <Suspense fallback={appFallback}>
+        <LazyPostHogProvider apiKey={posthogApiKey} options={posthogOptions}>
+          {app}
+        </LazyPostHogProvider>
+      </Suspense>
+    ) : (
+      app
+    )}
   </StrictMode>
 );

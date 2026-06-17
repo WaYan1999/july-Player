@@ -14,11 +14,6 @@ export default defineConfig(async () => ({
     },
   },
 
-  // Ensure lottie-react is pre-bundled correctly (CJS/ESM interop)
-  optimizeDeps: {
-    include: ["lottie-react"],
-  },
-
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors
@@ -38,6 +33,27 @@ export default defineConfig(async () => ({
     watch: {
       // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
+    },
+  },
+  build: {
+    chunkSizeWarningLimit: 900,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("@heroui")) return "vendor-heroui";
+          if (id.includes("@phosphor-icons") || id.includes("lucide-react")) {
+            return "vendor-icons";
+          }
+          if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
+          if (id.includes("posthog")) return "vendor-analytics";
+          if (id.includes("react-router-dom") || id.includes("@remix-run")) {
+            return "vendor-router";
+          }
+          if (id.includes("react") || id.includes("react-dom")) return "vendor-react";
+          return "vendor";
+        },
+      },
     },
   },
 }));

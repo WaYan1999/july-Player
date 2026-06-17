@@ -4,6 +4,7 @@ import {
   SparkleIcon as Sparkle,
   XIcon as X,
 } from "@phosphor-icons/react";
+import { Button } from "@heroui/react";
 import { cn } from "@/lib/utils";
 import { EASE_OUT } from "@/lib/constants";
 import { useSettings } from "@/hooks/useSettings";
@@ -12,31 +13,31 @@ import type { AppLanguage } from "@/lib/i18n";
 const RELEASE_NOTES_VERSION = "1.1.7";
 const RELEASE_NOTES_STORAGE_KEY = `july-player:release-notes-seen:${RELEASE_NOTES_VERSION}`;
 
-const RELEASE_NOTES: Record<
-  AppLanguage,
-  {
-    title: string;
-    eyebrow: string;
-    description: string;
-    highlights: string[];
-    close: string;
-    dismiss: string;
-  }
-> = {
+type ReleaseNotesCopy = {
+  title: string;
+  eyebrow: string;
+  description: string;
+  highlights: string[];
+  close: string;
+  dismiss: string;
+};
+
+const RELEASE_NOTES: Record<AppLanguage, ReleaseNotesCopy> = {
   zh: {
-    eyebrow: "版本更新",
-    title: "七月播放器 1.1.7",
-    description: "本次重点优化国内更新速度，并接入后端 latest.json 更新接口。",
+    eyebrow: "\u7248\u672c\u66f4\u65b0",
+    title: "\u4e03\u6708\u64ad\u653e\u5668 1.1.7",
+    description:
+      "\u672c\u6b21\u91cd\u70b9\u4f18\u5316\u56fd\u5185\u66f4\u65b0\u901f\u5ea6\uff0c\u5e76\u63a5\u5165\u540e\u7aef latest.json \u66f4\u65b0\u63a5\u53e3\u3002",
     highlights: [
-      "新增国内更新源优先检查：优先请求 julyres.top 的 latest.json，GitHub 保留兜底。",
-      "缩短更新检查超时时间：启动静默检查 3 秒，手动检查 5 秒，避免界面长时间等待。",
-      "新增 UPDATE_MANIFEST.md，后端可按文档提供 version、notes、pub_date、platforms、url 和 signature。",
-      "支持后端把安装包和签名文件放到国内 CDN，让检查更新和下载安装都更快。",
-      "保留 GitHub Release 更新清单作为备用源，国内源不可用时仍可继续检查更新。",
-      "完善 1.1.7 发布说明，明确本次新增的远程更新接口和国内加速方案。",
+      "\u65b0\u589e\u56fd\u5185\u66f4\u65b0\u6e90\u4f18\u5148\u68c0\u67e5\uff1a\u5148\u8bf7\u6c42 julyres.top \u7684 latest.json\uff0cGitHub \u4f5c\u4e3a\u5907\u7528\u3002",
+      "\u7f29\u77ed\u66f4\u65b0\u68c0\u67e5\u8d85\u65f6\uff1a\u542f\u52a8\u9759\u9ed8\u68c0\u67e5 3 \u79d2\uff0c\u624b\u52a8\u68c0\u67e5 5 \u79d2\u3002",
+      "\u65b0\u589e UPDATE_MANIFEST.md\uff0c\u540e\u7aef\u53ef\u6309\u6587\u6863\u63d0\u4f9b version\u3001notes\u3001pub_date\u3001platforms\u3001url \u548c signature\u3002",
+      "\u652f\u6301\u540e\u7aef\u628a\u5b89\u88c5\u5305\u548c\u7b7e\u540d\u6587\u4ef6\u653e\u5230\u56fd\u5185 CDN\uff0c\u8ba9\u68c0\u67e5\u548c\u4e0b\u8f7d\u66f4\u5feb\u3002",
+      "\u4fdd\u7559 GitHub Release \u66f4\u65b0\u6e05\u5355\u4f5c\u4e3a\u5907\u7528\u6e90\uff0c\u56fd\u5185\u6e90\u4e0d\u53ef\u7528\u65f6\u4ecd\u53ef\u7ee7\u7eed\u68c0\u67e5\u3002",
+      "\u5b8c\u5584 1.1.7 \u53d1\u5e03\u8bf4\u660e\uff0c\u660e\u786e\u8fdc\u7a0b\u66f4\u65b0\u63a5\u53e3\u548c\u56fd\u5185\u52a0\u901f\u65b9\u6848\u3002",
     ],
-    close: "开始使用",
-    dismiss: "关闭更新说明",
+    close: "\u5f00\u59cb\u4f7f\u7528",
+    dismiss: "\u5173\u95ed\u66f4\u65b0\u8bf4\u660e",
   },
   en: {
     eyebrow: "Release notes",
@@ -56,14 +57,15 @@ const RELEASE_NOTES: Record<
   fr: {
     eyebrow: "Notes de version",
     title: "July Player 1.1.7",
-    description: "Cette version améliore la recherche de mises à jour et documente le manifeste serveur.",
+    description:
+      "Cette version am\u00e9liore la recherche de mises \u00e0 jour et documente le manifeste serveur.",
     highlights: [
-      "Ajout d'un endpoint de mise à jour prioritaire sur julyres.top avec GitHub en secours.",
-      "Réduction du délai d'attente des vérifications de mise à jour.",
-      "Ajout de UPDATE_MANIFEST.md pour décrire le format latest.json attendu par le backend.",
-      "Prise en charge des installateurs et signatures hébergés sur CDN pour accélérer les téléchargements.",
+      "Ajout d'un endpoint de mise \u00e0 jour prioritaire sur julyres.top avec GitHub en secours.",
+      "R\u00e9duction du d\u00e9lai d'attente des v\u00e9rifications de mise \u00e0 jour.",
+      "Ajout de UPDATE_MANIFEST.md pour d\u00e9crire le format latest.json attendu par le backend.",
+      "Prise en charge des installateurs et signatures h\u00e9berg\u00e9s sur CDN pour acc\u00e9l\u00e9rer les t\u00e9l\u00e9chargements.",
       "Conservation de GitHub Releases comme source de secours si l'endpoint domestique est indisponible.",
-      "Mise à jour des notes 1.1.7 pour expliquer le manifeste distant et l'accélération.",
+      "Mise \u00e0 jour des notes 1.1.7 pour expliquer le manifeste distant et l'acc\u00e9l\u00e9ration.",
     ],
     close: "Commencer",
     dismiss: "Fermer les notes",
@@ -134,11 +136,11 @@ export function ReleaseNotesDialog() {
         aria-labelledby="release-notes-title"
         aria-modal="true"
         className={cn(
-          "relative w-full max-w-xl overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl",
+          "july-dialog relative w-full max-w-xl overflow-hidden border border-border bg-card text-card-foreground",
           "outline-none",
         )}
         role="dialog"
-        style={{ animation: `card-in 260ms ${EASE_OUT} both` }}
+        style={{ animation: `card-in 240ms ${EASE_OUT} both` }}
         onPointerDown={(event) => event.stopPropagation()}
       >
         <div className="absolute inset-x-0 top-0 h-px bg-primary/45" />
@@ -164,20 +166,22 @@ export function ReleaseNotesDialog() {
                 {copy.description}
               </p>
             </div>
-            <button
+            <Button
               aria-label={copy.dismiss}
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              className="july-heroui-button july-heroui-icon-button size-8 min-h-8 min-w-8 shrink-0 text-muted-foreground hover:bg-secondary hover:text-foreground"
               type="button"
+              variant="ghost"
+              isIconOnly
               onClick={close}
             >
               <X className="size-4" />
-            </button>
+            </Button>
           </div>
 
           <div className="space-y-2.5">
             {copy.highlights.map((item) => (
               <div
-                className="flex gap-3 rounded-xl border border-border/70 bg-secondary/35 px-3.5 py-3"
+                className="july-feedback-card flex gap-3 rounded-xl border border-border/70 bg-secondary/35 px-3.5 py-3"
                 key={item}
               >
                 <CheckCircle className="mt-0.5 size-4 shrink-0 text-primary" weight="fill" />
@@ -187,13 +191,14 @@ export function ReleaseNotesDialog() {
           </div>
 
           <div className="mt-5 flex justify-end">
-            <button
-              className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2.5 font-sans text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+            <Button
+              className="july-heroui-button july-heroui-button-primary px-4"
               type="button"
+              variant="primary"
               onClick={close}
             >
               {copy.close}
-            </button>
+            </Button>
           </div>
         </div>
       </section>

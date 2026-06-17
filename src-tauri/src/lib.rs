@@ -70,6 +70,8 @@ pub fn run() {
             commands::transcribe_audio_segment_only,
             commands::translate_live_subtitle_text,
             commands::ask_pet_ai,
+            commands::generate_ai_note,
+            commands::ask_note_ai,
             commands::open_desktop_pet,
             commands::close_desktop_pet,
             commands::is_desktop_pet_open,

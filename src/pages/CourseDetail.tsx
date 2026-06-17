@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useContext } from "react";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { ActivePathContext } from "@/hooks/usePageVisible";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/toast";
 import {
   CheckCircleIcon as CheckCircle,
   ClockIcon as Clock,
@@ -18,6 +18,7 @@ import {
   BookmarkSimpleIcon as BookmarkSimple,
   HeartIcon as Heart,
 } from "@phosphor-icons/react";
+import { Button } from "@heroui/react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/ui/ProgressBar";
@@ -151,7 +152,7 @@ export function CourseDetail({ className }: CourseDetailProps) {
 
   if (!isValidId || !course || !courseData) {
     return (
-      <div className={cn("mx-auto max-w-4xl", className)}>
+      <div className={cn("july-page-narrow", className)}>
         <p className="font-sans text-sm text-muted-foreground">
           {!isValidId ? t.courseDetail.invalidCourse : t.courseDetail.courseNotFound}
         </p>
@@ -516,13 +517,7 @@ function CourseDetailInner({
   async function handleAddNote(content: string) {
     if (!activeLesson) return;
     try {
-      const note = await storeAddNote(
-        course.id,
-        activeLesson.id,
-        activeLesson.title,
-        content,
-      );
-      setNotes((prev) => [note, ...prev]);
+      await saveCurrentLessonNote(content);
       setShowEditor(false);
     } catch (err) {
       // Keep editor open so the user doesn't lose their content.
@@ -531,6 +526,20 @@ function CourseDetailInner({
         description: t.courseDetail.contentStillEditor,
       });
     }
+  }
+
+  async function saveCurrentLessonNote(content: string) {
+    if (!activeLesson) {
+      throw new Error(t.courseDetail.courseNotFound);
+    }
+
+    const note = await storeAddNote(
+      course.id,
+      activeLesson.id,
+      activeLesson.title,
+      content,
+    );
+    setNotes((prev) => [note, ...prev]);
   }
 
   async function handleEditNote(noteId: number, content: string) {
@@ -628,13 +637,13 @@ function CourseDetailInner({
       allLessons.length - 1;
 
   return (
-    <div className={cn("mx-auto max-w-6xl", className)}>
+    <div className={cn("july-page", className)}>
       <div
-        className="mb-4 flex items-center justify-between"
+        className="mb-4 flex flex-wrap items-center justify-between gap-3"
         style={{
           opacity: mounted ? 1 : 0,
           transform: mounted ? "translateY(0)" : "translateY(8px)",
-          transition: `opacity 500ms ${EASE_OUT}, transform 500ms ${EASE_OUT}`,
+          transition: `opacity 220ms ${EASE_OUT}, transform 220ms ${EASE_OUT}`,
         }}
       >
         <Link
@@ -645,11 +654,13 @@ function CourseDetailInner({
           {t.common.back}
         </Link>
 
-        <div className="flex items-center gap-2">
-          <button
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="secondary"
             onClick={() => setCurriculumOpen((o) => !o)}
             className={cn(
-              "flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 font-sans text-xs font-medium transition-colors hover:bg-secondary hover:text-foreground",
+              "july-heroui-button min-h-8 gap-1.5 rounded-lg px-2.5 py-1.5 text-xs hover:bg-secondary hover:text-foreground",
               curriculumOpen ? "text-muted-foreground" : "text-foreground bg-secondary",
             )}
             style={{ transitionTimingFunction: SNAPPY }}
@@ -662,31 +673,35 @@ function CourseDetailInner({
               }}
             />
             {curriculumOpen ? t.courseDetail.hide : t.courseDetail.showCurriculum}
-          </button>
-          <button
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
             onClick={onToggleBookmark}
             className={cn(
-              "flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 font-sans text-xs font-medium transition-colors hover:bg-secondary hover:text-foreground",
+              "july-heroui-button min-h-8 gap-1.5 rounded-lg px-2.5 py-1.5 text-xs hover:bg-secondary hover:text-foreground",
               course.bookmarked ? "text-primary" : "text-muted-foreground",
             )}
             style={{ transitionTimingFunction: SNAPPY }}
           >
             <BookmarkSimple className="size-3.5" weight={course.bookmarked ? "fill" : "regular"} />
             {course.bookmarked ? t.courseDetail.bookmarked : t.courseDetail.bookmark}
-          </button>
-          <button
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
             onClick={onEdit}
-            className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 font-sans text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            className="july-heroui-button min-h-8 gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
             style={{ transitionTimingFunction: SNAPPY }}
           >
             <PencilSimple className="size-3.5" />
             {t.common.edit}
-          </button>
+          </Button>
         </div>
       </div>
 
       <div
-        className="flex flex-col lg:flex-row"
+        className="flex min-w-0 flex-col lg:flex-row"
         style={{
           gap: curriculumOpen ? 20 : 0,
           transition: `gap 400ms ${SNAPPY}`,
@@ -697,7 +712,7 @@ function CourseDetailInner({
           style={{
             opacity: mounted ? 1 : 0,
             transform: mounted ? "translateY(0)" : "translateY(12px)",
-            transition: `opacity 600ms ${EASE_OUT} 80ms, transform 600ms ${EASE_OUT} 80ms`,
+            transition: `opacity 240ms ${EASE_OUT} 40ms, transform 240ms ${EASE_OUT} 40ms`,
           }}
         >
           <VideoPlayer
@@ -724,24 +739,30 @@ function CourseDetailInner({
               <h2 className="font-sans text-base font-semibold text-foreground">
                 {activeLesson.title}
               </h2>
-              <button
+              <Button
+                type="button"
+                variant="ghost"
+                isIconOnly
                 onClick={() => handleToggleFavorite(activeLesson.id)}
                 className={cn(
-                  "rounded-md p-1 transition-colors",
+                  "july-heroui-button july-heroui-icon-button size-8 min-h-8 min-w-8 rounded-md transition-colors",
                   activeLesson.favorited
                     ? "text-red-500 hover:bg-red-500/10"
                     : "text-muted-foreground hover:bg-secondary hover:text-red-400",
                 )}
+                aria-label={activeLesson.favorited ? t.bookmarks.favorites : t.courseDetail.bookmark}
               >
                 <Heart
                   className="size-3.5"
                   weight={activeLesson.favorited ? "fill" : "regular"}
                 />
-              </button>
-              <button
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
                 onClick={() => handleToggleComplete(activeLesson.id)}
                 className={cn(
-                  "ml-auto flex items-center gap-1 rounded-md px-2 py-1 font-sans text-xs font-medium transition-colors",
+                  "july-heroui-button ml-auto min-h-8 gap-1 rounded-md px-2 py-1 text-xs",
                   activeLesson.completed
                     ? "text-primary hover:bg-primary/10"
                     : "text-muted-foreground hover:bg-secondary hover:text-foreground",
@@ -752,7 +773,7 @@ function CourseDetailInner({
                   weight={activeLesson.completed ? "fill" : "regular"}
                 />
                 {activeLesson.completed ? t.courseDetail.completed : t.courseDetail.markComplete}
-              </button>
+              </Button>
             </div>
           )}
 
@@ -790,10 +811,12 @@ function CourseDetailInner({
           <div>
             <div className="mb-3 flex items-center gap-1">
               {courseData.resources.length > 0 && (
-                <button
+                <Button
+                  type="button"
+                  variant="ghost"
                   onClick={() => setActiveTab("resources")}
                   className={cn(
-                    "rounded-md px-2.5 py-1 font-sans text-xs font-medium transition-colors",
+                    "july-heroui-button min-h-8 rounded-md px-2.5 py-1 text-xs",
                     activeTab === "resources"
                       ? "bg-secondary text-foreground"
                       : "text-muted-foreground hover:text-foreground",
@@ -804,12 +827,14 @@ function CourseDetailInner({
                     <FolderOpen className="size-3.5" />
                     {t.courseDetail.resources}
                   </span>
-                </button>
+                </Button>
               )}
-              <button
+              <Button
+                type="button"
+                variant="ghost"
                 onClick={() => setActiveTab("notes")}
                 className={cn(
-                  "rounded-md px-2.5 py-1 font-sans text-xs font-medium transition-colors",
+                  "july-heroui-button min-h-8 rounded-md px-2.5 py-1 text-xs",
                   activeTab === "notes"
                     ? "bg-secondary text-foreground"
                     : "text-muted-foreground hover:text-foreground",
@@ -825,7 +850,7 @@ function CourseDetailInner({
                     </span>
                   )}
                 </span>
-              </button>
+              </Button>
             </div>
 
             {activeTab === "resources" && courseData.resources.length > 0 && (
@@ -833,17 +858,19 @@ function CourseDetailInner({
                 {courseData.resources.map((resource) => {
                   const Icon = resourceIcons[resource.type] || File;
                   return (
-                    <button
+                    <Button
+                      type="button"
+                      variant="secondary"
                       key={resource.id}
                       onClick={() => handleOpenResource(resource.path)}
-                      className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-left transition-all duration-150 hover:scale-[1.02] hover:bg-secondary active:scale-[0.98]"
+                      className="july-heroui-button gap-2 rounded-lg px-3 py-2 text-left duration-150 hover:scale-[1.02] hover:bg-secondary active:scale-[0.98]"
                       style={{ transitionTimingFunction: SNAPPY }}
                     >
                       <Icon className="size-3.5 text-muted-foreground" />
                       <span className="font-sans text-xs font-medium text-foreground">
                         {resource.title}
                       </span>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
@@ -851,11 +878,16 @@ function CourseDetailInner({
 
             {activeTab === "notes" && (
               <NotesPanel
+                courseTitle={course.title}
+                lessonTitle={activeLesson?.title ?? ""}
+                subtitles={subtitles}
                 notes={lessonNotes}
                 videoTime={Math.floor(videoTime)}
                 editingNoteId={editingNoteId}
                 showEditor={showEditor}
+                language={language}
                 onAdd={handleAddNote}
+                onSaveAiNote={saveCurrentLessonNote}
                 onEdit={handleEditNote}
                 onDelete={handleDeleteNote}
                 onSetEditing={setEditingNoteId}
@@ -867,16 +899,16 @@ function CourseDetailInner({
         </div>
 
         <div
-          className="lg:shrink-0 overflow-clip self-start sticky top-4"
+          className="overflow-clip self-start lg:sticky lg:top-4 lg:shrink-0"
           style={{
-            width: curriculumOpen ? 320 : 0,
+            width: curriculumOpen ? "min(320px, 100%)" : 0,
             opacity: mounted ? 1 : 0,
             transform: mounted ? "translateY(0)" : "translateY(12px)",
-            transition: `width 400ms ${SNAPPY}, opacity 600ms ${EASE_OUT} 160ms, transform 600ms ${EASE_OUT} 160ms`,
+            transition: `width 260ms ${SNAPPY}, opacity 220ms ${EASE_OUT} 80ms, transform 220ms ${EASE_OUT} 80ms`,
           }}
         >
           <div
-            className="flex h-[85vh] w-80 flex-col overflow-hidden rounded-xl border border-border bg-card"
+            className="flex h-[min(85vh,720px)] w-full flex-col overflow-hidden rounded-xl border border-border bg-card lg:w-80"
           >
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <h2 className="font-heading text-sm font-bold text-foreground">
@@ -924,20 +956,24 @@ function CourseDetailInner({
               })}
             </p>
             <div className="mt-4 flex items-center justify-end gap-2">
-              <button
+              <Button
+                type="button"
+                variant="ghost"
                 onClick={() => setPendingTimestampNav(null)}
-                className="rounded-lg px-3 py-1.5 font-sans text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                className="july-heroui-button min-h-8 rounded-lg border-0 bg-transparent px-3 py-1.5 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
                 style={{ transitionTimingFunction: SNAPPY }}
               >
                 {t.common.cancel}
-              </button>
-              <button
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
                 onClick={confirmTimestampNav}
-                className="rounded-lg bg-primary px-3 py-1.5 font-sans text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                className="july-heroui-button july-heroui-button-primary min-h-8 rounded-lg px-3 py-1.5 text-xs"
                 style={{ transitionTimingFunction: SNAPPY }}
               >
                 {t.courseDetail.switchJump}
-              </button>
+              </Button>
             </div>
           </div>
           <style>{`

@@ -23,14 +23,13 @@ import {
   XIcon,
 } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { EASE_OUT } from "@/lib/constants";
 import { useI18n } from "@/hooks/useI18n";
 import { useSettings } from "@/hooks/useSettings";
 import { askPetAi, closeDesktopPet, isDesktopPetOpen, openDesktopPet } from "@/lib/store";
-import { DESKTOP_PET_READY_EVENT, withTimeout } from "@/lib/desktopPet";
+import { withTimeout } from "@/lib/desktopPet";
 import {
   PET_CATALOG,
   PET_ACTION_EVENT,
@@ -77,6 +76,7 @@ import {
   type PetVitals,
 } from "@/lib/petCare";
 import { PetSprite } from "@/components/pets/PetSprite";
+import { Button, Input, Switch } from "@heroui/react";
 
 interface PetsProps {
   className?: string;
@@ -173,6 +173,8 @@ const COPY = {
     backToPlayer: "Back to player",
     desktopPetOpened: "Desktop pet opened",
     desktopPetClosed: "Desktop pet returned",
+    desktopPetOpening: "Opening desktop pet...",
+    desktopPetClosing: "Returning pet...",
     aiGrowthTitle: "AI growth",
     aiGrowthDescription: "Allow the pet to use the AI module token for short self-growth thoughts.",
     aiTokenConsent: "Allow token use",
@@ -415,6 +417,8 @@ const COPY = {
     backToPlayer: "回到播放器",
     desktopPetOpened: "桌面宠物已打开",
     desktopPetClosed: "宠物已回到播放器",
+    desktopPetOpening: "正在打开桌面宠物...",
+    desktopPetClosing: "正在回到播放器...",
     aiGrowthTitle: "AI 自我成长",
     aiGrowthDescription: "允许宠物使用 AI 模块里的 token，生成一次短思考并获得成长。",
     aiTokenConsent: "允许消耗 Token",
@@ -657,6 +661,8 @@ const COPY = {
     backToPlayer: "Retour lecteur",
     desktopPetOpened: "Compagnon de bureau ouvert",
     desktopPetClosed: "Compagnon revenu au lecteur",
+    desktopPetOpening: "Ouverture du compagnon...",
+    desktopPetClosing: "Retour du compagnon...",
     aiGrowthTitle: "Croissance IA",
     aiGrowthDescription: "Autorisez le compagnon a utiliser le jeton du module IA pour une courte pensee.",
     aiTokenConsent: "Autoriser les jetons",
@@ -947,24 +953,31 @@ function Toggle({
   disabled?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={cn(
-        "relative flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 disabled:cursor-not-allowed disabled:opacity-60",
-        checked ? "bg-primary" : "bg-border",
-      )}
+    <Switch
+      isSelected={checked}
+      onChange={onChange}
+      isDisabled={disabled}
+      className="group"
+      aria-label="toggle"
     >
-      <span
-        className={cn(
-          "block size-4.5 rounded-full bg-background shadow-sm transition-transform duration-200",
-          checked ? "translate-x-[22px]" : "translate-x-[2px]",
-        )}
-      />
-    </button>
+      <Switch.Content className="inline-flex items-center">
+        <Switch.Control
+          className={cn(
+            "relative flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200",
+            checked ? "bg-primary" : "bg-border",
+            disabled && "opacity-60",
+            "group-data-[focus-visible=true]:ring-2 group-data-[focus-visible=true]:ring-primary/25",
+          )}
+        >
+          <Switch.Thumb
+            className={cn(
+              "block size-4.5 rounded-full bg-background shadow-sm transition-transform duration-200",
+              checked ? "translate-x-[22px]" : "translate-x-[2px]",
+            )}
+          />
+        </Switch.Control>
+      </Switch.Content>
+    </Switch>
   );
 }
 
@@ -989,6 +1002,28 @@ function formatTimer(seconds: number) {
   const minutes = Math.floor(seconds / 60);
   const rest = seconds % 60;
   return `${minutes.toString().padStart(2, "0")}:${rest.toString().padStart(2, "0")}`;
+}
+
+async function waitForDesktopPetOpen(timeoutMs = 2500): Promise<void> {
+  const startedAt = Date.now();
+  let lastError: unknown = null;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      const state = await isDesktopPetOpen();
+      if (state.open && state.visible) return;
+    } catch (error) {
+      lastError = error;
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, 120));
+  }
+
+  throw new Error(
+    lastError instanceof Error
+      ? `Desktop pet window check failed: ${lastError.message}`
+      : "Desktop pet window did not become available.",
+  );
 }
 
 function formatPetHud(template: string, stats: Pick<PetVitals, "food" | "energy" | "bond">) {
@@ -1941,33 +1976,32 @@ export function Pets({ className }: PetsProps) {
     if (desktopPetPending) return;
 
     setDesktopPetPending(true);
-    let unlistenReady: UnlistenFn | null = null;
+    const pendingTitle = enabled ? copy.desktopPetOpening : copy.desktopPetClosing;
+    const pendingDetail = enabled ? copy.desktopPetDescription : copy.residentPetDescription;
+    setLastFeedback({
+      title: pendingTitle,
+      detail: pendingDetail,
+      tone: "info",
+      nonce: nextFeedbackNonce(),
+    });
+    dispatchPetAction("thinking");
+    dispatchPetSpeech({
+      title: pendingTitle,
+      message: pendingDetail,
+      tone: "info",
+      durationMs: 2800,
+    });
     try {
       if (enabled) {
         await update("pet_enabled", "true");
-        const alreadyOpen = await withTimeout(
-          isDesktopPetOpen(),
-          1500,
-          "Could not check desktop pet window.",
-        ).catch(() => false);
-        if (alreadyOpen) {
-          await withTimeout(
-            closeDesktopPet(),
-            2500,
-            "Could not reset the previous desktop pet window.",
-          );
-          await new Promise((resolve) => window.setTimeout(resolve, 120));
+        const state = await withTimeout(
+          openDesktopPet(language, settings.pet_variant),
+          4000,
+          "Desktop pet window did not open.",
+        );
+        if (!state.open || !state.visible) {
+          await waitForDesktopPetOpen();
         }
-
-        let resolveReady: () => void = () => {};
-        const readyPromise = new Promise<void>((resolve) => {
-          resolveReady = resolve;
-        });
-
-        unlistenReady = await listen(DESKTOP_PET_READY_EVENT, () => resolveReady());
-
-        await withTimeout(openDesktopPet(), 4000, "Desktop pet window did not open.");
-        await withTimeout(readyPromise, 4000, "Desktop pet window did not finish loading.");
         await update("pet_desktop_enabled", "true");
         pushFeedback({
           title: copy.desktopPetOpened,
@@ -1986,17 +2020,11 @@ export function Pets({ className }: PetsProps) {
     } catch (error) {
       if (enabled) {
         await update("pet_desktop_enabled", "false").catch(() => {});
-        await withTimeout(
-          closeDesktopPet(),
-          2500,
-          "Desktop pet window rollback did not close.",
-        ).catch(() => {});
       }
       pushFailureFeedback(copy.desktopPet);
       console.warn("Desktop pet toggle failed", error);
       await reloadSettings();
     } finally {
-      unlistenReady?.();
       setDesktopPetPending(false);
     }
   };
@@ -2164,7 +2192,7 @@ export function Pets({ className }: PetsProps) {
   };
 
   return (
-    <div className={cn("mx-auto max-w-7xl px-6 py-8", className)}>
+    <div className={cn("july-page july-page-pets", className)}>
       <header
         className="mb-6 flex flex-wrap items-center justify-between gap-4"
         style={{ animation: `card-in 350ms ${EASE_OUT} both` }}
@@ -2178,17 +2206,18 @@ export function Pets({ className }: PetsProps) {
             <p className="font-sans text-sm text-muted-foreground">{copy.subtitle}</p>
           </div>
         </div>
-        <button
+        <Button
           type="button"
           onClick={() => setActiveView("shop")}
-          className="flex h-10 items-center gap-2 rounded-lg border border-border bg-secondary/45 px-3 text-xs font-bold text-foreground transition-colors hover:border-primary/45 hover:bg-primary/10"
+          variant="secondary"
+          className="july-heroui-button flex h-10 items-center gap-2 rounded-lg border-border bg-secondary/45 px-3 text-xs font-bold text-foreground transition-colors hover:border-primary/45 hover:bg-primary/10"
         >
           <CoinsIcon className="size-4 text-primary" weight="bold" />
           {copy.petShop}
           <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] text-primary">
             {formatNumber(careState.tokens)}
           </span>
-        </button>
+        </Button>
       </header>
 
       <nav
@@ -2199,20 +2228,21 @@ export function Pets({ className }: PetsProps) {
         {PET_VIEWS.map((view) => {
           const active = activeView === view;
           return (
-            <button
+            <Button
               key={view}
               type="button"
               onClick={() => setActiveView(view)}
+              variant={active ? "primary" : "ghost"}
               className={cn(
-                "pet-view-tab flex h-10 min-w-28 items-center justify-center rounded-lg px-4 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70",
+                "pet-view-tab flex h-10 min-w-28 items-center justify-center rounded-lg px-4 text-sm font-bold transition-colors",
                 active
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+                  ? "july-heroui-button-primary bg-primary text-primary-foreground"
+                  : "july-heroui-button text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
               )}
               aria-current={active ? "page" : undefined}
             >
               {copy[PET_VIEW_COPY_KEYS[view]]}
-            </button>
+            </Button>
           );
         })}
       </nav>
@@ -2222,8 +2252,8 @@ export function Pets({ className }: PetsProps) {
           className="mb-5 rounded-xl border border-border/70 bg-card p-5"
           style={{ animation: `card-in 350ms ${EASE_OUT} 60ms both` }}
         >
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_310px]">
-          <div>
+        <div className="pets-overview-grid">
+          <div className="min-w-0">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -2239,20 +2269,21 @@ export function Pets({ className }: PetsProps) {
                   {copy.growthDescription}
                 </p>
               </div>
-              <button
+              <Button
                 type="button"
-                disabled={careLoading || checkingIn}
+                isDisabled={careLoading || checkingIn}
                 onClick={() => void handleDailyCheckin()}
+                variant={checkedInToday ? "secondary" : "primary"}
                 className={cn(
-                  "flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-bold transition-colors disabled:cursor-wait disabled:opacity-60",
+                  "july-heroui-button flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-bold transition-colors disabled:cursor-wait disabled:opacity-60",
                   checkedInToday
                     ? "border border-border bg-secondary/50 text-muted-foreground hover:bg-secondary"
-                    : "bg-primary text-primary-foreground hover:bg-primary/90",
+                    : "july-heroui-button-primary bg-primary text-primary-foreground hover:bg-primary/90",
                 )}
               >
                 <CalendarCheckIcon className="size-4" weight={checkedInToday ? "regular" : "fill"} />
                 {checkingIn ? copy.applying : checkedInToday ? copy.checkedIn : copy.dailyCheckin}
-              </button>
+              </Button>
             </div>
 
             <div className="mt-5">
@@ -2268,7 +2299,7 @@ export function Pets({ className }: PetsProps) {
               </div>
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-5 grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,11.25rem),1fr))]">
               <div className="rounded-lg border border-border/70 bg-secondary/20 p-3">
                 <p className="text-xs font-semibold text-muted-foreground">{copy.totalXp}</p>
                 <p className="mt-1 font-mono text-lg font-bold text-foreground">{formatNumber(careState.xp)}</p>
@@ -2307,7 +2338,7 @@ export function Pets({ className }: PetsProps) {
                 </span>
               </div>
 
-              <div className="mt-4 grid gap-3 lg:grid-cols-3">
+              <div className="pets-play-grid mt-4">
                 {PLAY_ACTION_CONFIG.map((item) => {
                   const Icon = item.icon;
                   const rule = PET_PLAY_ACTIONS[item.action];
@@ -2316,10 +2347,10 @@ export function Pets({ className }: PetsProps) {
                   const pending = Boolean(playActionPending[item.action]);
 
                   return (
-                    <button
+                    <Button
                       key={item.action}
                       type="button"
-                      disabled={pending}
+                      isDisabled={pending}
                       onClick={() =>
                         void playWithPet({
                           action: item.action,
@@ -2328,12 +2359,13 @@ export function Pets({ className }: PetsProps) {
                           mood: item.mood,
                         })
                       }
+                      variant="secondary"
                       className={cn(
-                        "pet-play-card pet-action-button min-h-32 rounded-lg border border-border bg-background/60 p-3 text-left transition-colors hover:border-primary/45 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 disabled:cursor-wait disabled:opacity-70",
+                        "pet-play-card pet-action-button july-heroui-button flex h-auto min-h-32 w-full flex-col items-stretch justify-between gap-0 overflow-hidden rounded-lg border-border bg-background/60 p-3 text-left whitespace-normal transition-colors hover:border-primary/45 hover:bg-primary/10 disabled:cursor-wait disabled:opacity-70",
                         pending && "border-primary/45 bg-primary/10",
                       )}
                     >
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-2">
                           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
                             <Icon className="size-4.5" weight={pending ? "fill" : "regular"} />
@@ -2360,11 +2392,11 @@ export function Pets({ className }: PetsProps) {
                       <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
                         {copy[item.descriptionKey]}
                       </p>
-                      <div className="mt-3 flex items-center gap-2 text-[11px] font-semibold text-primary">
+                      <div className="mt-3 flex min-w-0 items-center gap-2 text-[11px] font-semibold text-primary">
                         <CoinsIcon className="size-3.5" weight="fill" />
                         <span className="truncate">{formatPlayActionMeta(copy, item.action)}</span>
                       </div>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
@@ -2379,7 +2411,7 @@ export function Pets({ className }: PetsProps) {
                     .replace("{total}", String(PET_DAILY_GOALS.length))}
                 </span>
               </div>
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+              <div className="pets-daily-grid">
                 {dailyGoalProgress.map((goal) => (
                   <div
                     key={goal.id}
@@ -2442,9 +2474,181 @@ export function Pets({ className }: PetsProps) {
                 })}
               </div>
             </div>
+
+            <div className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(min(100%,280px),0.72fr)]">
+              <div className="rounded-lg border border-border/70 bg-secondary/20 p-4">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h4 className="flex items-center gap-2 text-sm font-bold text-foreground">
+                      <BrainIcon className="size-4 text-primary" weight="fill" />
+                      {copy.aiGrowthTitle}
+                    </h4>
+                    <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+                      {copy.aiGrowthDescription}
+                    </p>
+                  </div>
+                  <span className={cn(
+                    "shrink-0 rounded-full px-2 py-1 text-[11px] font-bold",
+                    aiConfigured ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground",
+                  )}>
+                    {copy.aiBudgetUse
+                      .replace("{used}", String(aiUsedToday))
+                      .replace("{limit}", String(aiDailyLimit))}
+                  </span>
+                </div>
+
+                <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(min(100%,180px),220px)]">
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-background/45 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-foreground">{copy.aiTokenConsent}</p>
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                        {copy.aiTokenConsentHint}
+                      </p>
+                    </div>
+                    <Toggle
+                      checked={settings.pet_ai_token_enabled}
+                      onChange={(value) => void togglePetAiTokenUse(value)}
+                    />
+                  </div>
+
+                  <div>
+                    <div className="mb-2 flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
+                      <span>{copy.aiDailyBudget}</span>
+                      <span>{aiDailyLimit}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[1, 3, 5].map((budget) => (
+                        <Button
+                          key={budget}
+                          type="button"
+                          onClick={() => void updateAiDailyBudget(budget)}
+                          variant={aiDailyLimit === budget ? "primary" : "secondary"}
+                          className={cn(
+                            "july-heroui-button h-9 rounded-lg border px-3 py-2 text-xs font-bold transition-colors",
+                            aiDailyLimit === budget
+                              ? "border-primary/60 bg-primary/10 text-primary"
+                              : "border-border bg-background/55 text-muted-foreground hover:bg-secondary hover:text-foreground",
+                          )}
+                        >
+                          {budget}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={() => void runAiGrowth()}
+                  isDisabled={aiGrowthPending}
+                  variant={aiConfigured && settings.pet_ai_token_enabled && !aiBudgetReached ? "primary" : "secondary"}
+                  className={cn(
+                    "pet-action-button july-heroui-button mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-lg text-xs font-bold transition-colors disabled:cursor-wait disabled:opacity-70",
+                    aiConfigured && settings.pet_ai_token_enabled && !aiBudgetReached
+                      ? "july-heroui-button-primary bg-primary text-primary-foreground hover:bg-primary/90"
+                      : "border border-border bg-background/60 text-muted-foreground hover:bg-secondary hover:text-foreground",
+                  )}
+                >
+                  <MagicWandIcon className="size-4" weight="fill" />
+                  {aiGrowthPending ? copy.aiGrowing : copy.aiGrowAction}
+                </Button>
+              </div>
+
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 bg-secondary/20 p-4">
+                  <div className="min-w-0">
+                    <h4 className="flex items-center gap-2 text-sm font-bold text-foreground">
+                      <DesktopIcon className="size-4 text-primary" weight="fill" />
+                      {copy.desktopPet}
+                    </h4>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      {copy.desktopPetDescription}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    isDisabled={desktopPetPending}
+                    aria-busy={desktopPetPending}
+                    data-pending={desktopPetPending ? "true" : undefined}
+                    onClick={() => void toggleDesktopPet(!settings.pet_desktop_enabled)}
+                    variant={settings.pet_desktop_enabled ? "secondary" : "primary"}
+                    className={cn(
+                      "pet-action-button july-heroui-button flex h-9 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-bold transition-colors disabled:cursor-wait disabled:opacity-70",
+                      settings.pet_desktop_enabled
+                        ? "border border-border bg-background/60 text-foreground hover:bg-secondary"
+                        : "july-heroui-button-primary bg-primary text-primary-foreground hover:bg-primary/90",
+                    )}
+                  >
+                    <RobotIcon className="size-4" weight={settings.pet_desktop_enabled ? "regular" : "fill"} />
+                    {desktopPetPending
+                      ? settings.pet_desktop_enabled
+                        ? copy.desktopPetClosing
+                        : copy.desktopPetOpening
+                      : settings.pet_desktop_enabled
+                        ? copy.backToPlayer
+                        : copy.enterDesktop}
+                  </Button>
+                </div>
+
+                <div
+                  key={`overview-${activeFeedback.nonce}`}
+                  aria-live="polite"
+                  className={cn(
+                    "pet-feedback-card flex items-start gap-3 rounded-lg border p-4",
+                    activeFeedback.tone === "success"
+                      ? "border-primary/45 bg-primary/10"
+                      : "border-border bg-secondary/25",
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "flex size-9 shrink-0 items-center justify-center rounded-lg",
+                      activeFeedback.tone === "success" ? "bg-primary text-primary-foreground" : "bg-secondary text-primary",
+                    )}
+                  >
+                    <FeedbackIcon className="size-4.5" weight="fill" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="mb-1 text-[11px] font-semibold text-muted-foreground">{copy.latestFeedback}</p>
+                    <h4 className="text-sm font-bold text-foreground">{activeFeedback.title}</h4>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{activeFeedback.detail}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-lg border border-border/70 bg-secondary/20 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h4 className="font-heading text-sm font-bold text-foreground">{copy.recentActivity}</h4>
+                <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-bold text-muted-foreground">
+                  {careState.recentEvents.length}
+                </span>
+              </div>
+              {careState.recentEvents.length > 0 ? (
+                <div className="grid gap-2 lg:grid-cols-2">
+                  {careState.recentEvents.slice(0, 4).map((event) => (
+                    <div key={event.id} className="flex items-center justify-between gap-3 rounded-lg bg-background/45 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-bold text-foreground">{event.label}</p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          {new Date(event.at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-primary/15 px-2 py-1 text-[11px] font-bold text-primary">
+                        {formatEventTokens(event.tokens)} / +{event.xp} XP
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-lg bg-background/45 p-3 text-xs leading-relaxed text-muted-foreground">
+                  {copy.noActivity}
+                </p>
+              )}
+            </div>
           </div>
 
-          <aside className="space-y-4">
+          <aside className="pets-side-panel min-w-0 space-y-4">
             <div className="rounded-lg border border-border/70 bg-secondary/20 p-4">
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div>
@@ -2461,22 +2665,23 @@ export function Pets({ className }: PetsProps) {
                 </span>
               </div>
               <div className="flex gap-2">
-                <input
+                <Input
                   value={petNameDraft}
                   onChange={(event) => setPetNameDraft(event.target.value)}
                   disabled={careState.petNameClaimed || petNameSaving}
                   placeholder={copy.petNamePlaceholder}
                   maxLength={24}
-                  className="h-10 min-w-0 flex-1 rounded-lg border border-border/70 bg-background/65 px-3 text-sm font-medium text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/60 focus:ring-2 focus:ring-primary/15 disabled:opacity-60"
+                  className="july-heroui-field h-10 min-w-0 flex-1 rounded-lg border-border/70 bg-background/65 text-sm font-medium text-foreground disabled:opacity-60"
                 />
-                <button
+                <Button
                   type="button"
-                  disabled={careState.petNameClaimed || petNameSaving}
+                  isDisabled={careState.petNameClaimed || petNameSaving}
                   onClick={() => void handleSavePetName()}
-                  className="pet-action-button flex h-10 shrink-0 items-center justify-center rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
+                  variant="primary"
+                  className="pet-action-button july-heroui-button july-heroui-button-primary flex h-10 shrink-0 items-center justify-center rounded-lg px-3 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
                 >
                   {petNameSaving ? copy.applying : copy.savePetName}
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -2490,7 +2695,7 @@ export function Pets({ className }: PetsProps) {
                   {copy.petLevel}{currentPetProgress.level}
                 </span>
               </div>
-              <button
+              <Button
                 type="button"
                 onClick={() => {
                   dispatchPetAction("wave");
@@ -2501,7 +2706,8 @@ export function Pets({ className }: PetsProps) {
                     durationMs: 3600,
                   });
                 }}
-                className="group flex w-full items-end justify-center rounded-lg bg-background/45 py-4 transition-colors hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
+                variant="ghost"
+                className="group flex h-auto w-full items-end justify-center rounded-lg bg-background/45 py-4 transition-colors hover:bg-background/70"
               >
                 <PetSprite
                   variantId={currentPet.id}
@@ -2509,28 +2715,28 @@ export function Pets({ className }: PetsProps) {
                   width={112}
                   className="transition-transform duration-200 group-hover:scale-105"
                 />
-              </button>
+              </Button>
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-border">
                 <div
                   className="pet-progress-fill h-full rounded-full bg-primary"
                   style={{ width: `${currentPetProgress.progress * 100}%` }}
                 />
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="pets-vitals-grid mt-3">
                 <StatBar label={copy.food} value={petStats.food} icon={ForkKnifeIcon} />
                 <StatBar label={copy.energy} value={petStats.energy} icon={BatteryChargingIcon} />
                 <StatBar label={copy.play} value={petStats.play} icon={SmileyIcon} />
                 <StatBar label={copy.bond} value={petStats.bond} icon={HeartIcon} />
               </div>
-              <div className="mt-3 grid grid-cols-4 gap-2">
+              <div className="pets-care-grid mt-3">
                 {CARE_ACTION_CONFIG.map((item) => {
                   const Icon = item.icon;
                   const pending = Boolean(careActionPending[item.action]);
                   return (
-                    <button
+                    <Button
                       key={item.action}
                       type="button"
-                      disabled={pending}
+                      isDisabled={pending}
                       onClick={() =>
                         void careForPet({
                           action: item.action,
@@ -2540,14 +2746,15 @@ export function Pets({ className }: PetsProps) {
                           requireVirtualModule: false,
                         })
                       }
-                      className="pet-action-button flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border border-border bg-background/60 px-2 py-2 text-[11px] font-bold text-foreground transition-colors hover:border-primary/45 hover:bg-primary/10 disabled:cursor-wait disabled:opacity-70"
+                      variant="secondary"
+                      className="pet-care-action-button pet-action-button july-heroui-button flex h-auto min-h-16 flex-col items-center justify-center gap-1 overflow-hidden rounded-lg border-border bg-background/60 px-2 py-2 text-center text-[11px] font-bold text-foreground whitespace-normal transition-colors hover:border-primary/45 hover:bg-primary/10 disabled:cursor-wait disabled:opacity-70"
                     >
                       <Icon className="size-4 text-primary" weight={pending ? "fill" : "regular"} />
                       <span className="truncate">{copy[item.labelKey]}</span>
                       <span className="max-w-full truncate text-[9px] font-semibold text-muted-foreground">
                         {formatCareActionMeta(copy, item.action)}
                       </span>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
@@ -2566,163 +2773,13 @@ export function Pets({ className }: PetsProps) {
                 <Toggle checked={settings.pet_enabled} onChange={(value) => void toggleResidentPet(value)} />
               </div>
             </div>
-
-            <div className="rounded-lg border border-border/70 bg-secondary/20 p-3">
-              <div className="mb-3 flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h4 className="flex items-center gap-2 text-sm font-bold text-foreground">
-                    <BrainIcon className="size-4 text-primary" weight="fill" />
-                    {copy.aiGrowthTitle}
-                  </h4>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    {copy.aiGrowthDescription}
-                  </p>
-                </div>
-                <span className={cn(
-                  "shrink-0 rounded-full px-2 py-1 text-[11px] font-bold",
-                  aiConfigured ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground",
-                )}>
-                  {copy.aiBudgetUse
-                    .replace("{used}", String(aiUsedToday))
-                    .replace("{limit}", String(aiDailyLimit))}
-                </span>
-              </div>
-
-              <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-background/45 px-3 py-2">
-                <div>
-                  <p className="text-xs font-bold text-foreground">{copy.aiTokenConsent}</p>
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-                    {copy.aiTokenConsentHint}
-                  </p>
-                </div>
-                <Toggle
-                  checked={settings.pet_ai_token_enabled}
-                  onChange={(value) => void togglePetAiTokenUse(value)}
-                />
-              </div>
-
-              <div className="mb-3">
-                <div className="mb-2 flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
-                  <span>{copy.aiDailyBudget}</span>
-                  <span>{aiDailyLimit}</span>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {[1, 3, 5].map((budget) => (
-                    <button
-                      key={budget}
-                      type="button"
-                      onClick={() => void updateAiDailyBudget(budget)}
-                      className={cn(
-                        "rounded-lg border px-3 py-2 text-xs font-bold transition-colors",
-                        aiDailyLimit === budget
-                          ? "border-primary/60 bg-primary/10 text-primary"
-                          : "border-border bg-background/55 text-muted-foreground hover:bg-secondary hover:text-foreground",
-                      )}
-                    >
-                      {budget}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => void runAiGrowth()}
-                disabled={aiGrowthPending}
-                className={cn(
-                  "pet-action-button flex h-10 w-full items-center justify-center gap-2 rounded-lg text-xs font-bold transition-colors disabled:cursor-wait disabled:opacity-70",
-                  aiConfigured && settings.pet_ai_token_enabled && !aiBudgetReached
-                    ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                    : "border border-border bg-background/60 text-muted-foreground hover:bg-secondary hover:text-foreground",
-                )}
-              >
-                <MagicWandIcon className="size-4" weight="fill" />
-                {aiGrowthPending ? copy.aiGrowing : copy.aiGrowAction}
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 bg-secondary/20 p-3">
-              <div>
-                <h4 className="flex items-center gap-2 text-sm font-bold text-foreground">
-                  <DesktopIcon className="size-4 text-primary" weight="fill" />
-                  {copy.desktopPet}
-                </h4>
-                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  {copy.desktopPetDescription}
-                </p>
-              </div>
-              <button
-                type="button"
-                disabled={desktopPetPending}
-                onClick={() => void toggleDesktopPet(!settings.pet_desktop_enabled)}
-                className={cn(
-                  "pet-action-button flex h-9 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-bold transition-colors disabled:cursor-wait disabled:opacity-70",
-                  settings.pet_desktop_enabled
-                    ? "border border-border bg-background/60 text-foreground hover:bg-secondary"
-                    : "bg-primary text-primary-foreground hover:bg-primary/90",
-                )}
-              >
-                <RobotIcon className="size-4" weight={settings.pet_desktop_enabled ? "regular" : "fill"} />
-                {settings.pet_desktop_enabled ? copy.backToPlayer : copy.enterDesktop}
-              </button>
-            </div>
-
-            <div
-              key={`overview-${activeFeedback.nonce}`}
-              aria-live="polite"
-              className={cn(
-                "pet-feedback-card flex items-start gap-3 rounded-lg border p-3",
-                activeFeedback.tone === "success"
-                  ? "border-primary/45 bg-primary/10"
-                  : "border-border bg-secondary/25",
-              )}
-            >
-              <div
-                className={cn(
-                  "flex size-9 shrink-0 items-center justify-center rounded-lg",
-                  activeFeedback.tone === "success" ? "bg-primary text-primary-foreground" : "bg-secondary text-primary",
-                )}
-              >
-                <FeedbackIcon className="size-4.5" weight="fill" />
-              </div>
-              <div className="min-w-0">
-                <p className="mb-1 text-[11px] font-semibold text-muted-foreground">{copy.latestFeedback}</p>
-                <h4 className="text-sm font-bold text-foreground">{activeFeedback.title}</h4>
-                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{activeFeedback.detail}</p>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="mb-2 font-heading text-sm font-bold text-foreground">{copy.recentActivity}</h4>
-              {careState.recentEvents.length > 0 ? (
-                <div className="space-y-2">
-                  {careState.recentEvents.slice(0, 4).map((event) => (
-                    <div key={event.id} className="flex items-center justify-between gap-3 rounded-lg bg-secondary/25 px-3 py-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-bold text-foreground">{event.label}</p>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">
-                          {new Date(event.at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <span className="shrink-0 rounded-full bg-primary/15 px-2 py-1 text-[11px] font-bold text-primary">
-                        {formatEventTokens(event.tokens)} / +{event.xp} XP
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="rounded-lg bg-secondary/25 p-3 text-xs leading-relaxed text-muted-foreground">
-                  {copy.noActivity}
-                </p>
-              )}
-            </div>
           </aside>
         </div>
       </section>
       )}
 
       {activeView === "library" && (
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid min-w-0 gap-5 2xl:grid-cols-[minmax(0,1fr)_minmax(min(100%,300px),360px)]">
         <section
           className="rounded-xl border border-border/70 bg-card"
           style={{ animation: `card-in 350ms ${EASE_OUT} 120ms both` }}
@@ -2737,34 +2794,35 @@ export function Pets({ className }: PetsProps) {
               </div>
               <div className="flex gap-1 rounded-lg border border-border/70 bg-secondary/35 p-1">
                 {FILTERS.map((filterId) => (
-                  <button
+                  <Button
                     key={filterId}
                     type="button"
                     onClick={() => setFilter(filterId)}
+                    variant={filter === filterId ? "primary" : "ghost"}
                     className={cn(
-                      "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+                      "h-8 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
                       filter === filterId
                         ? "bg-primary text-primary-foreground"
                         : "text-muted-foreground hover:bg-secondary hover:text-foreground",
                     )}
                   >
                     {copy[filterId]}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
             <label className="flex h-10 items-center gap-2 rounded-lg border border-border/70 bg-background/70 px-3 text-sm text-muted-foreground focus-within:ring-2 focus-within:ring-primary/50">
               <MagnifyingGlassIcon className="size-4 shrink-0" />
-              <input
+              <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder={copy.searchPlaceholder}
-                className="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                className="h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground"
               />
             </label>
           </div>
 
-          <div className="grid max-h-[600px] grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3 overflow-y-auto p-5">
+          <div className="grid max-h-[600px] min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-3 overflow-y-auto p-5">
             {pets.map((pet) => {
               const applied = settings.pet_variant === pet.id;
               const previewing = previewPetId === pet.id;
@@ -2774,19 +2832,20 @@ export function Pets({ className }: PetsProps) {
               const petProgress = getPetCareProgress(getPetXp(careState, pet.id));
 
               return (
-                <button
+                <Button
                   key={pet.id}
                   type="button"
                   onClick={() => previewPetChoice(pet.id)}
+                  variant="ghost"
                   className={cn(
-                    "group relative min-h-44 rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70",
+                    "pet-library-card group relative flex h-auto min-h-44 w-full flex-col items-stretch justify-start rounded-lg border p-4 text-left whitespace-normal transition-colors",
                     previewing && unlocked
                       ? "border-primary/70 bg-primary/10"
                       : "border-border bg-secondary/20 hover:border-muted-foreground/35 hover:bg-secondary/40",
                     (!unlocked || !owned) && "opacity-75",
                   )}
                 >
-                  <div className="mb-3 flex items-start justify-between gap-2">
+                  <div className="mb-3 flex min-w-0 items-start justify-between gap-2">
                     <span className="rounded-full border border-border/70 bg-background/70 px-2 py-1 text-[11px] font-semibold text-muted-foreground">
                       {sourceLabel(pet, copy)}
                     </span>
@@ -2808,7 +2867,7 @@ export function Pets({ className }: PetsProps) {
                     </span>
                   </div>
 
-                  <div className="flex items-end justify-between gap-3">
+                  <div className="flex min-w-0 items-end justify-between gap-3">
                     <div className="min-w-0">
                       <h4 className="truncate font-heading text-base font-bold text-foreground">
                         {pet.displayName}
@@ -2832,7 +2891,7 @@ export function Pets({ className }: PetsProps) {
                       />
                     </div>
                   </div>
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -2874,23 +2933,26 @@ export function Pets({ className }: PetsProps) {
             <div>
               <div className="mb-3 flex items-center justify-between">
                 <h4 className="font-heading text-sm font-bold text-foreground">{copy.preview}</h4>
-                <button
+                <Button
                   type="button"
                   onClick={resetPreviewAction}
-                  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  variant="ghost"
+                  isIconOnly
+                  className="july-heroui-button july-heroui-icon-button size-8 min-h-8 min-w-8 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                   aria-label={copy.resetFocus}
                 >
                   <ArrowCounterClockwiseIcon className="size-4" />
-                </button>
+                </Button>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 {PET_ACTIONS.map((action) => (
-                  <button
+                  <Button
                     key={action.key}
                     type="button"
                     onClick={() => playPreviewAction(action.mood, copy[action.key])}
+                    variant={previewMood === action.mood ? "primary" : "secondary"}
                     className={cn(
-                      "pet-action-button rounded-lg border px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70",
+                      "pet-action-button july-heroui-button h-9 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors",
                       previewMood === action.mood
                         ? "border-primary/70 bg-primary/10 text-primary"
                         : "border-border bg-secondary/25 text-muted-foreground hover:text-foreground",
@@ -2898,15 +2960,20 @@ export function Pets({ className }: PetsProps) {
                     aria-pressed={previewMood === action.mood}
                   >
                     {copy[action.key]}
-                  </button>
+                  </Button>
                 ))}
               </div>
-              <button
+              <Button
                 type="button"
                 onClick={() => void applyPreviewPet()}
-                disabled={applyingPet}
+                isDisabled={applyingPet}
+                variant={
+                  !applyingPet && isPetAvailable(previewPet.id, careState)
+                    ? "primary"
+                    : "secondary"
+                }
                 className={cn(
-                  "pet-action-button mt-3 flex h-10 w-full items-center justify-center rounded-lg px-4 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70",
+                  "pet-action-button july-heroui-button mt-3 flex h-10 w-full items-center justify-center rounded-lg px-4 text-sm font-bold transition-colors",
                   applyingPet
                     ? "cursor-wait bg-secondary text-muted-foreground"
                     : isPetUnlocked(previewPet.id, careState)
@@ -2923,7 +2990,7 @@ export function Pets({ className }: PetsProps) {
                     : isPetUnlocked(previewPet.id, careState)
                       ? copy.buyFor.replace("{cost}", String(getPetStorePrice(previewPet.id)))
                       : copy.unlockAt.replace("{level}", String(getPetUnlockLevel(previewPet.id)))}
-              </button>
+              </Button>
             </div>
 
             <div
@@ -3029,14 +3096,15 @@ export function Pets({ className }: PetsProps) {
                   </div>
 
                   <div className="mt-auto pt-4">
-                    <button
+                    <Button
                       type="button"
-                      disabled={buying || applyingPet}
+                      isDisabled={buying || applyingPet}
                       onClick={() => owned ? void applyOwnedShopPet(pet) : void buyPet(pet)}
+                      variant={owned || canBuy ? "primary" : "secondary"}
                       className={cn(
-                        "pet-action-button flex h-10 w-full items-center justify-center gap-2 rounded-lg text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 disabled:cursor-not-allowed disabled:opacity-70",
+                        "pet-action-button july-heroui-button flex h-10 w-full items-center justify-center gap-2 rounded-lg text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-70",
                         owned || canBuy
-                          ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                          ? "july-heroui-button-primary bg-primary text-primary-foreground hover:bg-primary/90"
                           : "border border-border bg-background/60 text-muted-foreground hover:bg-secondary hover:text-foreground",
                       )}
                     >
@@ -3054,7 +3122,7 @@ export function Pets({ className }: PetsProps) {
                           : unlocked
                             ? copy.buyFor.replace("{cost}", String(price))
                             : copy.unlockAt.replace("{level}", String(unlockLevel))}
-                    </button>
+                    </Button>
                     {!owned && unlocked && careState.tokens < price && (
                       <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
                         {copy.shopTokenShort}
@@ -3086,19 +3154,21 @@ export function Pets({ className }: PetsProps) {
                 <span className="rounded-full border border-border/70 bg-secondary/35 px-3 py-1.5 text-xs font-semibold text-muted-foreground">
                   {copy.activeModules.replace("{count}", String(activePluginCount))}
                 </span>
-                <button
+                <Button
                   type="button"
                   onClick={() => setActiveView("overview")}
-                  className="flex size-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
+                  variant="ghost"
+                  isIconOnly
+                  className="july-heroui-button july-heroui-icon-button flex size-9 min-h-9 min-w-9 items-center justify-center rounded-lg border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                   aria-label={copy.closeModules}
                 >
                   <XIcon className="size-4" weight="bold" />
-                </button>
+                </Button>
               </div>
             </div>
 
-            <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid min-w-0 gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(min(100%,280px),320px)]">
+              <div className="grid min-w-0 gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))]">
                 {PET_PLUGINS.map((plugin) => {
                   const Icon = PLUGIN_ICONS[plugin.id];
                   const checked = activePluginIds.includes(plugin.id);
@@ -3140,14 +3210,14 @@ export function Pets({ className }: PetsProps) {
                           <span className="mb-1.5 block text-[11px] font-semibold text-muted-foreground">
                             {copy.askPetQuestion}
                           </span>
-                          <input
+                          <Input
                             value={magicQuestion}
                             onChange={(event) => setMagicQuestion(event.target.value)}
                             onKeyDown={(event) => {
                               if (event.key === "Enter") void runPluginAction(plugin.id);
                             }}
                             placeholder={copy.askPetPlaceholder}
-                            className="h-9 w-full rounded-lg border border-border/70 bg-background/65 px-3 text-xs font-medium text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/60 focus:ring-2 focus:ring-primary/15"
+                            className="july-heroui-field h-9 w-full rounded-lg border-border/70 bg-background/65 text-xs font-medium text-foreground"
                             maxLength={160}
                           />
                         </label>
@@ -3166,14 +3236,15 @@ export function Pets({ className }: PetsProps) {
                             {checked ? result : copy.moduleDisabledHint}
                           </p>
                         </div>
-                        <button
+                        <Button
                           type="button"
                           onClick={() => checked ? void runPluginAction(plugin.id) : void togglePlugin(plugin.id, true)}
-                          disabled={Boolean(runningPlugins[plugin.id] || pluginTogglePending[plugin.id])}
+                          isDisabled={Boolean(runningPlugins[plugin.id] || pluginTogglePending[plugin.id])}
+                          variant={checked ? "primary" : "secondary"}
                           className={cn(
-                            "flex h-9 w-full items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 disabled:cursor-wait disabled:opacity-70",
+                            "july-heroui-button flex h-9 w-full items-center justify-center gap-2 rounded-lg text-xs font-bold transition-all duration-200 disabled:cursor-wait disabled:opacity-70",
                             checked
-                              ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                              ? "july-heroui-button-primary bg-primary text-primary-foreground hover:bg-primary/90"
                               : "border border-border bg-background/60 text-muted-foreground hover:bg-secondary hover:text-foreground",
                           )}
                         >
@@ -3183,7 +3254,7 @@ export function Pets({ className }: PetsProps) {
                             : checked
                               ? copy.useModule
                               : copy.enableModule}
-                        </button>
+                        </Button>
                       </div>
                     </article>
                   );
@@ -3202,15 +3273,15 @@ export function Pets({ className }: PetsProps) {
                     <StatBar label={copy.play} value={petStats.play} icon={SmileyIcon} />
                     <StatBar label={copy.bond} value={petStats.bond} icon={HeartIcon} />
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="mt-3 grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,8.75rem),1fr))] gap-2">
                     {CARE_ACTION_CONFIG.map((item) => {
                       const Icon = item.icon;
                       const pending = Boolean(careActionPending[item.action]);
                       return (
-                        <button
+                        <Button
                           key={item.action}
                           type="button"
-                          disabled={pending}
+                          isDisabled={pending}
                           onClick={() =>
                             void careForPet({
                               action: item.action,
@@ -3220,8 +3291,9 @@ export function Pets({ className }: PetsProps) {
                               requireVirtualModule: true,
                             })
                           }
+                          variant="secondary"
                           className={cn(
-                            "pet-action-button flex min-h-14 items-center gap-2 rounded-lg border border-border bg-background/60 px-3 py-2 text-left text-xs font-semibold text-foreground transition-colors hover:border-primary/45 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 disabled:cursor-wait disabled:opacity-70",
+                            "pet-action-button july-heroui-button flex h-auto min-h-14 items-center justify-start gap-2 rounded-lg border-border bg-background/60 px-3 py-2 text-left text-xs font-semibold text-foreground transition-colors hover:border-primary/45 hover:bg-primary/10 disabled:cursor-wait disabled:opacity-70",
                             pending && "border-primary/45 bg-primary/10",
                             !virtualPetEnabled && "text-muted-foreground",
                           )}
@@ -3233,7 +3305,7 @@ export function Pets({ className }: PetsProps) {
                               {formatCareActionMeta(copy, item.action)}
                             </span>
                           </span>
-                        </button>
+                        </Button>
                       );
                     })}
                   </div>
@@ -3248,40 +3320,43 @@ export function Pets({ className }: PetsProps) {
                     <TimerIcon className="size-4 text-primary" weight={focusRunning ? "fill" : "regular"} />
                   </div>
                   <div className="grid grid-cols-3 gap-2">
-                    <button
+                    <Button
                       type="button"
                       onClick={startFocus}
+                      variant="primary"
                       className={cn(
-                        "pet-action-button flex items-center justify-center gap-1 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground",
+                        "pet-action-button july-heroui-button july-heroui-button-primary flex h-9 items-center justify-center gap-1 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground",
                         !focusEnabled && "border border-border bg-background/60 text-muted-foreground hover:bg-secondary hover:text-foreground",
                         focusRunning && "bg-primary/80",
                       )}
                     >
                       <PlayIcon className="size-3.5" weight="fill" />
                       {copy.startFocus}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
                       onClick={pauseFocus}
+                      variant="secondary"
                       className={cn(
-                        "pet-action-button flex items-center justify-center gap-1 rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground",
+                        "pet-action-button july-heroui-button flex h-9 items-center justify-center gap-1 rounded-lg border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground",
                         !focusEnabled && "text-muted-foreground hover:bg-secondary hover:text-foreground",
                       )}
                     >
                       <PauseIcon className="size-3.5" weight="fill" />
                       {copy.pauseFocus}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
                       onClick={resetFocus}
+                      variant="secondary"
                       className={cn(
-                        "pet-action-button flex items-center justify-center gap-1 rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground",
+                        "pet-action-button july-heroui-button flex h-9 items-center justify-center gap-1 rounded-lg border-border bg-background/60 px-3 py-2 text-xs font-semibold text-foreground",
                         !focusEnabled && "text-muted-foreground hover:bg-secondary hover:text-foreground",
                       )}
                     >
                       <ArrowCounterClockwiseIcon className="size-3.5" />
                       {copy.resetFocus}
-                    </button>
+                    </Button>
                   </div>
                 </div>
 

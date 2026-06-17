@@ -8,6 +8,7 @@ import {
   TextStrikethroughIcon as TextStrikethrough,
   ClockIcon as Clock,
 } from "@phosphor-icons/react";
+import { Button } from "@heroui/react";
 import { cn } from "@/lib/utils";
 import { buildTimestampHtml, formatTimestamp, parseTimeString } from "@/lib/format";
 import { SNAPPY, EASE_OUT } from "@/lib/constants";
@@ -329,22 +330,25 @@ export function NoteEditor({
     <div className={cn("rounded-lg border border-border bg-card", className)}>
       <div className="flex items-center gap-0.5 border-b border-border/50 px-2 py-1.5">
         {toolbarButtons.map(({ command, icon: Icon, label }) => (
-          <button
+          <Button
             key={command}
+            type="button"
+            variant="ghost"
+            isIconOnly
             onMouseDown={(e) => {
               e.preventDefault();
               execFormat(command);
             }}
-            title={label}
+            aria-label={label}
             className={cn(
-              "rounded p-1 transition-colors",
+              "july-heroui-button july-heroui-icon-button size-7 min-h-7 min-w-7 rounded p-1",
               activeFormats.has(command)
                 ? "bg-secondary text-foreground"
                 : "text-muted-foreground hover:bg-secondary hover:text-foreground"
             )}
           >
             <Icon className="size-3.5" />
-          </button>
+          </Button>
         ))}
 
         <span className="ml-2 font-mono text-[10px] text-muted-foreground/40">
@@ -375,14 +379,16 @@ export function NoteEditor({
             }}
           >
             {suggestions.map((s, i) => (
-              <button
+              <Button
                 key={s.seconds}
+                type="button"
+                variant="ghost"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   replaceAtQuery(s.seconds);
                 }}
                 className={cn(
-                  "flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors",
+                  "flex min-h-9 w-full items-center justify-start gap-2.5 rounded-none border-0 px-3 py-2 text-left shadow-none",
                   i === selectedIndex
                     ? "bg-secondary"
                     : "hover:bg-secondary/50"
@@ -395,7 +401,7 @@ export function NoteEditor({
                 <span className="ml-auto font-sans text-[10px] text-muted-foreground">
                   {s.description}
                 </span>
-              </button>
+              </Button>
             ))}
           </div>
         )}
@@ -403,24 +409,30 @@ export function NoteEditor({
 
       <div className="flex items-center justify-end gap-1.5 border-t border-border/50 px-3 py-1.5">
         {onCancel && (
-          <button
+          <Button
+            type="button"
+            variant="ghost"
+            isIconOnly
             onClick={onCancel}
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            className="july-heroui-button july-heroui-icon-button size-8 min-h-8 min-w-8 text-muted-foreground hover:bg-secondary hover:text-foreground"
+            aria-label={t.common.cancel}
           >
             <X className="size-3.5" />
-          </button>
+          </Button>
         )}
-        <button
+        <Button
+          type="button"
+          variant="primary"
           onMouseDown={(e) => {
             e.preventDefault();
             handleSubmit();
           }}
-          className="flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1 font-sans text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
+          className="july-heroui-button july-heroui-button-primary min-h-8 gap-1.5 rounded-md px-2.5 py-1 text-xs"
           style={{ transitionTimingFunction: SNAPPY }}
         >
           <PaperPlaneTilt className="size-3.5" weight="fill" />
           {t.common.save}
-        </button>
+        </Button>
       </div>
     </div>
   );

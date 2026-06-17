@@ -5,6 +5,7 @@ import {
   CaretDownIcon as CaretDown,
   HeartIcon as Heart,
 } from "@phosphor-icons/react";
+import { Button } from "@heroui/react";
 import { cn } from "@/lib/utils";
 import { EASE } from "@/lib/constants";
 import { formatDuration } from "@/lib/format";
@@ -43,9 +44,12 @@ export function SectionAccordion({
 
   return (
     <div className="border-b border-border last:border-b-0">
-      <button
+      <Button
+        type="button"
+        variant="ghost"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-secondary"
+        className="flex min-h-0 w-full items-start justify-start gap-3 rounded-none border-0 bg-transparent px-4 py-2.5 text-left shadow-none hover:bg-secondary"
+        aria-expanded={open}
       >
         <CaretDown
           className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
@@ -69,7 +73,7 @@ export function SectionAccordion({
             {sectionDuration > 0 && <> · {formatDuration(sectionDuration)}</>}
           </span>
         </div>
-      </button>
+      </Button>
 
       <div
         style={{
@@ -84,11 +88,13 @@ export function SectionAccordion({
             const isActive = lesson.id === activeLessonId;
 
             return (
-              <button
+              <Button
+                type="button"
+                variant="ghost"
                 key={lesson.id}
                 onClick={() => onSelectLesson(lesson)}
                 className={cn(
-                  "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-secondary",
+                  "group flex min-h-0 w-full items-center justify-start gap-3 rounded-lg border-0 px-3 py-2.5 text-left shadow-none hover:bg-secondary",
                   isActive && "bg-primary/5",
                 )}
                 style={{
@@ -153,7 +159,7 @@ export function SectionAccordion({
                     </>
                   )}
                 </span>
-              </button>
+              </Button>
             );
           })}
         </div>

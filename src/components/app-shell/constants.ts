@@ -11,7 +11,7 @@ import { EASE } from "@/lib/constants";
 import type { NavItem } from "@/types";
 
 export { EASE };
-export const DUR = "500ms";
+export const DUR = "220ms";
 export const spring = (extra = "") =>
   `${extra ? extra + " " : ""}${DUR} ${EASE}`.trim();
 

@@ -9,6 +9,7 @@ import {
   SpinnerGapIcon as SpinnerGap,
   BookmarkSimpleIcon as BookmarkSimple,
 } from "@phosphor-icons/react";
+import { Button, ListBox, ListBoxItem, Select } from "@heroui/react";
 import { cn } from "@/lib/utils";
 import { CourseCard } from "@/components/dashboard/CourseCard";
 import { DashboardStatsBar } from "@/components/dashboard/DashboardStats";
@@ -198,34 +199,36 @@ export function Dashboard({ className }: DashboardProps) {
     return (
       <div className={cn("mx-auto flex max-w-6xl flex-col items-center justify-center gap-3 py-32", className)}>
         <p className="font-sans text-sm text-muted-foreground">{t.dashboard.failedLibrary}</p>
-        <button
+        <Button
+          type="button"
+          variant="ghost"
           onClick={() => loadCourses(true)}
-          className="font-sans text-xs font-medium text-primary transition-colors hover:text-primary/80"
+          className="july-heroui-button min-h-8 border-0 bg-transparent px-2 text-xs text-primary hover:text-primary/80"
         >
           {t.common.tryAgain}
-        </button>
+        </Button>
       </div>
     );
   }
 
   if (courses.length === 0) {
     return (
-      <div className={cn("mx-auto max-w-6xl", className)}>
+      <div className={cn("july-page", className)}>
         <EmptyLibrary onImport={handleImport} />
       </div>
     );
   }
 
   return (
-    <div className={cn("mx-auto max-w-6xl", className)}>
+    <div className={cn("july-page", className)}>
       {stats && <DashboardStatsBar stats={stats} className="mb-6" />}
 
-      <div className="mb-6 flex items-center gap-3">
+      <div className="july-toolbar mb-6">
         <SquircleSearch
           value={search}
           onChange={setSearch}
           placeholder={t.dashboard.searchCourses}
-          className="flex-1"
+          className="min-w-[min(100%,18rem)] flex-1"
         />
 
         <SquircleButton
@@ -261,48 +264,54 @@ export function Dashboard({ className }: DashboardProps) {
         className="overflow-hidden"
       >
         <div className="mb-6 flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             {availableCategories.map((cat) => (
-              <button
+              <Button
+                type="button"
+                variant="ghost"
                 key={cat}
                 onClick={() => setCategory(cat)}
                 className={cn(
-                  "rounded-full border px-3 py-1.5 font-sans text-xs font-medium transition-colors duration-150",
+                  "july-heroui-button min-h-8 rounded-full px-3 py-1.5 text-xs duration-150",
                   category === cat
                     ? "border-primary/25 bg-primary/15 text-primary"
                     : "border-border/50 bg-secondary text-muted-foreground hover:text-foreground"
                 )}
               >
                 {getCategoryLabel(cat)}
-              </button>
+              </Button>
             ))}
           </div>
 
           <div className="h-5 w-px bg-border" />
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             {(Object.keys(statusLabels) as (CourseStatus | "all")[]).map((s) => (
-              <button
+              <Button
+                type="button"
+                variant="ghost"
                 key={s}
                 onClick={() => setStatus(s)}
                 className={cn(
-                  "rounded-full border px-3 py-1.5 font-sans text-xs font-medium transition-colors duration-150",
+                  "july-heroui-button min-h-8 rounded-full px-3 py-1.5 text-xs duration-150",
                   status === s
                     ? "border-primary/25 bg-primary/15 text-primary"
                     : "border-border/50 bg-secondary text-muted-foreground hover:text-foreground"
                 )}
               >
                 {statusLabels[s]}
-              </button>
+              </Button>
             ))}
           </div>
 
           <div className="h-5 w-px bg-border" />
 
-          <button
+          <Button
+            type="button"
+            variant="ghost"
             onClick={() => setBookmarkFilter((v) => !v)}
             className={cn(
-              "flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-sans text-xs font-medium transition-colors duration-150",
+              "july-heroui-button min-h-8 gap-1.5 rounded-full px-3 py-1.5 text-xs duration-150",
               bookmarkFilter
                 ? "border-primary/25 bg-primary/15 text-primary"
                 : "border-border/50 bg-secondary text-muted-foreground hover:text-foreground"
@@ -310,26 +319,42 @@ export function Dashboard({ className }: DashboardProps) {
           >
             <BookmarkSimple className="size-3" weight={bookmarkFilter ? "fill" : "regular"} />
             {t.dashboard.bookmarked}
-          </button>
+          </Button>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex min-w-0 items-center gap-2">
             <SortAscending className="size-4 text-muted-foreground" />
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as SortOption)}
-              className="bg-transparent font-sans text-xs font-medium text-muted-foreground focus:outline-none"
+            <Select
+              selectedKey={sort}
+              onSelectionChange={(key) => {
+                if (key) setSort(String(key) as SortOption);
+              }}
+              aria-label={t.dashboard.filters}
+              className="min-w-32"
             >
-              {(Object.keys(sortLabels) as SortOption[]).map((s) => (
-                <option key={s} value={s}>
-                  {sortLabels[s]}
-                </option>
-              ))}
-            </select>
+              <Select.Trigger className="july-select flex min-h-8 min-w-32 items-center justify-between gap-2 bg-transparent px-2 py-1 font-sans text-xs font-medium text-muted-foreground focus:outline-none">
+                <Select.Value>{sortLabels[sort]}</Select.Value>
+                <Select.Indicator className="size-3.5 text-muted-foreground transition-transform data-[open=true]:rotate-180" />
+              </Select.Trigger>
+              <Select.Popover className="july-popover z-50 max-h-64 min-w-36 overflow-y-auto p-1.5">
+                <ListBox className="outline-none">
+                  {(Object.keys(sortLabels) as SortOption[]).map((s) => (
+                    <ListBoxItem
+                      key={s}
+                      id={s}
+                      textValue={sortLabels[s]}
+                      className="flex cursor-pointer items-center rounded-lg px-3 py-2 font-sans text-xs text-foreground outline-none transition-colors hover:bg-secondary data-[selected=true]:bg-primary/12 data-[selected=true]:text-primary"
+                    >
+                      {sortLabels[s]}
+                    </ListBoxItem>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
           </div>
         </div>
       </div>
 
-      <div className="mb-6 flex items-baseline justify-between">
+      <div className="mb-6 flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="font-heading text-2xl font-bold text-foreground">
           {t.dashboard.yourLibrary}
         </h2>
@@ -342,7 +367,7 @@ export function Dashboard({ className }: DashboardProps) {
       </div>
 
       {filteredCourses.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="july-card-grid gap-4">
           {filteredCourses.map((course, index) => (
             <div
               key={course.id}
@@ -365,14 +390,16 @@ export function Dashboard({ className }: DashboardProps) {
           <p className="font-sans text-sm text-muted-foreground">
             {t.dashboard.noCoursesMatch}
           </p>
-          <button
+          <Button
+            type="button"
+            variant="ghost"
             onClick={() => {
               setSearchParams({}, { replace: true });
             }}
-            className="font-sans text-xs font-medium text-primary transition-colors hover:text-primary/80"
+            className="july-heroui-button min-h-8 border-0 bg-transparent px-2 text-xs text-primary hover:text-primary/80"
           >
             {t.dashboard.clearAllFilters}
-          </button>
+          </Button>
         </div>
       )}
     </div>

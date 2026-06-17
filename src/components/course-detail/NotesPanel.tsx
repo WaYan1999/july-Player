@@ -3,18 +3,26 @@ import {
   PencilSimpleIcon as PencilSimple,
   TrashIcon as Trash,
 } from "@phosphor-icons/react";
+import { Button } from "@heroui/react";
+import { AiNotesAssistant } from "./ai-notes";
 import { NoteEditor } from "./NoteEditor";
 import { SNAPPY } from "@/lib/constants";
-import type { Note } from "@/types";
+import type { AppLanguage } from "@/lib/i18n";
+import type { Note, Subtitle } from "@/types";
 import { useI18n } from "@/hooks/useI18n";
 import { sanitizeNoteHtml } from "@/lib/sanitize";
 
 interface NotesPanelProps {
+  courseTitle: string;
+  lessonTitle: string;
+  subtitles: Subtitle[];
   notes: Note[];
   videoTime: number;
   editingNoteId: number | null;
   showEditor: boolean;
+  language: AppLanguage;
   onAdd: (content: string) => void;
+  onSaveAiNote: (content: string) => Promise<void>;
   onEdit: (noteId: number, content: string) => void;
   onDelete: (noteId: number) => void;
   onSetEditing: (id: number | null) => void;
@@ -23,11 +31,16 @@ interface NotesPanelProps {
 }
 
 export function NotesPanel({
+  courseTitle,
+  lessonTitle,
+  subtitles,
   notes,
   videoTime,
   editingNoteId,
   showEditor,
+  language,
   onAdd,
+  onSaveAiNote,
   onEdit,
   onDelete,
   onSetEditing,
@@ -37,6 +50,15 @@ export function NotesPanel({
   const { t } = useI18n();
   return (
     <div className="flex flex-col gap-3">
+      <AiNotesAssistant
+        courseTitle={courseTitle}
+        lessonTitle={lessonTitle}
+        subtitles={subtitles}
+        notes={notes}
+        language={language}
+        onSaveNote={onSaveAiNote}
+      />
+
       {showEditor ? (
         <NoteEditor
           videoTime={videoTime}
@@ -44,14 +66,16 @@ export function NotesPanel({
           onCancel={() => onSetShowEditor(false)}
         />
       ) : (
-        <button
+        <Button
+          type="button"
+          variant="ghost"
           onClick={() => onSetShowEditor(true)}
-          className="flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2.5 font-sans text-xs text-muted-foreground transition-colors hover:border-border hover:bg-secondary hover:text-foreground"
+          className="july-heroui-button justify-start gap-2 rounded-lg border-dashed px-3 py-2.5 text-xs text-muted-foreground hover:border-border hover:bg-secondary hover:text-foreground"
           style={{ transitionTimingFunction: SNAPPY }}
         >
           <NotePencil className="size-3.5" />
           {t.notesPanel.addNote}
-        </button>
+        </Button>
       )}
 
       {notes.length === 0 && !showEditor && (
@@ -98,6 +122,8 @@ function NoteCard({
   onCancelEdit,
   onTimestampClick,
 }: NoteCardProps) {
+  const { t } = useI18n();
+
   if (isEditing) {
     return (
       <NoteEditor
@@ -135,18 +161,26 @@ function NoteCard({
           }}
         />
         <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-          <button
+          <Button
+            type="button"
+            variant="ghost"
+            isIconOnly
             onClick={onStartEdit}
-            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            className="july-heroui-button july-heroui-icon-button size-7 min-h-7 min-w-7 text-muted-foreground hover:bg-secondary hover:text-foreground"
+            aria-label={t.common.edit}
           >
             <PencilSimple className="size-3" />
-          </button>
-          <button
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            isIconOnly
             onClick={() => onDelete(note.id)}
-            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
+            className="july-heroui-button july-heroui-icon-button size-7 min-h-7 min-w-7 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+            aria-label={t.common.delete}
           >
             <Trash className="size-3" />
-          </button>
+          </Button>
         </div>
       </div>
 

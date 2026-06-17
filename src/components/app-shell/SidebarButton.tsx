@@ -1,4 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
+import { Button } from "@heroui/react";
 import { cn } from "@/lib/utils";
 import type { NavItem } from "@/types";
 import { spring } from "./constants";
@@ -41,11 +42,12 @@ export function SidebarButton({
   };
 
   return (
-    <a
-      href={item.path}
+    <Button
+      type="button"
       onClick={handleClick}
+      variant="ghost"
       className={cn(
-        "group relative flex items-center py-2.5 font-sans text-sm",
+        "group relative flex min-h-10 w-full items-center overflow-visible rounded-lg py-2.5 font-sans text-sm shadow-none",
         collapsed ? "justify-center px-0" : "gap-3 px-3",
         isActive
           ? "font-semibold text-primary"
@@ -54,7 +56,7 @@ export function SidebarButton({
     >
       <div
         className={cn(
-          "absolute inset-0 squircle transition-[background] duration-200",
+          "absolute inset-0 rounded-lg transition-[background] duration-200",
           isActive
             ? "bg-primary/10"
             : "bg-transparent group-hover:bg-sidebar-accent"
@@ -78,10 +80,10 @@ export function SidebarButton({
       </span>
 
       {collapsed && (
-        <span className="squircle pointer-events-none absolute left-full z-50 ml-3 whitespace-nowrap bg-popover px-3 py-1.5 font-sans text-xs font-medium text-popover-foreground opacity-0 shadow-lg transition-all duration-200 ease-out group-hover:opacity-100 group-hover:translate-x-0 -translate-x-1">
+        <span className="pointer-events-none absolute left-full z-50 ml-3 -translate-x-1 whitespace-nowrap rounded-lg border border-border bg-popover px-3 py-1.5 font-sans text-xs font-medium text-popover-foreground opacity-0 shadow-lg transition-all duration-200 ease-out group-hover:translate-x-0 group-hover:opacity-100">
           {label}
         </span>
       )}
-    </a>
+    </Button>
   );
 }

@@ -1,16 +1,6 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import { AppShell } from "@/components/app-shell/AppShell";
-import { Dashboard } from "@/pages/Dashboard";
-import { CourseDetail } from "@/pages/CourseDetail";
-import { ImportCourse } from "@/pages/ImportCourse";
-import { Bookmarks } from "@/pages/Bookmarks";
-import { Progress } from "@/pages/Progress";
-import { Notes } from "@/pages/Notes";
-import { Settings } from "@/pages/Settings";
-import { AiModule } from "@/pages/AiModule";
-import { Pets } from "@/pages/Pets";
-import { DesktopPetWindow } from "@/components/DesktopPetWindow";
 import { ActivePathContext } from "@/hooks/usePageVisible";
 import { sectionMemory } from "@/hooks/useSectionMemory";
 import { SettingsContext, useSettingsProvider } from "@/hooks/useSettings";
@@ -21,6 +11,41 @@ import {
 } from "@/hooks/useUpdater";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { ReleaseNotesDialog } from "@/components/ReleaseNotesDialog";
+import { LoadingOrbit } from "@/components/ui/LoadingOrbit";
+
+const Dashboard = lazy(() =>
+  import("@/pages/Dashboard").then((module) => ({ default: module.Dashboard })),
+);
+const CourseDetail = lazy(() =>
+  import("@/pages/CourseDetail").then((module) => ({ default: module.CourseDetail })),
+);
+const ImportCourse = lazy(() =>
+  import("@/pages/ImportCourse").then((module) => ({ default: module.ImportCourse })),
+);
+const Bookmarks = lazy(() =>
+  import("@/pages/Bookmarks").then((module) => ({ default: module.Bookmarks })),
+);
+const Progress = lazy(() =>
+  import("@/pages/Progress").then((module) => ({ default: module.Progress })),
+);
+const Notes = lazy(() =>
+  import("@/pages/Notes").then((module) => ({ default: module.Notes })),
+);
+const Settings = lazy(() =>
+  import("@/pages/Settings").then((module) => ({ default: module.Settings })),
+);
+const AiModule = lazy(() =>
+  import("@/pages/AiModule").then((module) => ({ default: module.AiModule })),
+);
+const PreviewAiModule = lazy(() =>
+  import("@/pages/PreviewAiModule").then((module) => ({ default: module.PreviewAiModule })),
+);
+const Pets = lazy(() =>
+  import("@/pages/Pets").then((module) => ({ default: module.Pets })),
+);
+const DesktopPetWindow = lazy(() =>
+  import("@/components/DesktopPetWindow").then((module) => ({ default: module.DesktopPetWindow })),
+);
 
 function routeKey(pathname: string, search: string): string {
   if (pathname.startsWith("/course/")) {
@@ -41,19 +66,31 @@ function sectionRoot(pathname: string, search: string): string {
 
 const TRANSIENT_ROUTES = new Set(["/import"]);
 
+function shouldKeepAlive(pathname: string): boolean {
+  return pathname.startsWith("/course/");
+}
+
+function RouteFallback() {
+  return (
+    <div className="flex h-full min-h-80 items-center justify-center">
+      <LoadingOrbit size="sm" />
+    </div>
+  );
+}
+
 /**
- * Keep-alive router: caches page instances so they preserve state when
- * navigating away. Course pages are keyed by origin section so the same
- * course opened from Dashboard vs Bookmarks gets separate cached instances.
- * Routes in TRANSIENT_ROUTES always mount fresh.
+ * Keep-alive router: only course pages stay mounted so video/note state can be
+ * restored quickly. Normal app pages mount fresh to avoid hidden AI, pet, and
+ * settings panels doing background work after navigation.
  */
 function KeepAliveRoutes() {
   const location = useLocation();
   const key = routeKey(location.pathname, location.search);
   const isTransient = TRANSIENT_ROUTES.has(location.pathname);
+  const keepAlive = !isTransient && shouldKeepAlive(location.pathname);
 
   const [cache, setCache] = useState<Map<string, ReturnType<typeof useLocation>>>(
-    () => isTransient ? new Map() : new Map([[key, { ...location }]]),
+    () => keepAlive ? new Map([[key, { ...location }]]) : new Map(),
   );
 
   useEffect(() => {
@@ -63,7 +100,7 @@ function KeepAliveRoutes() {
   }, [location, isTransient]);
 
   useEffect(() => {
-    if (isTransient) return;
+    if (!keepAlive) return;
     setCache((prev) => {
       const next = new Map(prev);
       next.set(key, { ...location });
@@ -74,13 +111,20 @@ function KeepAliveRoutes() {
       }
       return next;
     });
-  }, [location, key, isTransient]);
+  }, [location, key, keepAlive]);
+
+  const cachedRoutes = Array.from(cache.entries());
+  const hasCurrentCachedRoute = cachedRoutes.some(([cachedKey]) => cachedKey === key);
+  const visibleRoutes = keepAlive && !hasCurrentCachedRoute
+    ? [...cachedRoutes, [key, { ...location }] as [string, ReturnType<typeof useLocation>]]
+    : cachedRoutes;
 
   return (
     <ActivePathContext.Provider value={key}>
-      {Array.from(cache.entries()).map(([cachedKey, cachedLocation]) => (
+      {visibleRoutes.map(([cachedKey, cachedLocation]) => (
         <div
           key={cachedKey}
+          className="route-cache-layer"
           style={{ display: cachedKey === key ? undefined : "none" }}
         >
           <Routes location={cachedLocation}>
@@ -96,22 +140,29 @@ function KeepAliveRoutes() {
         </div>
       ))}
 
-      {isTransient && (
-        <Routes location={location}>
-          <Route path="/import" element={<ImportCourse />} />
-        </Routes>
+      {!keepAlive && (
+        <div className="route-page-layer" key={key}>
+          <Routes location={location}>
+            <Route path="/import" element={<ImportCourse />} />
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/bookmarks" element={<Bookmarks />} />
+            <Route path="/progress" element={<Progress />} />
+            <Route path="/notes" element={<Notes />} />
+            <Route path="/ai" element={<AiModule />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/pets" element={<Pets />} />
+          </Routes>
+        </div>
       )}
     </ActivePathContext.Provider>
   );
 }
 
 function DesktopPetApp() {
-  const settingsCtx = useSettingsProvider();
-
   return (
-    <SettingsContext.Provider value={settingsCtx}>
+    <Suspense fallback={<RouteFallback />}>
       <DesktopPetWindow />
-    </SettingsContext.Provider>
+    </Suspense>
   );
 }
 
@@ -124,7 +175,9 @@ function MainApp() {
     <SettingsContext.Provider value={settingsCtx}>
       <UpdaterContext.Provider value={updaterCtx}>
         <AppShell>
-          <KeepAliveRoutes />
+          <Suspense fallback={<RouteFallback />}>
+            <KeepAliveRoutes />
+          </Suspense>
         </AppShell>
         <ReleaseNotesDialog />
         <UpdateBanner />
@@ -135,7 +188,16 @@ function MainApp() {
 
 function App() {
   const location = useLocation();
+  const isPreviewAiModule = location.pathname === "/preview/ai";
   const isDesktopPetWindow = location.pathname === "/desktop-pet";
+
+  if (isPreviewAiModule) {
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        <PreviewAiModule />
+      </Suspense>
+    );
+  }
 
   return isDesktopPetWindow ? <DesktopPetApp /> : <MainApp />;
 }

@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { XIcon } from "@phosphor-icons/react";
 import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { createPetSpriteStyle } from "@/lib/pets";
-import { getPetCareState, PET_CARE_UPDATED_EVENT } from "@/lib/petCare";
-import { useI18n } from "@/hooks/useI18n";
-import { useSettings } from "@/hooks/useSettings";
 import {
-  DESKTOP_PET_CLOSE_REQUEST_EVENT,
-  DESKTOP_PET_READY_EVENT,
-} from "@/lib/desktopPet";
+  createPetSpriteStyle,
+  DEFAULT_PET_VARIANT,
+  isPetVariantId,
+  PET_CATALOG,
+} from "@/lib/pets";
+import { isAppLanguage, type AppLanguage } from "@/lib/i18n";
+import { DESKTOP_PET_CLOSE_REQUEST_EVENT } from "@/lib/desktopPet";
 
 const COPY = {
   en: {
@@ -29,44 +29,31 @@ const COPY = {
   },
 } as const;
 
+function getDesktopPetParams() {
+  const params = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
+  const language = params.get("language") ?? "";
+  const pet = params.get("pet") ?? "";
+
+  return {
+    language: isAppLanguage(language) ? language : "en",
+    petVariant: isPetVariantId(pet) ? pet : DEFAULT_PET_VARIANT,
+  };
+}
+
 export function DesktopPetWindow() {
-  const { language } = useI18n();
-  const { settings } = useSettings();
-  const copy = COPY[language];
-  const [petName, setPetName] = useState("");
+  const { language, petVariant } = useMemo(getDesktopPetParams, []);
+  const copy = COPY[language as AppLanguage];
+  const pet = PET_CATALOG.find((item) => item.id === petVariant);
   const spriteStyle = useMemo(
-    () => createPetSpriteStyle("idle", settings.pet_variant, 128),
-    [settings.pet_variant],
+    () => createPetSpriteStyle("idle", petVariant, 128),
+    [petVariant],
   );
-
-  const refreshPetName = useCallback(async () => {
-    try {
-      const state = await getPetCareState(settings.pet_variant);
-      setPetName(state.petName);
-    } catch {
-      setPetName("");
-    }
-  }, [settings.pet_variant]);
-
-  useEffect(() => {
-    void refreshPetName();
-  }, [refreshPetName]);
-
-  useEffect(() => {
-    void emit(DESKTOP_PET_READY_EVENT);
-  }, []);
-
-  useEffect(() => {
-    const handleCareUpdate = () => void refreshPetName();
-    window.addEventListener(PET_CARE_UPDATED_EVENT, handleCareUpdate);
-    return () => window.removeEventListener(PET_CARE_UPDATED_EVENT, handleCareUpdate);
-  }, [refreshPetName]);
 
   const closeWindow = async () => {
     try {
-      await emit(DESKTOP_PET_CLOSE_REQUEST_EVENT);
+      await emit(DESKTOP_PET_CLOSE_REQUEST_EVENT).catch(() => {});
     } finally {
-      await getCurrentWindow().close();
+      await getCurrentWindow().close().catch(() => {});
     }
   };
 
@@ -83,7 +70,7 @@ export function DesktopPetWindow() {
       </button>
 
       <div className="desktop-pet-bubble" aria-live="polite">
-        <strong>{petName || copy.title}</strong>
+        <strong>{pet?.displayName || copy.title}</strong>
         <span>{copy.message}</span>
       </div>
 

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowSquareOutIcon as ArrowSquareOut,
-  CaretDownIcon as CaretDown,
   CheckCircleIcon as CheckCircle,
   CloudArrowDownIcon as CloudArrowDown,
   FloppyDiskIcon as FloppyDisk,
@@ -13,7 +12,9 @@ import {
   TranslateIcon as Translate,
   WarningCircleIcon as WarningCircle,
 } from "@phosphor-icons/react";
+import { Button, Input, ListBox, ListBoxItem, Select, TextArea } from "@heroui/react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { EASE_OUT } from "@/lib/constants";
 import { TRANSLATION_LANGUAGE_OPTIONS, type TranslationLanguage } from "@/lib/i18n";
@@ -45,7 +46,10 @@ const JULY_LINKS = [
 
 interface AiModuleProps {
   className?: string;
+  previewMode?: boolean;
 }
+
+type FeedbackTone = "success" | "info" | "error";
 
 interface SoftSelectProps<T extends string> {
   label: string;
@@ -68,69 +72,77 @@ function SoftSelect<T extends string>({
   helper,
   className,
 }: SoftSelectProps<T>) {
-  const [open, setOpen] = useState(false);
   const selected = options.find((option) => option.value === value);
 
   return (
-    <label className={cn("relative flex flex-col gap-1.5", className)}>
+    <div className={cn("ai-soft-select relative flex min-w-0 flex-col gap-1.5", className)}>
       <span className="font-sans text-xs font-medium text-muted-foreground">
         {label}
       </span>
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
-        className={cn(
-          "flex min-h-10 w-full items-center justify-between gap-3 rounded-xl border border-border/80 bg-secondary/70 px-3 py-2 text-left font-sans text-sm text-foreground outline-none transition-colors",
-          "hover:border-primary/35 hover:bg-secondary focus:border-primary/65 focus:ring-2 focus:ring-primary/15",
-          open && "border-primary/65 ring-2 ring-primary/15",
-        )}
+      <Select
+        selectedKey={value}
+        onSelectionChange={(key) => {
+          if (key) onChange(String(key) as T);
+        }}
+        aria-label={label}
+        isDisabled={loading || options.length === 0}
+        className="w-full min-w-0"
       >
-        <span className={cn("min-w-0 truncate", !selected && "text-muted-foreground")}>
-          {loading ? placeholder : selected?.label ?? placeholder}
-        </span>
-        {loading ? (
-          <SpinnerGap className="size-4 shrink-0 animate-spin text-primary" />
-        ) : (
-          <CaretDown
-            className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
-          />
-        )}
-      </button>
+        <Select.Trigger
+          className={cn(
+            "july-select ai-soft-select-trigger flex min-h-10 w-full min-w-0 items-center justify-between gap-3 px-3 py-2 text-left font-sans text-sm text-foreground outline-none",
+            loading && "cursor-wait opacity-70",
+          )}
+        >
+          <Select.Value className="min-w-0 flex-1 overflow-hidden">
+            <span className={cn("block min-w-0 truncate", !selected && "text-muted-foreground")}>
+              {loading ? placeholder : selected?.label ?? placeholder}
+            </span>
+          </Select.Value>
+          {loading ? (
+            <SpinnerGap className="size-4 shrink-0 animate-spin text-primary" />
+          ) : (
+            <Select.Indicator className="size-4 shrink-0 text-muted-foreground transition-transform data-[open=true]:rotate-180" />
+          )}
+        </Select.Trigger>
+        <Select.Popover
+          placement="bottom start"
+          offset={6}
+          containerPadding={16}
+          className="july-popover ai-soft-select-popover z-[80] overflow-y-auto p-1.5"
+        >
+          <ListBox className="ai-soft-select-listbox outline-none">
+            {options.map((option) => (
+              <ListBoxItem
+                id={option.value}
+                key={option.value}
+                textValue={option.label}
+                className="ai-soft-select-option cursor-pointer rounded-lg px-3 py-2 text-left font-sans text-sm text-foreground outline-none transition-colors hover:bg-secondary/80 data-[focus-visible=true]:bg-secondary data-[selected=true]:bg-primary/12 data-[selected=true]:text-primary"
+              >
+                <span className="min-w-0 truncate">{option.label}</span>
+                <CheckCircle
+                  className={cn(
+                    "size-4 shrink-0 transition-opacity",
+                    option.value === value ? "opacity-100" : "opacity-0",
+                  )}
+                  weight="fill"
+                  aria-hidden="true"
+                />
+              </ListBoxItem>
+            ))}
+          </ListBox>
+        </Select.Popover>
+      </Select>
       {helper && (
         <span className="font-sans text-[11px] leading-relaxed text-muted-foreground">
           {helper}
         </span>
       )}
-      {open && !loading && (
-        <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-64 overflow-y-auto rounded-xl border border-border/80 bg-popover p-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.28)]">
-          {options.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => {
-                onChange(option.value);
-                setOpen(false);
-              }}
-              className={cn(
-                "flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left font-sans text-sm transition-colors",
-                option.value === value
-                  ? "bg-primary/12 text-primary"
-                  : "text-foreground hover:bg-secondary/80",
-              )}
-            >
-              <span className="truncate">{option.label}</span>
-              {option.value === value && <CheckCircle className="size-4 shrink-0" weight="fill" />}
-            </button>
-          ))}
-        </div>
-      )}
-    </label>
+    </div>
   );
 }
 
-export function AiModule({ className }: AiModuleProps) {
+export function AiModule({ className, previewMode = false }: AiModuleProps) {
   const { t } = useI18n();
   const { settings, update } = useSettings();
   const [testText, setTestText] = useState("This lesson explains component state.");
@@ -149,6 +161,7 @@ export function AiModule({ className }: AiModuleProps) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [configFeedback, setConfigFeedback] = useState<{ tone: FeedbackTone; text: string } | null>(null);
 
   const hasCredential =
     settings.ai_deepseek_proxy_url.trim().length > 0 &&
@@ -191,11 +204,18 @@ export function AiModule({ className }: AiModuleProps) {
     settings.ai_translation_target,
   ]);
 
-  const saveConfiguration = async () => {
-    if (!hasChanges) return true;
+  const saveConfiguration = async (options: { successToast?: boolean } = {}) => {
+    if (!hasChanges) {
+      if (options.successToast) {
+        setConfigFeedback({ tone: "success", text: t.ai.saved });
+        toast.success(t.ai.saved);
+      }
+      return true;
+    }
     setSaving(true);
     setSaveError("");
     setSaveSuccess(false);
+    setConfigFeedback({ tone: "info", text: t.ai.saving });
     try {
       await update("ai_deepseek_proxy_url", form.apiUrl.trim());
       await update("ai_deepseek_proxy_token", form.apiKey.trim());
@@ -206,21 +226,41 @@ export function AiModule({ className }: AiModuleProps) {
       await update("ai_asr_endpoint", "");
       await update("ai_translation_target", form.targetLanguage);
       setSaveSuccess(true);
+      setConfigFeedback({ tone: "success", text: t.ai.saved });
+      if (options.successToast) toast.success(t.ai.saved);
       return true;
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      setSaveError(message);
+      setConfigFeedback({ tone: "error", text: `${t.ai.saveFailed}: ${message}` });
+      toast.error(t.ai.saveFailed, { description: message });
       return false;
     } finally {
       setSaving(false);
     }
   };
 
-  const refreshModels = async () => {
+  const refreshModels = async (options: { notify?: boolean } = { notify: true }) => {
     setLoadingModels(true);
     setModelError("");
+    if (options.notify) setConfigFeedback({ tone: "info", text: t.ai.loadingModels });
     try {
       const saved = await saveConfiguration();
       if (!saved) return;
+      if (previewMode) {
+        const previewModels = [
+          { id: "deepseek-v4-flash", label: "DeepSeek V4 Flash" },
+          { id: "deepseek-chat", label: "DeepSeek Chat" },
+          { id: "qwen-plus", label: "Qwen Plus" },
+        ];
+        setModelOptions(previewModels);
+        if (!previewModels.some((model) => model.id === form.model)) {
+          setForm((current) => ({ ...current, model: previewModels[0].id }));
+        }
+        if (options.notify) setConfigFeedback({ tone: "success", text: t.ai.refreshModels });
+        if (options.notify) toast.success(t.ai.refreshModels);
+        return;
+      }
       const models = await getAiModels();
       if (models.length > 0) {
         setModelOptions(models);
@@ -229,9 +269,18 @@ export function AiModule({ className }: AiModuleProps) {
           setForm((current) => ({ ...current, model: nextModel }));
           await update("ai_deepseek_model", nextModel);
         }
+        if (options.notify) setConfigFeedback({ tone: "success", text: t.ai.refreshModels });
+        if (options.notify) toast.success(t.ai.refreshModels);
+      } else {
+        setModelError(t.ai.modelLoadFailed);
+        if (options.notify) setConfigFeedback({ tone: "error", text: t.ai.modelLoadFailed });
+        if (options.notify) toast.error(t.ai.modelLoadFailed);
       }
     } catch (err) {
-      setModelError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      setModelError(message);
+      if (options.notify) setConfigFeedback({ tone: "error", text: `${t.ai.modelLoadFailed}: ${message}` });
+      if (options.notify) toast.error(t.ai.modelLoadFailed, { description: message });
       setModelOptions(FALLBACK_MODEL_OPTIONS);
     } finally {
       setLoadingModels(false);
@@ -239,16 +288,16 @@ export function AiModule({ className }: AiModuleProps) {
   };
 
   useEffect(() => {
-    if (!form.apiKey.trim()) return;
+    if (!hasFormCredential || hasChanges || !configured) return;
 
     const timer = window.setTimeout(() => {
-      void refreshModels();
+      void refreshModels({ notify: false });
     }, 900);
 
     return () => window.clearTimeout(timer);
     // Fetch after the upstream credentials settle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.apiUrl, form.apiKey]);
+  }, [form.apiUrl, form.apiKey, hasFormCredential, hasChanges, configured]);
 
   const openExternal = async (url: string) => {
     try {
@@ -265,20 +314,28 @@ export function AiModule({ className }: AiModuleProps) {
     try {
       const saved = await saveConfiguration();
       if (!saved) return;
+      if (previewMode) {
+        setResult("Preview translation: the desktop app will call your configured API here.");
+        toast.success(t.ai.testTranslation);
+        return;
+      }
       const translated = await translateWithDeepSeek(
         testText,
         form.targetLanguage,
       );
       setResult(translated);
+      toast.success(t.ai.testTranslation);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
+      toast.error(t.ai.testTranslation, { description: message });
     } finally {
       setTesting(false);
     }
   };
 
   return (
-    <div className={cn("mx-auto max-w-6xl px-6 py-8", className)}>
+    <div className={cn("july-page", className)}>
       <div
         className="mb-8 flex items-center gap-3"
         style={{ animation: `card-in 350ms ${EASE_OUT} both` }}
@@ -296,12 +353,10 @@ export function AiModule({ className }: AiModuleProps) {
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(min(100%,280px),320px)]">
         <div className="flex min-w-0 flex-col gap-4">
-          <section className="relative">
-            <div className="squircle-subtle absolute inset-0 bg-border/50" />
-            <div className="squircle-subtle absolute inset-px bg-card" />
-            <div className="relative p-5">
+          <section className="relative overflow-visible rounded-xl border border-border/70 bg-card/95">
+            <div className="relative p-5 sm:p-6">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <Key className="size-4 text-primary" weight="bold" />
@@ -335,13 +390,14 @@ export function AiModule({ className }: AiModuleProps) {
                     <span className="font-sans text-xs font-medium text-muted-foreground">
                       {t.ai.apiUrl}
                     </span>
-                    <input
+                    <Input
                       value={form.apiUrl}
                       onChange={(event) =>
                         setForm((current) => ({ ...current, apiUrl: event.target.value }))
                       }
                       placeholder="https://api.example.com/v1"
-                      className="rounded-xl border border-border/80 bg-secondary/70 px-3 py-2 font-sans text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 hover:border-primary/35 focus:border-primary/65 focus:ring-2 focus:ring-primary/15"
+                      fullWidth
+                      className="july-heroui-field w-full"
                     />
                     <span className="font-sans text-[11px] leading-relaxed text-muted-foreground">
                       {t.ai.apiUrlHint}
@@ -352,14 +408,15 @@ export function AiModule({ className }: AiModuleProps) {
                     <span className="font-sans text-xs font-medium text-muted-foreground">
                       {t.ai.apiKey}
                     </span>
-                    <input
+                    <Input
                       type="password"
                       value={form.apiKey}
                       onChange={(event) =>
                         setForm((current) => ({ ...current, apiKey: event.target.value }))
                       }
                       placeholder="sk-..."
-                      className="rounded-xl border border-border/80 bg-secondary/70 px-3 py-2 font-sans text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 hover:border-primary/35 focus:border-primary/65 focus:ring-2 focus:ring-primary/15"
+                      fullWidth
+                      className="july-heroui-field w-full"
                     />
                     <span className="font-sans text-[11px] leading-relaxed text-muted-foreground">
                       {t.ai.apiKeyHint}
@@ -410,7 +467,7 @@ export function AiModule({ className }: AiModuleProps) {
                 </div>
 
                 {configured && (
-                  <div className="flex items-center gap-2 rounded-lg bg-secondary/60 px-3 py-2 font-mono text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2 rounded-lg border border-border/45 bg-secondary/45 px-3 py-2 font-mono text-xs text-muted-foreground">
                     <FloppyDisk className="size-3.5 shrink-0" />
                     <span>
                       {t.ai.savedKey}: {maskedKey}
@@ -419,16 +476,33 @@ export function AiModule({ className }: AiModuleProps) {
                 )}
 
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="font-sans text-xs text-muted-foreground">
-                    {saveSuccess && !hasChanges ? t.ai.saved : hasChanges ? t.ai.unsaved : t.ai.saved}
-                  </p>
+                  <div
+                    className={cn(
+                      "inline-flex min-h-8 items-center gap-2 rounded-lg border px-3 py-1.5 font-sans text-xs font-semibold",
+                      hasChanges
+                        ? "border-info/25 bg-info/8 text-info"
+                        : saveSuccess
+                          ? "border-primary/25 bg-primary/10 text-primary"
+                          : "border-border/55 bg-secondary/35 text-muted-foreground",
+                    )}
+                  >
+                    {hasChanges ? (
+                      <WarningCircle className="size-3.5" weight="bold" />
+                    ) : saveSuccess ? (
+                      <CheckCircle className="size-3.5" weight="bold" />
+                    ) : (
+                      <FloppyDisk className="size-3.5" />
+                    )}
+                    {saveSuccess && !hasChanges ? t.ai.saved : hasChanges ? t.ai.unsaved : configured ? t.ai.configured : t.ai.notConfigured}
+                  </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <button
+                    <Button
                       type="button"
-                      onClick={() => void refreshModels()}
-                      disabled={saving || loadingModels || !hasFormCredential}
+                      onClick={() => void refreshModels({ notify: true })}
+                      isDisabled={saving || loadingModels || !hasFormCredential}
+                      variant="secondary"
                       className={cn(
-                        "flex items-center gap-2 rounded-lg border border-border/80 px-3 py-2 font-sans text-sm font-semibold transition-colors",
+                        "inline-flex h-10 items-center gap-2 rounded-lg border border-border/70 px-3 font-sans text-sm font-semibold whitespace-nowrap shadow-none",
                         hasFormCredential && !saving && !loadingModels
                           ? "bg-secondary/60 text-foreground hover:border-primary/40 hover:bg-secondary"
                           : "cursor-not-allowed bg-secondary/35 text-muted-foreground/40",
@@ -440,26 +514,53 @@ export function AiModule({ className }: AiModuleProps) {
                         <CloudArrowDown className="size-4" />
                       )}
                       {t.ai.refreshModels}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
                       onClick={() => {
-                        void saveConfiguration();
+                        void saveConfiguration({ successToast: true });
                       }}
-                      disabled={!hasChanges || saving}
+                      isDisabled={!hasChanges || saving}
+                      variant="primary"
                       className={cn(
-                        "rounded-lg px-4 py-2 font-sans text-sm font-semibold transition-colors",
+                        "inline-flex h-10 items-center gap-2 rounded-lg px-4 font-sans text-sm font-semibold whitespace-nowrap shadow-none",
                         hasChanges && !saving
                           ? "bg-primary text-primary-foreground hover:opacity-90"
                           : "cursor-not-allowed bg-secondary text-muted-foreground/40",
                       )}
                     >
-                      {saving ? t.ai.saving : t.ai.saveConfig}
-                    </button>
+                      {saving ? (
+                        <SpinnerGap className="size-4 animate-spin" />
+                      ) : saveSuccess && !hasChanges ? (
+                        <CheckCircle className="size-4" weight="bold" />
+                      ) : (
+                        <FloppyDisk className="size-4" />
+                      )}
+                      {saving ? t.ai.saving : saveSuccess && !hasChanges ? t.ai.saved : t.ai.saveConfig}
+                    </Button>
                   </div>
                 </div>
+                {configFeedback && (
+                  <div
+                    className={cn(
+                      "july-feedback-card flex items-start gap-2 rounded-lg border px-3 py-2 font-sans text-xs leading-relaxed",
+                      configFeedback.tone === "success" && "border-primary/25 bg-primary/10 text-primary",
+                      configFeedback.tone === "info" && "border-info/25 bg-info/8 text-info",
+                      configFeedback.tone === "error" && "border-destructive/25 bg-destructive/10 text-destructive",
+                    )}
+                  >
+                    {configFeedback.tone === "info" ? (
+                      <SpinnerGap className="mt-0.5 size-3.5 shrink-0 animate-spin" />
+                    ) : configFeedback.tone === "error" ? (
+                      <WarningCircle className="mt-0.5 size-3.5 shrink-0" weight="bold" />
+                    ) : (
+                      <CheckCircle className="mt-0.5 size-3.5 shrink-0" weight="bold" />
+                    )}
+                    <span>{configFeedback.text}</span>
+                  </div>
+                )}
                 {saveError && (
-                  <div className="rounded-lg bg-destructive/10 px-3 py-2 font-sans text-xs text-destructive">
+                  <div className="july-feedback-card rounded-lg bg-destructive/10 px-3 py-2 font-sans text-xs text-destructive">
                     {t.ai.saveFailed}: {saveError}
                   </div>
                 )}
@@ -467,38 +568,43 @@ export function AiModule({ className }: AiModuleProps) {
             </div>
           </section>
 
-          <section className="relative">
-            <div className="squircle-subtle absolute inset-0 bg-border/50" />
-            <div className="squircle-subtle absolute inset-px bg-card" />
-            <div className="relative p-5">
+          <section className="relative overflow-visible rounded-xl border border-border/70 bg-card/95">
+            <div className="relative p-5 sm:p-6">
               <div className="mb-4 flex items-center gap-2">
                 <Translate className="size-4 text-info" weight="bold" />
                 <h3 className="font-heading text-sm font-bold text-foreground">
                   {t.ai.testTranslation}
                 </h3>
               </div>
-              <textarea
+              <TextArea
                 value={testText}
                 onChange={(event) => setTestText(event.target.value)}
-                className="min-h-24 w-full resize-none rounded-xl border border-border/80 bg-secondary/70 px-3 py-2 font-sans text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 hover:border-primary/35 focus:border-primary/65 focus:ring-2 focus:ring-primary/15"
+                fullWidth
+                className="july-heroui-field min-h-24 w-full resize-none"
               />
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <p className="font-sans text-xs text-muted-foreground">
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="max-w-2xl font-sans text-xs leading-relaxed text-muted-foreground">
                   {t.ai.playerHint}
                 </p>
-                <button
+                <Button
                   type="button"
                   onClick={testDeepSeek}
-                  disabled={saving || testing || !hasFormCredential || !testText.trim()}
+                  isDisabled={saving || testing || !hasFormCredential || !testText.trim()}
+                  variant="primary"
                   className={cn(
-                    "rounded-lg px-4 py-2 font-sans text-sm font-semibold transition-colors",
+                    "inline-flex h-10 w-full items-center gap-2 rounded-lg px-4 font-sans text-sm font-semibold whitespace-nowrap shadow-none sm:w-auto",
                     hasFormCredential && !saving && testText.trim()
                       ? "bg-primary text-primary-foreground hover:opacity-90"
                       : "cursor-not-allowed bg-secondary text-muted-foreground/40",
                   )}
                 >
+                  {testing ? (
+                    <SpinnerGap className="size-4 animate-spin" />
+                  ) : (
+                    <Translate className="size-4" weight="bold" />
+                  )}
                   {testing ? t.ai.testing : t.ai.test}
-                </button>
+                </Button>
               </div>
 
               {result && (
@@ -506,6 +612,14 @@ export function AiModule({ className }: AiModuleProps) {
                   <CheckCircle className="mt-0.5 size-4 shrink-0 text-primary" weight="bold" />
                   <p className="font-sans text-sm leading-relaxed text-foreground">
                     {result}
+                  </p>
+                </div>
+              )}
+              {testing && !result && !error && (
+                <div className="mt-4 flex gap-2 rounded-lg border border-info/25 bg-info/8 px-3 py-2.5">
+                  <SpinnerGap className="mt-0.5 size-4 shrink-0 animate-spin text-info" />
+                  <p className="font-sans text-sm leading-relaxed text-info">
+                    {t.ai.testing}
                   </p>
                 </div>
               )}
@@ -522,17 +636,18 @@ export function AiModule({ className }: AiModuleProps) {
         </div>
 
         <aside
-          className="relative overflow-hidden rounded-xl border border-primary/20 bg-card p-4"
+          className="relative min-w-0 overflow-hidden rounded-xl border border-primary/18 bg-card/95 p-4 lg:sticky lg:top-4 lg:self-start"
           style={{ animation: `card-in 350ms ${EASE_OUT} 80ms both` }}
         >
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(200,241,53,0.15),transparent_42%)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(200,241,53,0.11),transparent_46%)]" />
           <div className="relative flex h-full flex-col gap-3">
             {JULY_LINKS.map((link) => (
-              <button
+              <Button
                 key={link.host}
                 type="button"
                 onClick={() => void openExternal(link.url)}
-                className="group rounded-xl border border-border/80 bg-secondary/35 p-4 text-left transition-colors hover:border-primary/35 hover:bg-primary/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                variant="ghost"
+                className="july-feedback-card group h-auto w-full flex-col items-stretch justify-start rounded-xl border border-border/80 bg-secondary/35 p-4 text-left transition-colors hover:border-primary/35 hover:bg-primary/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
                 <div className="mb-3 flex items-center gap-2">
                   <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/15">
@@ -554,7 +669,7 @@ export function AiModule({ className }: AiModuleProps) {
                   {t.ai.openLink}
                   <ArrowSquareOut className="size-4" weight="bold" />
                 </span>
-              </button>
+              </Button>
             ))}
           </div>
         </aside>

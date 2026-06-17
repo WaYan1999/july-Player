@@ -204,7 +204,7 @@ interface DashboardStatsBarProps {
 export function DashboardStatsBar({ stats, className }: DashboardStatsBarProps) {
   const { t } = useI18n();
   return (
-    <div className={cn("grid grid-cols-2 gap-3 lg:grid-cols-6", className)}>
+    <div className={cn("grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,10.5rem),1fr))] gap-3", className)}>
       <LevelCard
         level={stats.userLevel}
         lessonsToNext={stats.lessonsToNextLevel}

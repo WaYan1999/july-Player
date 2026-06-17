@@ -13,6 +13,7 @@ import {
   SortAscendingIcon as SortAscending,
   SortDescendingIcon as SortDescending,
 } from "@phosphor-icons/react";
+import { Button } from "@heroui/react";
 import { cn } from "@/lib/utils";
 import { SquircleSearch } from "@/components/ui/SquircleSearch";
 import type { NoteWithCourse } from "@/types";
@@ -139,7 +140,7 @@ export function Notes({ className }: NotesProps) {
 
   if (notes.length === 0) {
     return (
-      <div className={cn("mx-auto max-w-6xl", className)}>
+      <div className={cn("july-page", className)}>
         <div
           className="flex flex-col items-center justify-center gap-3 py-32 text-center"
           style={{ animation: `card-in 350ms ${EASE_OUT} both` }}
@@ -161,12 +162,12 @@ export function Notes({ className }: NotesProps) {
   const SortIcon = sortDir === "desc" ? SortDescending : SortAscending;
 
   return (
-    <div className={cn("mx-auto max-w-6xl", className)}>
+    <div className={cn("july-page", className)}>
       <div
         className="mb-6"
         style={{ animation: `card-in 350ms ${EASE_OUT} both` }}
       >
-        <div className="flex items-baseline justify-between">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
             <h2 className="font-heading text-2xl font-bold text-foreground">
               {t.notesPage.title}
@@ -184,22 +185,24 @@ export function Notes({ className }: NotesProps) {
       </div>
 
       <div
-        className="mb-4 flex items-center gap-3"
+        className="july-toolbar mb-4"
         style={{ animation: `card-in 350ms ${EASE_OUT} 40ms both` }}
       >
         <SquircleSearch
           value={search}
           onChange={setSearch}
           placeholder={t.notesPage.searchNotes}
-          className="flex-1"
+          className="min-w-[min(100%,18rem)] flex-1"
         />
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           {(["updated", "created", "course"] as SortField[]).map((field) => (
-            <button
+            <Button
+              type="button"
+              variant="ghost"
               key={field}
               onClick={() => toggleSort(field)}
               className={cn(
-                "flex items-center gap-1 rounded-md px-2 py-1.5 font-sans text-xs font-medium transition-colors",
+                "july-heroui-button min-h-8 gap-1 rounded-md px-2 py-1.5 text-xs",
                 sortField === field
                   ? "border border-border bg-secondary text-foreground"
                   : "text-muted-foreground hover:text-foreground",
@@ -211,21 +214,23 @@ export function Notes({ className }: NotesProps) {
                   ? t.notesPage.created
                   : t.notesPage.course}
               {sortField === field && <SortIcon className="size-3" />}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
 
       {courses.length > 1 && (
         <div
-          className="mb-4 flex flex-wrap items-center gap-1.5"
+          className="mb-4 flex min-w-0 flex-wrap items-center gap-1.5"
           style={{ animation: `card-in 350ms ${EASE_OUT} 80ms both` }}
         >
           <Funnel className="mr-0.5 size-3.5 text-muted-foreground/50" />
-          <button
+          <Button
+            type="button"
+            variant="ghost"
             onClick={() => setCourseFilter(null)}
             className={cn(
-              "flex items-center gap-1.5 rounded-full px-2.5 py-1 font-sans text-xs font-medium transition-colors",
+              "july-heroui-button min-h-7 gap-1.5 rounded-full px-2.5 py-1 text-xs",
               courseFilter === null
                 ? "border border-border bg-secondary text-foreground"
                 : "text-muted-foreground hover:text-foreground",
@@ -235,13 +240,15 @@ export function Notes({ className }: NotesProps) {
             <span className="font-mono text-[9px] text-muted-foreground/60">
               {notes.length}
             </span>
-          </button>
+          </Button>
           {courses.map((course) => (
-            <button
+            <Button
+              type="button"
+              variant="ghost"
               key={course.id}
               onClick={() => setCourseFilter(courseFilter === course.id ? null : course.id)}
               className={cn(
-                "flex items-center gap-1.5 rounded-full px-2.5 py-1 font-sans text-xs font-medium transition-colors",
+                "july-heroui-button min-h-7 gap-1.5 rounded-full px-2.5 py-1 text-xs",
                 courseFilter === course.id
                   ? "border border-border bg-secondary text-foreground"
                   : "text-muted-foreground hover:text-foreground",
@@ -255,7 +262,7 @@ export function Notes({ className }: NotesProps) {
               <span className="font-mono text-[9px] text-muted-foreground/60">
                 {course.count}
               </span>
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -320,7 +327,7 @@ function NoteItem({
 
   return (
     <div
-      className="group rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-secondary/50"
+      className="group min-w-0 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-secondary/50"
       style={{ transitionTimingFunction: SNAPPY }}
     >
       <div className="flex items-start gap-3">
@@ -335,7 +342,7 @@ function NoteItem({
             dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(note.content) }}
           />
 
-          <div className="mt-2 flex items-center gap-1.5">
+          <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
             <Link
               to={`/course/${note.courseId}?lesson=${note.lessonId}&from=/notes`}
               className="flex items-center gap-1 font-sans text-[11px] text-muted-foreground transition-colors hover:text-foreground"
@@ -360,20 +367,26 @@ function NoteItem({
           >
             <CaretRight className="size-3.5" />
           </Link>
-          <button
+          <Button
+            type="button"
+            variant="ghost"
+            isIconOnly
             onClick={onStartEdit}
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            title={t.notesPage.editNote}
+            className="july-heroui-button july-heroui-icon-button size-8 min-h-8 min-w-8 text-muted-foreground hover:bg-secondary hover:text-foreground"
+            aria-label={t.notesPage.editNote}
           >
             <PencilSimple className="size-3.5" />
-          </button>
-          <button
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            isIconOnly
             onClick={onDelete}
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
-            title={t.notesPage.deleteNote}
+            className="july-heroui-button july-heroui-icon-button size-8 min-h-8 min-w-8 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+            aria-label={t.notesPage.deleteNote}
           >
             <Trash className="size-3.5" />
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -172,16 +172,73 @@ export async function askPetAi(prompt: string, language: string): Promise<string
   return invoke<string>("ask_pet_ai", { prompt, language });
 }
 
-export async function openDesktopPet(): Promise<void> {
-  return invoke("open_desktop_pet");
+export interface AiNoteRequest {
+  courseTitle: string;
+  lessonTitle: string;
+  transcript: string;
+  existingNotes: string;
+  language: string;
 }
 
-export async function closeDesktopPet(): Promise<void> {
-  return invoke("close_desktop_pet");
+export interface AiNoteQuestionRequest extends AiNoteRequest {
+  question: string;
 }
 
-export async function isDesktopPetOpen(): Promise<boolean> {
-  return invoke<boolean>("is_desktop_pet_open");
+export async function generateAiNote({
+  courseTitle,
+  lessonTitle,
+  transcript,
+  existingNotes,
+  language,
+}: AiNoteRequest): Promise<string> {
+  return invoke<string>("generate_ai_note", {
+    courseTitle,
+    lessonTitle,
+    transcript,
+    existingNotes,
+    language,
+  });
+}
+
+export async function askNoteAi({
+  courseTitle,
+  lessonTitle,
+  transcript,
+  existingNotes,
+  question,
+  language,
+}: AiNoteQuestionRequest): Promise<string> {
+  return invoke<string>("ask_note_ai", {
+    courseTitle,
+    lessonTitle,
+    transcript,
+    existingNotes,
+    question,
+    language,
+  });
+}
+
+export interface DesktopPetWindowState {
+  open: boolean;
+  visible: boolean;
+}
+
+export async function openDesktopPet(
+  language?: string,
+  petVariant?: string,
+): Promise<DesktopPetWindowState> {
+  return invoke<DesktopPetWindowState>("open_desktop_pet", {
+    language,
+    petVariant,
+  });
+}
+
+export async function closeDesktopPet(): Promise<DesktopPetWindowState> {
+  return invoke<DesktopPetWindowState>("close_desktop_pet");
+}
+
+export async function isDesktopPetOpen(): Promise<DesktopPetWindowState> {
+  return invoke<DesktopPetWindowState>("is_desktop_pet_open");
 }
 
 export async function getAiModels(): Promise<AiModelOption[]> {

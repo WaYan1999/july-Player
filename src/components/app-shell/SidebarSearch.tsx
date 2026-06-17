@@ -6,6 +6,7 @@ import {
   PlayCircleIcon as PlayCircle,
   XIcon as X,
 } from "@phosphor-icons/react";
+import { Button, Input } from "@heroui/react";
 import { cn } from "@/lib/utils";
 import { searchContent } from "@/lib/store";
 import type { SearchResult } from "@/types";
@@ -115,10 +116,13 @@ export function SidebarSearch({ collapsed }: SidebarSearchProps) {
   return (
     <>
       {/* Sidebar trigger button */}
-      <button
+      <Button
+        type="button"
         onClick={openModal}
+        variant="ghost"
+        fullWidth
         className={cn(
-          "squircle flex w-full items-center bg-sidebar-accent/50 py-2.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
+          "july-heroui-button flex w-full items-center bg-sidebar-accent/50 py-2.5 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
           collapsed ? "justify-center px-0" : "gap-3 px-3",
         )}
       >
@@ -136,7 +140,7 @@ export function SidebarSearch({ collapsed }: SidebarSearchProps) {
             /
           </kbd>
         </div>
-      </button>
+      </Button>
 
       {/* Backdrop */}
       <div
@@ -173,17 +177,20 @@ export function SidebarSearch({ collapsed }: SidebarSearchProps) {
             {/* Search input row */}
             <div className="flex items-center gap-3 px-4 py-3.5">
               <MagnifyingGlass className="size-4 shrink-0 text-muted-foreground" />
-              <input
+              <Input
                 ref={inputRef}
                 type="text"
                 value={query}
                 onChange={handleChange}
                 onKeyDown={handleKeyDown}
                 placeholder={t.nav.searchPlaceholder}
-                className="flex-1 bg-transparent font-sans text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                className="min-h-0 flex-1 border-0 bg-transparent px-0 py-0 font-sans text-sm text-foreground placeholder:text-muted-foreground shadow-none focus:outline-none"
               />
               {query ? (
-                <button
+                <Button
+                  type="button"
+                  variant="ghost"
+                  isIconOnly
                   onPointerDown={(e) => {
                     e.preventDefault();
                     setQuery("");
@@ -191,10 +198,11 @@ export function SidebarSearch({ collapsed }: SidebarSearchProps) {
                     setActiveIndex(-1);
                     inputRef.current?.focus();
                   }}
-                  className="text-muted-foreground transition-colors hover:text-foreground"
+                  className="july-heroui-button july-heroui-icon-button size-8 min-h-8 min-w-8 text-muted-foreground hover:text-foreground"
+                  aria-label={t.common.clear}
                 >
                   <X className="size-4" />
-                </button>
+                </Button>
               ) : (
                 <kbd className="shrink-0 rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
                   esc

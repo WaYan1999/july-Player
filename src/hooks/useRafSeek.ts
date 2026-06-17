@@ -3,32 +3,75 @@ import { useCallback, useEffect, useRef } from "react";
 interface UseRafSeekOptions {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   duration: number;
-  onTimeChange: (time: number) => void;
+  onPreviewTimeChange: (time: number) => void;
+  onCommitTimeChange?: (time: number) => void;
+  liveSeekIntervalMs?: number;
 }
 
-export function useRafSeek({ videoRef, duration, onTimeChange }: UseRafSeekOptions) {
+export function useRafSeek({
+  videoRef,
+  duration,
+  onPreviewTimeChange,
+  onCommitTimeChange,
+  liveSeekIntervalMs = 90,
+}: UseRafSeekOptions) {
   const frameRef = useRef<number | null>(null);
   const pendingTimeRef = useRef<number | null>(null);
+  const lastLiveSeekAtRef = useRef(0);
+  const lastAppliedTimeRef = useRef<number | null>(null);
 
-  const applySeekTime = useCallback(
+  const clampTime = useCallback(
     (time: number) => {
+      if (!Number.isFinite(time)) return null;
       const video = videoRef.current;
-      if (!video || !Number.isFinite(time)) return;
       const videoDuration =
-        Number.isFinite(video.duration) && video.duration > 0 ? video.duration : duration;
-      const clampedTime =
-        videoDuration > 0
-          ? Math.max(0, Math.min(time, videoDuration))
-          : Math.max(0, time);
-      video.currentTime = clampedTime;
+        video && Number.isFinite(video.duration) && video.duration > 0
+          ? video.duration
+          : duration;
+      if (videoDuration > 0) {
+        return Math.max(0, Math.min(time, videoDuration));
+      }
+      return Math.max(0, time);
     },
     [duration, videoRef],
   );
 
+  const applySeekTime = useCallback(
+    (time: number, approximate: boolean) => {
+      const video = videoRef.current;
+      const clampedTime = clampTime(time);
+      if (!video || clampedTime === null) return;
+
+      const seekableVideo = video as HTMLVideoElement & {
+        fastSeek?: (time: number) => void;
+      };
+      if (approximate && typeof seekableVideo.fastSeek === "function") {
+        seekableVideo.fastSeek(clampedTime);
+      } else {
+        video.currentTime = clampedTime;
+      }
+      lastAppliedTimeRef.current = clampedTime;
+    },
+    [clampTime, videoRef],
+  );
+
+  const startSeekTime = useCallback(
+    (time: number) => {
+      const clampedTime = clampTime(time);
+      if (clampedTime === null) return;
+
+      pendingTimeRef.current = clampedTime;
+      lastLiveSeekAtRef.current = performance.now();
+      onPreviewTimeChange(clampedTime);
+      applySeekTime(clampedTime, true);
+    },
+    [applySeekTime, clampTime, onPreviewTimeChange],
+  );
+
   const scheduleSeekTime = useCallback(
     (time: number) => {
-      if (!Number.isFinite(time) || duration <= 0) return;
-      const clampedTime = Math.max(0, Math.min(time, duration));
+      const clampedTime = clampTime(time);
+      if (clampedTime === null || duration <= 0) return;
       pendingTimeRef.current = clampedTime;
 
       if (frameRef.current !== null) return;
@@ -36,12 +79,23 @@ export function useRafSeek({ videoRef, duration, onTimeChange }: UseRafSeekOptio
         frameRef.current = null;
         const pendingTime = pendingTimeRef.current;
         if (pendingTime !== null) {
-          onTimeChange(pendingTime);
-          applySeekTime(pendingTime);
+          onPreviewTimeChange(pendingTime);
+
+          const now = performance.now();
+          const appliedTime = lastAppliedTimeRef.current;
+          const jumpedFar =
+            appliedTime === null || Math.abs(appliedTime - pendingTime) >= 3;
+          if (
+            jumpedFar ||
+            now - lastLiveSeekAtRef.current >= liveSeekIntervalMs
+          ) {
+            lastLiveSeekAtRef.current = now;
+            applySeekTime(pendingTime, true);
+          }
         }
       });
     },
-    [applySeekTime, duration, onTimeChange],
+    [applySeekTime, clampTime, duration, liveSeekIntervalMs, onPreviewTimeChange],
   );
 
   const flushSeekTime = useCallback(() => {
@@ -52,10 +106,11 @@ export function useRafSeek({ videoRef, duration, onTimeChange }: UseRafSeekOptio
     const pendingTime = pendingTimeRef.current;
     pendingTimeRef.current = null;
     if (pendingTime !== null) {
-      onTimeChange(pendingTime);
-      applySeekTime(pendingTime);
+      onPreviewTimeChange(pendingTime);
+      applySeekTime(pendingTime, false);
+      onCommitTimeChange?.(pendingTime);
     }
-  }, [applySeekTime, onTimeChange]);
+  }, [applySeekTime, onCommitTimeChange, onPreviewTimeChange]);
 
   useEffect(() => {
     return () => {
@@ -66,5 +121,5 @@ export function useRafSeek({ videoRef, duration, onTimeChange }: UseRafSeekOptio
     };
   }, []);
 
-  return { scheduleSeekTime, flushSeekTime };
+  return { startSeekTime, scheduleSeekTime, flushSeekTime };
 }

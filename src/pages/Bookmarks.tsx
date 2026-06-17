@@ -8,6 +8,7 @@ import {
   ClockIcon as Clock,
   CheckCircleIcon as CheckCircle,
 } from "@phosphor-icons/react";
+import { Button } from "@heroui/react";
 import { cn } from "@/lib/utils";
 import { CourseCard } from "@/components/dashboard/CourseCard";
 import { ProgressBar } from "@/components/ui/ProgressBar";
@@ -62,7 +63,7 @@ export function Bookmarks({ className }: BookmarksProps) {
   const isEmpty = courses.length === 0 && favorites.length === 0;
 
   return (
-    <div className={cn("mx-auto max-w-6xl", className)}>
+    <div className={cn("july-page", className)}>
       {isEmpty ? (
         <div
           className="flex flex-col items-center justify-center gap-3 py-32 text-center"
@@ -80,11 +81,13 @@ export function Bookmarks({ className }: BookmarksProps) {
         </div>
       ) : (
         <>
-          <div className="mb-6 flex items-center gap-1">
-            <button
+          <div className="mb-6 flex flex-wrap items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
               onClick={() => setActiveTab("courses")}
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-2.5 py-1 font-sans text-sm font-medium transition-colors",
+                "july-heroui-button min-h-8 gap-1.5 rounded-md px-2.5 py-1 text-sm",
                 activeTab === "courses"
                   ? "border border-border bg-secondary text-foreground"
                   : "text-muted-foreground hover:text-foreground",
@@ -97,11 +100,13 @@ export function Bookmarks({ className }: BookmarksProps) {
                   {courses.length}
                 </span>
               )}
-            </button>
-            <button
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
               onClick={() => setActiveTab("favorites")}
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-2.5 py-1 font-sans text-sm font-medium transition-colors",
+                "july-heroui-button min-h-8 gap-1.5 rounded-md px-2.5 py-1 text-sm",
                 activeTab === "favorites"
                   ? "border border-border bg-secondary text-foreground"
                   : "text-muted-foreground hover:text-foreground",
@@ -114,13 +119,13 @@ export function Bookmarks({ className }: BookmarksProps) {
                   {favorites.length}
                 </span>
               )}
-            </button>
+            </Button>
           </div>
 
           {activeTab === "courses" && (
             <>
               {courses.length > 0 ? (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="july-card-grid gap-4">
                   {courses.map((course, index) => (
                     <div
                       key={course.id}
@@ -200,6 +205,7 @@ function FavoriteItem({
   index: number;
   onRemove: (lessonId: number) => void;
 }) {
+  const { t } = useI18n();
   const progress = favorite.duration > 0
     ? Math.min(favorite.lastPosition / (favorite.duration * 60), 1)
     : 0;
@@ -208,7 +214,7 @@ function FavoriteItem({
   return (
     <Link
       to={`/course/${favorite.courseId}?lesson=${favorite.lessonId}&from=/bookmarks`}
-      className="group flex items-center gap-4 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-secondary"
+      className="group flex min-w-0 items-center gap-4 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-secondary"
       style={{
         animation: `card-in 350ms ${EASE_OUT} ${index * 40}ms both`,
       }}
@@ -250,16 +256,20 @@ function FavoriteItem({
           )}
         </span>
 
-        <button
+        <Button
+          type="button"
+          variant="ghost"
+          isIconOnly
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
             onRemove(favorite.lessonId);
           }}
-          className="rounded-md p-1 text-red-500 opacity-0 transition-all hover:bg-red-500/10 group-hover:opacity-100"
+          className="july-heroui-button july-heroui-icon-button size-8 min-h-8 min-w-8 text-red-500 opacity-0 transition-all hover:bg-red-500/10 group-hover:opacity-100"
+          aria-label={t.bookmarks.favorites}
         >
           <Heart className="size-3.5" weight="fill" />
-        </button>
+        </Button>
       </div>
     </Link>
   );
