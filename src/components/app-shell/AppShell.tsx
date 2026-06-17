@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { listen } from "@tauri-apps/api/event";
 import {
   SquareHalfIcon as SquareHalf,
   CornersOutIcon as CornersOut,
@@ -19,6 +20,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { isDesktopPetOpen } from "@/lib/store";
 import { AppWindowTitleBar } from "./AppWindowTitleBar";
 import { ResidentPet } from "@/components/ResidentPet";
+import { DESKTOP_PET_CLOSE_REQUEST_EVENT } from "@/lib/desktopPet";
 
 interface AppShellProps {
   children: ReactNode;
@@ -69,8 +71,11 @@ function AppShellInner({ children }: AppShellProps) {
     if (!settings.pet_desktop_enabled) return;
 
     let cancelled = false;
+    let syncing = false;
 
     const syncDesktopPetState = async () => {
+      if (syncing) return;
+      syncing = true;
       try {
         const open = await isDesktopPetOpen();
         if (!cancelled && !open) {
@@ -80,11 +85,13 @@ function AppShellInner({ children }: AppShellProps) {
         if (!cancelled) {
           await update("pet_desktop_enabled", "false").catch(() => {});
         }
+      } finally {
+        syncing = false;
       }
     };
 
     void syncDesktopPetState();
-    const interval = window.setInterval(() => void syncDesktopPetState(), 5000);
+    const interval = window.setInterval(() => void syncDesktopPetState(), 8000);
     window.addEventListener("focus", syncDesktopPetState);
 
     return () => {
@@ -93,6 +100,28 @@ function AppShellInner({ children }: AppShellProps) {
       window.removeEventListener("focus", syncDesktopPetState);
     };
   }, [settings.pet_desktop_enabled, update]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const unlisteners: Array<() => void> = [];
+    const restoreResidentPet = () => {
+      if (!cancelled) {
+        void update("pet_desktop_enabled", "false").catch(() => {});
+      }
+    };
+
+    void listen(DESKTOP_PET_CLOSE_REQUEST_EVENT, restoreResidentPet).then((unlisten) => {
+      if (cancelled) unlisten();
+      else unlisteners.push(unlisten);
+    });
+
+    return () => {
+      cancelled = true;
+      for (const unlisten of unlisteners) {
+        unlisten();
+      }
+    };
+  }, [update]);
 
   const effectiveCollapsed = isSmallScreen || collapsed;
 

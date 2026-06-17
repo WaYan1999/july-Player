@@ -3,10 +3,9 @@ use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 const DESKTOP_PET_LABEL: &str = "july-desktop-pet";
 
 #[tauri::command]
-pub async fn open_desktop_pet(app: tauri::AppHandle) -> Result<(), String> {
+pub fn open_desktop_pet(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(DESKTOP_PET_LABEL) {
         window.show().map_err(|e| e.to_string())?;
-        let _ = window.set_focus();
         return Ok(());
     }
 
@@ -24,7 +23,7 @@ pub async fn open_desktop_pet(app: tauri::AppHandle) -> Result<(), String> {
     .shadow(false)
     .always_on_top(true)
     .skip_taskbar(true)
-    .focused(true)
+    .focused(false)
     .center()
     .build()
     .map(|_| ())
@@ -32,9 +31,10 @@ pub async fn open_desktop_pet(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn close_desktop_pet(app: tauri::AppHandle) -> Result<(), String> {
+pub fn close_desktop_pet(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(DESKTOP_PET_LABEL) {
-        window.close().map_err(|e| e.to_string())?;
+        let _ = window.hide();
+        window.destroy().map_err(|e| e.to_string())?;
     }
     Ok(())
 }

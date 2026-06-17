@@ -23,12 +23,14 @@ import {
   XIcon,
 } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { EASE_OUT } from "@/lib/constants";
 import { useI18n } from "@/hooks/useI18n";
 import { useSettings } from "@/hooks/useSettings";
-import { askPetAi, closeDesktopPet, openDesktopPet } from "@/lib/store";
+import { askPetAi, closeDesktopPet, isDesktopPetOpen, openDesktopPet } from "@/lib/store";
+import { DESKTOP_PET_READY_EVENT, withTimeout } from "@/lib/desktopPet";
 import {
   PET_CATALOG,
   PET_ACTION_EVENT,
@@ -1939,10 +1941,33 @@ export function Pets({ className }: PetsProps) {
     if (desktopPetPending) return;
 
     setDesktopPetPending(true);
+    let unlistenReady: UnlistenFn | null = null;
     try {
       if (enabled) {
         await update("pet_enabled", "true");
-        await openDesktopPet();
+        const alreadyOpen = await withTimeout(
+          isDesktopPetOpen(),
+          1500,
+          "Could not check desktop pet window.",
+        ).catch(() => false);
+        if (alreadyOpen) {
+          await withTimeout(
+            closeDesktopPet(),
+            2500,
+            "Could not reset the previous desktop pet window.",
+          );
+          await new Promise((resolve) => window.setTimeout(resolve, 120));
+        }
+
+        let resolveReady: () => void = () => {};
+        const readyPromise = new Promise<void>((resolve) => {
+          resolveReady = resolve;
+        });
+
+        unlistenReady = await listen(DESKTOP_PET_READY_EVENT, () => resolveReady());
+
+        await withTimeout(openDesktopPet(), 4000, "Desktop pet window did not open.");
+        await withTimeout(readyPromise, 4000, "Desktop pet window did not finish loading.");
         await update("pet_desktop_enabled", "true");
         pushFeedback({
           title: copy.desktopPetOpened,
@@ -1951,7 +1976,7 @@ export function Pets({ className }: PetsProps) {
         });
       } else {
         await update("pet_desktop_enabled", "false");
-        await closeDesktopPet();
+        await withTimeout(closeDesktopPet(), 2500, "Desktop pet window did not close.");
         pushFeedback({
           title: copy.desktopPetClosed,
           detail: copy.residentPetDescription,
@@ -1961,12 +1986,17 @@ export function Pets({ className }: PetsProps) {
     } catch (error) {
       if (enabled) {
         await update("pet_desktop_enabled", "false").catch(() => {});
-        await closeDesktopPet().catch(() => {});
+        await withTimeout(
+          closeDesktopPet(),
+          2500,
+          "Desktop pet window rollback did not close.",
+        ).catch(() => {});
       }
       pushFailureFeedback(copy.desktopPet);
       console.warn("Desktop pet toggle failed", error);
       await reloadSettings();
     } finally {
+      unlistenReady?.();
       setDesktopPetPending(false);
     }
   };

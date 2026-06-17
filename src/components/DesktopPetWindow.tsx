@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { XIcon } from "@phosphor-icons/react";
-import { closeDesktopPet } from "@/lib/store";
+import { emit } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { createPetSpriteStyle } from "@/lib/pets";
 import { getPetCareState, PET_CARE_UPDATED_EVENT } from "@/lib/petCare";
 import { useI18n } from "@/hooks/useI18n";
 import { useSettings } from "@/hooks/useSettings";
+import {
+  DESKTOP_PET_CLOSE_REQUEST_EVENT,
+  DESKTOP_PET_READY_EVENT,
+} from "@/lib/desktopPet";
 
 const COPY = {
   en: {
@@ -26,7 +31,7 @@ const COPY = {
 
 export function DesktopPetWindow() {
   const { language } = useI18n();
-  const { settings, update } = useSettings();
+  const { settings } = useSettings();
   const copy = COPY[language];
   const [petName, setPetName] = useState("");
   const spriteStyle = useMemo(
@@ -48,6 +53,10 @@ export function DesktopPetWindow() {
   }, [refreshPetName]);
 
   useEffect(() => {
+    void emit(DESKTOP_PET_READY_EVENT);
+  }, []);
+
+  useEffect(() => {
     const handleCareUpdate = () => void refreshPetName();
     window.addEventListener(PET_CARE_UPDATED_EVENT, handleCareUpdate);
     return () => window.removeEventListener(PET_CARE_UPDATED_EVENT, handleCareUpdate);
@@ -55,9 +64,9 @@ export function DesktopPetWindow() {
 
   const closeWindow = async () => {
     try {
-      await update("pet_desktop_enabled", "false");
+      await emit(DESKTOP_PET_CLOSE_REQUEST_EVENT);
     } finally {
-      await closeDesktopPet();
+      await getCurrentWindow().close();
     }
   };
 

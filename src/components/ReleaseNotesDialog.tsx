@@ -9,7 +9,7 @@ import { EASE_OUT } from "@/lib/constants";
 import { useSettings } from "@/hooks/useSettings";
 import type { AppLanguage } from "@/lib/i18n";
 
-const RELEASE_NOTES_VERSION = "1.1.5";
+const RELEASE_NOTES_VERSION = "1.1.6";
 const RELEASE_NOTES_STORAGE_KEY = `july-player:release-notes-seen:${RELEASE_NOTES_VERSION}`;
 
 const RELEASE_NOTES: Record<
@@ -25,46 +25,45 @@ const RELEASE_NOTES: Record<
 > = {
   zh: {
     eyebrow: "版本更新",
-    title: "七月播放器 1.1.5",
-    description: "本次重点优化播放器稳定性、字幕同步和更新说明体验。",
+    title: "七月播放器 1.1.6",
+    description: "本次重点修复桌面宠物卡死、消失和状态恢复问题。",
     highlights: [
-      "新增应用内更新说明：安装或升级到新版本后，首次打开会自动展示一次。",
-      "修复拖动视频进度条可能卡死或闪退的问题，拖动时画面会实时跟随。",
-      "修复中文字幕和双语字幕显示：中文轨只保留中文，双语字幕去重。",
-      "优化 AI 字幕翻译：提前预翻译后续字幕并复用缓存，减少“AI 翻译中”的闪烁。",
-      "拆分字幕解析、语言识别、字幕查找和进度条 seek 逻辑，降低播放器维护成本。",
-      "优化长字幕性能：字幕 cue 查找改为排序后二分定位，播放中扫描压力更低。",
+      "修复宠物进入桌面模式后可能消失、卡死或导致宠物模块锁死的问题。",
+      "新增桌面宠物加载完成确认，窗口真正打开后才隐藏播放器内的常驻宠物。",
+      "进入桌面模式前会清理旧的桌面宠物窗口，避免复用异常 WebView。",
+      "打开和关闭桌面宠物增加超时保护，失败时自动回滚状态。",
+      "桌面宠物窗口不再直接写入共享设置，改为通知主窗口统一恢复状态。",
+      "从主窗口关闭桌面宠物时改用更可靠的 Windows WebView2 销毁流程。",
     ],
     close: "开始使用",
     dismiss: "关闭更新说明",
   },
   en: {
     eyebrow: "Release notes",
-    title: "July Player 1.1.5",
-    description: "This update focuses on player stability, subtitle sync, and in-app release notes.",
+    title: "July Player 1.1.6",
+    description: "This update fixes desktop pet freezes, disappearing pets, and state recovery.",
     highlights: [
-      "Added in-app release notes shown once after installing or upgrading to a new version.",
-      "Fixed freezes or crashes when dragging the video progress bar, with live frame follow-up while seeking.",
-      "Fixed Chinese and bilingual subtitles: Chinese tracks keep Chinese only, and bilingual lines are deduplicated.",
-      "Improved AI subtitle translation with pre-translation and cache reuse to reduce translation flicker.",
-      "Split subtitle parsing, language detection, cue lookup, and seek handling into smaller modules.",
-      "Improved long-subtitle performance with sorted cue lookup and binary positioning.",
+      "Fixed a desktop pet issue where entering desktop mode could freeze, disappear, or lock the pet module.",
+      "Added a desktop pet ready handshake before hiding the in-player resident pet.",
+      "Desktop mode now resets any stale desktop pet window before creating a fresh one.",
+      "Opening and closing desktop pet mode now has timeout protection and automatic rollback.",
+      "The desktop pet window no longer writes shared settings directly; it notifies the main window instead.",
+      "Main-window shutdown of the desktop pet now uses a stronger window destroy path on Windows.",
     ],
     close: "Start watching",
     dismiss: "Dismiss release notes",
   },
   fr: {
     eyebrow: "Notes de version",
-    title: "July Player 1.1.5",
-    description:
-      "Cette version améliore la stabilité du lecteur, la synchronisation des sous-titres et les notes intégrées.",
+    title: "July Player 1.1.6",
+    description: "Cette version corrige les blocages et disparitions du compagnon de bureau.",
     highlights: [
-      "Ajout de notes de version intégrées, affichées une seule fois après installation ou mise à jour.",
-      "Correction des blocages ou plantages lors du déplacement de la barre de progression vidéo.",
-      "Correction des sous-titres chinois et bilingues : la piste chinoise garde uniquement le chinois.",
-      "Amélioration de la traduction IA des sous-titres avec pré-traduction et cache réutilisé.",
-      "Séparation de l'analyse des sous-titres, de la détection de langue, de la recherche de cue et du seek.",
-      "Meilleures performances sur les longs sous-titres grâce à une recherche triée et binaire.",
+      "Correction du blocage possible lors du passage du compagnon en mode bureau.",
+      "Ajout d'une confirmation de chargement avant de masquer le compagnon du lecteur.",
+      "Le mode bureau recrée une fenêtre propre au lieu de réutiliser une ancienne fenêtre bloquée.",
+      "Ouverture et fermeture ont maintenant une protection par délai et un retour automatique.",
+      "La petite fenêtre du compagnon notifie la fenêtre principale au lieu d'écrire les réglages directement.",
+      "La fermeture depuis la fenêtre principale utilise un chemin plus robuste sous Windows.",
     ],
     close: "Commencer",
     dismiss: "Fermer les notes",
