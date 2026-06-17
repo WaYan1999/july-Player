@@ -10,7 +10,7 @@ import { EASE_OUT } from "@/lib/constants";
 import { useSettings } from "@/hooks/useSettings";
 import type { AppLanguage } from "@/lib/i18n";
 
-const RELEASE_NOTES_VERSION = "1.1.7";
+const RELEASE_NOTES_VERSION = "1.1.8";
 const RELEASE_NOTES_STORAGE_KEY = `july-player:release-notes-seen:${RELEASE_NOTES_VERSION}`;
 
 type ReleaseNotesCopy = {
@@ -25,47 +25,47 @@ type ReleaseNotesCopy = {
 const RELEASE_NOTES: Record<AppLanguage, ReleaseNotesCopy> = {
   zh: {
     eyebrow: "\u7248\u672c\u66f4\u65b0",
-    title: "\u4e03\u6708\u64ad\u653e\u5668 1.1.7",
+    title: "\u4e03\u6708\u64ad\u653e\u5668 1.1.8",
     description:
-      "\u672c\u6b21\u91cd\u70b9\u4f18\u5316\u56fd\u5185\u66f4\u65b0\u901f\u5ea6\uff0c\u5e76\u63a5\u5165\u540e\u7aef latest.json \u66f4\u65b0\u63a5\u53e3\u3002",
+      "\u672c\u6b21\u91cd\u70b9\u4f18\u5316\u64ad\u653e\u5668\u754c\u9762\u3001\u5ba0\u7269\u73a9\u6cd5\u3001AI \u7b14\u8bb0\u548c\u66f4\u65b0\u53d1\u5e03\u6d41\u7a0b\u3002",
     highlights: [
-      "\u65b0\u589e\u56fd\u5185\u66f4\u65b0\u6e90\u4f18\u5148\u68c0\u67e5\uff1a\u5148\u8bf7\u6c42 julyres.top \u7684 latest.json\uff0cGitHub \u4f5c\u4e3a\u5907\u7528\u3002",
-      "\u7f29\u77ed\u66f4\u65b0\u68c0\u67e5\u8d85\u65f6\uff1a\u542f\u52a8\u9759\u9ed8\u68c0\u67e5 3 \u79d2\uff0c\u624b\u52a8\u68c0\u67e5 5 \u79d2\u3002",
-      "\u65b0\u589e UPDATE_MANIFEST.md\uff0c\u540e\u7aef\u53ef\u6309\u6587\u6863\u63d0\u4f9b version\u3001notes\u3001pub_date\u3001platforms\u3001url \u548c signature\u3002",
-      "\u652f\u6301\u540e\u7aef\u628a\u5b89\u88c5\u5305\u548c\u7b7e\u540d\u6587\u4ef6\u653e\u5230\u56fd\u5185 CDN\uff0c\u8ba9\u68c0\u67e5\u548c\u4e0b\u8f7d\u66f4\u5feb\u3002",
-      "\u4fdd\u7559 GitHub Release \u66f4\u65b0\u6e05\u5355\u4f5c\u4e3a\u5907\u7528\u6e90\uff0c\u56fd\u5185\u6e90\u4e0d\u53ef\u7528\u65f6\u4ecd\u53ef\u7ee7\u7eed\u68c0\u67e5\u3002",
-      "\u5b8c\u5584 1.1.7 \u53d1\u5e03\u8bf4\u660e\uff0c\u660e\u786e\u8fdc\u7a0b\u66f4\u65b0\u63a5\u53e3\u548c\u56fd\u5185\u52a0\u901f\u65b9\u6848\u3002",
+      "\u5168\u9762\u4f18\u5316 HeroUI \u64ad\u653e\u5668\u754c\u9762\uff0c\u6539\u5584\u4fa7\u8fb9\u680f\u3001\u8bfe\u7a0b\u9875\u3001\u8bbe\u7f6e\u9875\u548c\u7a84\u5c4f\u81ea\u9002\u5e94\u5e03\u5c40\u3002",
+      "\u4fee\u590d\u5ba0\u7269\u9875\u54cd\u5e94\u5f0f\u6392\u7248\u548c\u684c\u9762\u5ba0\u7269\u7a33\u5b9a\u6027\uff0c\u4f18\u5316\u5ba0\u7269\u72b6\u6001\u3001\u53cd\u9988\u548c\u6e38\u620f\u6570\u503c\u4f53\u9a8c\u3002",
+      "\u65b0\u589e AI \u7b14\u8bb0\u52a9\u624b\uff0c\u53ef\u4ece\u8bfe\u7a0b\u5185\u5bb9\u63d0\u53d6\u7b14\u8bb0\u5e76\u7ee7\u7eed\u8ffd\u95ee\u3002",
+      "\u4f18\u5316\u89c6\u9891\u62d6\u52a8\u8fdb\u5ea6\u548c\u64ad\u653e\u53cd\u9988\uff0c\u51cf\u5c11\u62d6\u62fd\u65f6\u7684\u5361\u987f\u611f\u3002",
+      "\u79fb\u9664 lottie \u52a0\u8f7d\u8d44\u6e90\uff0c\u6362\u6210\u8f7b\u91cf LoadingOrbit\uff0c\u51cf\u5c11\u6784\u5efa\u8b66\u544a\u548c\u4e3b\u5305\u538b\u529b\u3002",
+      "\u65b0\u589e\u767b\u5f55\u6a21\u5757\u548c\u5ba0\u7269\u6570\u636e\u8868\u8bbe\u8ba1\u6587\u6863\uff0c\u4fbf\u4e8e\u540e\u7eed\u63a5\u5165\u8d26\u53f7\u3001\u5546\u5e97\u548c\u4e91\u540c\u6b65\u3002",
     ],
     close: "\u5f00\u59cb\u4f7f\u7528",
     dismiss: "\u5173\u95ed\u66f4\u65b0\u8bf4\u660e",
   },
   en: {
     eyebrow: "Release notes",
-    title: "July Player 1.1.7",
-    description: "This update improves update checks in China and documents the backend manifest API.",
+    title: "July Player 1.1.8",
+    description: "This update polishes the player UI, pet experience, AI notes, and release flow.",
     highlights: [
-      "Added a China-friendly update endpoint that checks julyres.top before falling back to GitHub.",
-      "Reduced update-check waiting time with 3-second silent checks and 5-second manual checks.",
-      "Added UPDATE_MANIFEST.md so the backend can serve the required latest.json fields.",
-      "Supports CDN-hosted installers and signatures for faster update downloads.",
-      "Keeps GitHub Releases as a fallback update source when the domestic endpoint is unavailable.",
-      "Updated 1.1.7 release notes for the remote update manifest and acceleration flow.",
+      "Refined the HeroUI interface across navigation, course pages, settings, and responsive layouts.",
+      "Improved pet page responsiveness, desktop pet stability, feedback, state, and game-system feel.",
+      "Added the AI notes assistant for extracting course notes and follow-up questions.",
+      "Improved video seek feedback to reduce stutter while dragging the progress bar.",
+      "Replaced lottie loading assets with a lightweight LoadingOrbit to reduce warnings and bundle pressure.",
+      "Added login-module and pet-data design docs for account, shop, and cloud-sync integration.",
     ],
     close: "Start watching",
     dismiss: "Dismiss release notes",
   },
   fr: {
     eyebrow: "Notes de version",
-    title: "July Player 1.1.7",
+    title: "July Player 1.1.8",
     description:
-      "Cette version am\u00e9liore la recherche de mises \u00e0 jour et documente le manifeste serveur.",
+      "Cette version am\u00e9liore l'interface, l'animal compagnon, les notes IA et le flux de publication.",
     highlights: [
-      "Ajout d'un endpoint de mise \u00e0 jour prioritaire sur julyres.top avec GitHub en secours.",
-      "R\u00e9duction du d\u00e9lai d'attente des v\u00e9rifications de mise \u00e0 jour.",
-      "Ajout de UPDATE_MANIFEST.md pour d\u00e9crire le format latest.json attendu par le backend.",
-      "Prise en charge des installateurs et signatures h\u00e9berg\u00e9s sur CDN pour acc\u00e9l\u00e9rer les t\u00e9l\u00e9chargements.",
-      "Conservation de GitHub Releases comme source de secours si l'endpoint domestique est indisponible.",
-      "Mise \u00e0 jour des notes 1.1.7 pour expliquer le manifeste distant et l'acc\u00e9l\u00e9ration.",
+      "Interface HeroUI affin\u00e9e pour la navigation, les cours, les r\u00e9glages et les layouts responsives.",
+      "Stabilit\u00e9 et retours am\u00e9lior\u00e9s pour la page animal et le mode bureau.",
+      "Ajout de l'assistant de notes IA pour extraire les notes de cours et poser des questions.",
+      "Meilleur retour lors du d\u00e9placement dans la vid\u00e9o afin de r\u00e9duire les saccades.",
+      "Remplacement des assets lottie par LoadingOrbit pour r\u00e9duire les avertissements et le poids du bundle.",
+      "Ajout de documents de conception pour le compte, la boutique et la synchronisation des donn\u00e9es animal.",
     ],
     close: "Commencer",
     dismiss: "Fermer les notes",

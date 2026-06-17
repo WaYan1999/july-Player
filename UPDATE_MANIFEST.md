@@ -1,4 +1,4 @@
-# 七月播放器远程更新 latest.json 说明
+﻿# 七月播放器远程更新 latest.json 说明
 
 七月播放器使用 Tauri Updater 做远程更新。后台不负责生成签名，后台只负责托管安装包、托管 `.sig` 文件，并把 `.sig` 文件内容写进 `latest.json` 的 `signature` 字段。
 
@@ -125,28 +125,28 @@ src-tauri/target/release/bundle/macos/xxx.app.tar.gz.sig
 
 ```json
 {
-  "version": "1.1.7",
-  "notes": "七月播放器 1.1.7 更新说明：\n- 优化远程更新\n- 修复已知问题",
+  "version": "1.1.8",
+  "notes": "七月播放器 1.1.8 更新说明：\n- 优化远程更新\n- 修复已知问题",
   "pub_date": "2026-06-17T12:00:00Z",
   "platforms": {
     "windows-x86_64": {
-      "url": "https://julyres.top/july-player/七月播放器_1.1.7_x64_zh-CN.msi",
+      "url": "https://julyres.top/july-player/七月播放器_1.1.8_x64_zh-CN.msi",
       "signature": "这里放 .msi.sig 文件里的完整内容"
     },
     "windows-x86_64-msi": {
-      "url": "https://julyres.top/july-player/七月播放器_1.1.7_x64_zh-CN.msi",
+      "url": "https://julyres.top/july-player/七月播放器_1.1.8_x64_zh-CN.msi",
       "signature": "这里放 .msi.sig 文件里的完整内容"
     },
     "windows-x86_64-nsis": {
-      "url": "https://julyres.top/july-player/七月播放器_1.1.7_x64-setup.exe",
+      "url": "https://julyres.top/july-player/七月播放器_1.1.8_x64-setup.exe",
       "signature": "这里放 .exe.sig 文件里的完整内容"
     },
     "darwin-aarch64": {
-      "url": "https://julyres.top/july-player/七月播放器_1.1.7_universal.app.tar.gz",
+      "url": "https://julyres.top/july-player/七月播放器_1.1.8_universal.app.tar.gz",
       "signature": "这里放 .app.tar.gz.sig 文件里的完整内容"
     },
     "darwin-x86_64": {
-      "url": "https://julyres.top/july-player/七月播放器_1.1.7_universal.app.tar.gz",
+      "url": "https://julyres.top/july-player/七月播放器_1.1.8_universal.app.tar.gz",
       "signature": "这里放 .app.tar.gz.sig 文件里的完整内容"
     }
   }
@@ -188,7 +188,7 @@ HTTP/1.1 204 No Content
 
 ```json
 {
-  "version": "1.1.7",
+  "version": "1.1.8",
   "notes": "当前已经是最新版本",
   "pub_date": "2026-06-17T12:00:00Z",
   "platforms": {}
@@ -202,32 +202,32 @@ HTTP/1.1 204 No Content
 ```js
 app.get("/july-player/latest.json", (req, res) => {
   res.json({
-    version: "1.1.7",
+    version: "1.1.8",
     notes: [
-      "七月播放器 1.1.7 更新说明：",
+      "七月播放器 1.1.8 更新说明：",
       "- 优化远程更新",
       "- 修复已知问题"
     ].join("\n"),
     pub_date: "2026-06-17T12:00:00Z",
     platforms: {
       "windows-x86_64": {
-        url: "https://julyres.top/july-player/七月播放器_1.1.7_x64_zh-CN.msi",
+        url: "https://julyres.top/july-player/七月播放器_1.1.8_x64_zh-CN.msi",
         signature: process.env.JULY_PLAYER_MSI_SIGNATURE
       },
       "windows-x86_64-msi": {
-        url: "https://julyres.top/july-player/七月播放器_1.1.7_x64_zh-CN.msi",
+        url: "https://julyres.top/july-player/七月播放器_1.1.8_x64_zh-CN.msi",
         signature: process.env.JULY_PLAYER_MSI_SIGNATURE
       },
       "windows-x86_64-nsis": {
-        url: "https://julyres.top/july-player/七月播放器_1.1.7_x64-setup.exe",
+        url: "https://julyres.top/july-player/七月播放器_1.1.8_x64-setup.exe",
         signature: process.env.JULY_PLAYER_EXE_SIGNATURE
       },
       "darwin-aarch64": {
-        url: "https://julyres.top/july-player/七月播放器_1.1.7_universal.app.tar.gz",
+        url: "https://julyres.top/july-player/七月播放器_1.1.8_universal.app.tar.gz",
         signature: process.env.JULY_PLAYER_MAC_SIGNATURE
       },
       "darwin-x86_64": {
-        url: "https://julyres.top/july-player/七月播放器_1.1.7_universal.app.tar.gz",
+        url: "https://julyres.top/july-player/七月播放器_1.1.8_universal.app.tar.gz",
         signature: process.env.JULY_PLAYER_MAC_SIGNATURE
       }
     }
