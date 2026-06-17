@@ -9,7 +9,7 @@ import { EASE_OUT } from "@/lib/constants";
 import { useSettings } from "@/hooks/useSettings";
 import type { AppLanguage } from "@/lib/i18n";
 
-const RELEASE_NOTES_VERSION = "1.1.6";
+const RELEASE_NOTES_VERSION = "1.1.7";
 const RELEASE_NOTES_STORAGE_KEY = `july-player:release-notes-seen:${RELEASE_NOTES_VERSION}`;
 
 const RELEASE_NOTES: Record<
@@ -25,45 +25,45 @@ const RELEASE_NOTES: Record<
 > = {
   zh: {
     eyebrow: "版本更新",
-    title: "七月播放器 1.1.6",
-    description: "本次重点修复桌面宠物卡死、消失和状态恢复问题。",
+    title: "七月播放器 1.1.7",
+    description: "本次重点优化国内更新速度，并接入后端 latest.json 更新接口。",
     highlights: [
-      "修复宠物进入桌面模式后可能消失、卡死或导致宠物模块锁死的问题。",
-      "新增桌面宠物加载完成确认，窗口真正打开后才隐藏播放器内的常驻宠物。",
-      "进入桌面模式前会清理旧的桌面宠物窗口，避免复用异常 WebView。",
-      "打开和关闭桌面宠物增加超时保护，失败时自动回滚状态。",
-      "桌面宠物窗口不再直接写入共享设置，改为通知主窗口统一恢复状态。",
-      "从主窗口关闭桌面宠物时改用更可靠的 Windows WebView2 销毁流程。",
+      "新增国内更新源优先检查：优先请求 julyres.top 的 latest.json，GitHub 保留兜底。",
+      "缩短更新检查超时时间：启动静默检查 3 秒，手动检查 5 秒，避免界面长时间等待。",
+      "新增 UPDATE_MANIFEST.md，后端可按文档提供 version、notes、pub_date、platforms、url 和 signature。",
+      "支持后端把安装包和签名文件放到国内 CDN，让检查更新和下载安装都更快。",
+      "保留 GitHub Release 更新清单作为备用源，国内源不可用时仍可继续检查更新。",
+      "完善 1.1.7 发布说明，明确本次新增的远程更新接口和国内加速方案。",
     ],
     close: "开始使用",
     dismiss: "关闭更新说明",
   },
   en: {
     eyebrow: "Release notes",
-    title: "July Player 1.1.6",
-    description: "This update fixes desktop pet freezes, disappearing pets, and state recovery.",
+    title: "July Player 1.1.7",
+    description: "This update improves update checks in China and documents the backend manifest API.",
     highlights: [
-      "Fixed a desktop pet issue where entering desktop mode could freeze, disappear, or lock the pet module.",
-      "Added a desktop pet ready handshake before hiding the in-player resident pet.",
-      "Desktop mode now resets any stale desktop pet window before creating a fresh one.",
-      "Opening and closing desktop pet mode now has timeout protection and automatic rollback.",
-      "The desktop pet window no longer writes shared settings directly; it notifies the main window instead.",
-      "Main-window shutdown of the desktop pet now uses a stronger window destroy path on Windows.",
+      "Added a China-friendly update endpoint that checks julyres.top before falling back to GitHub.",
+      "Reduced update-check waiting time with 3-second silent checks and 5-second manual checks.",
+      "Added UPDATE_MANIFEST.md so the backend can serve the required latest.json fields.",
+      "Supports CDN-hosted installers and signatures for faster update downloads.",
+      "Keeps GitHub Releases as a fallback update source when the domestic endpoint is unavailable.",
+      "Updated 1.1.7 release notes for the remote update manifest and acceleration flow.",
     ],
     close: "Start watching",
     dismiss: "Dismiss release notes",
   },
   fr: {
     eyebrow: "Notes de version",
-    title: "July Player 1.1.6",
-    description: "Cette version corrige les blocages et disparitions du compagnon de bureau.",
+    title: "July Player 1.1.7",
+    description: "Cette version améliore la recherche de mises à jour et documente le manifeste serveur.",
     highlights: [
-      "Correction du blocage possible lors du passage du compagnon en mode bureau.",
-      "Ajout d'une confirmation de chargement avant de masquer le compagnon du lecteur.",
-      "Le mode bureau recrée une fenêtre propre au lieu de réutiliser une ancienne fenêtre bloquée.",
-      "Ouverture et fermeture ont maintenant une protection par délai et un retour automatique.",
-      "La petite fenêtre du compagnon notifie la fenêtre principale au lieu d'écrire les réglages directement.",
-      "La fermeture depuis la fenêtre principale utilise un chemin plus robuste sous Windows.",
+      "Ajout d'un endpoint de mise à jour prioritaire sur julyres.top avec GitHub en secours.",
+      "Réduction du délai d'attente des vérifications de mise à jour.",
+      "Ajout de UPDATE_MANIFEST.md pour décrire le format latest.json attendu par le backend.",
+      "Prise en charge des installateurs et signatures hébergés sur CDN pour accélérer les téléchargements.",
+      "Conservation de GitHub Releases comme source de secours si l'endpoint domestique est indisponible.",
+      "Mise à jour des notes 1.1.7 pour expliquer le manifeste distant et l'accélération.",
     ],
     close: "Commencer",
     dismiss: "Fermer les notes",

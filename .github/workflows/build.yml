@@ -81,13 +81,13 @@ jobs:
           tagName: v__VERSION__
           releaseName: '七月播放器 v__VERSION__'
           releaseBody: |
-            七月播放器 1.1.6 新增修改：
-            - 修复宠物进入桌面模式后可能消失、卡死或导致宠物模块锁死的问题。
-            - 新增桌面宠物加载完成确认，窗口真正打开后才隐藏播放器内的常驻宠物。
-            - 进入桌面模式前会清理旧的桌面宠物窗口，避免复用异常 WebView。
-            - 打开和关闭桌面宠物增加超时保护，失败时自动回滚状态。
-            - 桌面宠物窗口不再直接写入共享设置，改为通知主窗口统一恢复状态。
-            - 从主窗口关闭桌面宠物时改用更可靠的 Windows WebView2 销毁流程。
+            七月播放器 1.1.7 新增修改：
+            - 新增国内更新源优先检查：优先请求 https://julyres.top/july-player/latest.json。
+            - GitHub Release latest.json 保留为备用源，国内源不可用时仍可继续检查更新。
+            - 缩短更新检查超时时间：启动静默检查 3 秒，手动检查 5 秒，减少等待。
+            - 新增 UPDATE_MANIFEST.md，后端可按文档提供 version、notes、pub_date、platforms、url 和 signature。
+            - 支持后端把安装包和签名文件放到国内 CDN，让检查更新和下载安装都更快。
+            - 同步应用内 1.1.7 更新说明，写明远程更新接口和国内加速方案。
             - 发布前完成前端构建、TypeScript 检查、Rust 检查和代码审查。
           includeUpdaterJson: true
           releaseDraft: true
@@ -170,13 +170,13 @@ jobs:
           const latest = {
             version,
             notes: [
-              "七月播放器 1.1.6 新增修改：",
-              "- 修复宠物进入桌面模式后可能消失、卡死或导致宠物模块锁死的问题。",
-              "- 新增桌面宠物加载完成确认，窗口真正打开后才隐藏播放器内的常驻宠物。",
-              "- 进入桌面模式前会清理旧的桌面宠物窗口，避免复用异常 WebView。",
-              "- 打开和关闭桌面宠物增加超时保护，失败时自动回滚状态。",
-              "- 桌面宠物窗口不再直接写入共享设置，改为通知主窗口统一恢复状态。",
-              "- 从主窗口关闭桌面宠物时改用更可靠的 Windows WebView2 销毁流程。",
+              "七月播放器 1.1.7 新增修改：",
+              "- 新增国内更新源优先检查：优先请求 https://julyres.top/july-player/latest.json。",
+              "- GitHub Release latest.json 保留为备用源，国内源不可用时仍可继续检查更新。",
+              "- 缩短更新检查超时时间：启动静默检查 3 秒，手动检查 5 秒，减少等待。",
+              "- 新增 UPDATE_MANIFEST.md，后端可按文档提供 version、notes、pub_date、platforms、url 和 signature。",
+              "- 支持后端把安装包和签名文件放到国内 CDN，让检查更新和下载安装都更快。",
+              "- 同步应用内 1.1.7 更新说明，写明远程更新接口和国内加速方案。",
               "- 发布前完成前端构建、TypeScript 检查、Rust 检查和代码审查。",
             ].join("\n"),
             pub_date: release.publishedAt,

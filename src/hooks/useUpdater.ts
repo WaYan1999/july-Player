@@ -32,6 +32,9 @@ const initialState: UpdaterState = {
   progress: 0,
 };
 
+const UPDATE_CHECK_TIMEOUT_MS = 5000;
+const SILENT_UPDATE_CHECK_TIMEOUT_MS = 3000;
+
 export function useUpdaterProvider(): UpdaterApi {
   const [state, setState] = useState<UpdaterState>(initialState);
   const [dismissed, setDismissed] = useState(false);
@@ -43,7 +46,9 @@ export function useUpdaterProvider(): UpdaterApi {
     const silent = opts?.silent ?? false;
     try {
       setState((s) => ({ ...s, status: silent ? s.status : "checking", error: undefined }));
-      const update = await check();
+      const update = await check({
+        timeout: silent ? SILENT_UPDATE_CHECK_TIMEOUT_MS : UPDATE_CHECK_TIMEOUT_MS,
+      });
       if (!update) {
         updateRef.current = null;
         setState((s) => ({
