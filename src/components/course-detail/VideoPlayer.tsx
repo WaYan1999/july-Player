@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   forwardRef,
   type MouseEvent as ReactMouseEvent,
 } from "react";
@@ -40,7 +41,23 @@ import { EASE_OUT } from "@/lib/constants";
 import type { PlayerTranslationKey } from "@/lib/i18n";
 import { useI18n } from "@/hooks/useI18n";
 import { useSettings } from "@/hooks/useSettings";
+import { useRafSeek } from "@/hooks/useRafSeek";
 import { plainTextToSubtitleLines } from "@/lib/sanitize";
+import {
+  findUpcomingCues,
+  getActiveCue,
+  getAiSourceSubtitleCueText,
+  getBilingualSubtitleIndexes,
+  getDefaultSubtitleIndex,
+  getDisplaySubtitleCueText,
+  getSubtitleDisplayLabel,
+  getSubtitleLanguageKey,
+  getTranslationSourceSubtitleIndex,
+  normalizeLiveSubtitleText,
+  parseVttCues,
+  uniqueSubtitleCueTexts,
+  type SubtitleCue,
+} from "@/lib/subtitles";
 
 interface VideoPlayerProps {
   lesson: Lesson | undefined;
@@ -73,6 +90,8 @@ const LIVE_AI_POLL_MS = 220;
 const LIVE_AI_BUSY_POLL_MS = 180;
 const LIVE_AI_PAUSED_POLL_MS = 700;
 const LIVE_AI_CACHE_LIMIT = 120;
+const LIVE_AI_PREFETCH_CUE_COUNT = 8;
+const LIVE_AI_PREFETCH_CONCURRENCY = 3;
 
 const SUB_SIZE_OPTIONS: { labelKey: PlayerTranslationKey; value: number }[] = [
   { labelKey: "small", value: 14 },
@@ -113,7 +132,6 @@ const SUB_STYLE_KEY = "ckourse:subtitle-style";
 const SUBTITLE_OFF_KEY = "__off__";
 const BILINGUAL_SUBTITLE_KEY = "bilingual";
 const BILINGUAL_SUBTITLE_IDX = -2;
-const CHINESE_SUBTITLE_LABEL = "中文字幕";
 const BILINGUAL_SUBTITLE_LABEL = "双语字幕";
 
 const DEFAULT_SUB_STYLE: SubtitleStyle = {
@@ -133,97 +151,14 @@ function loadSubStyle(): SubtitleStyle {
   return DEFAULT_SUB_STYLE;
 }
 
-function getSubtitleFileName(path: string): string {
-  return path.split(/[\\/]/).pop() ?? path;
-}
-
-function getSubtitleSearchText(sub: Subtitle): string {
-  return [sub.language, getSubtitleFileName(sub.path)]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-}
-
-function getSubtitleTokens(sub: Subtitle): string[] {
-  return getSubtitleSearchText(sub)
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
-}
-
-function getSubtitleLanguageKey(sub: Subtitle): string {
-  const tokens = getSubtitleTokens(sub);
-  const searchText = getSubtitleSearchText(sub);
-
-  if (
-    searchText.includes("中文") ||
-    searchText.includes("简体") ||
-    searchText.includes("繁体") ||
-    tokens.some((token) => token.startsWith("zh")) ||
-    tokens.some((token) =>
-      ["chinese", "china", "chi", "zho", "cmn"].includes(token),
-    )
-  ) {
-    return "zh";
-  }
-
-  if (tokens.some((token) => ["en", "eng", "english"].includes(token))) {
-    return "en";
-  }
-
-  if (
-    tokens.some((token) =>
-      ["fr", "fra", "fre", "french", "francais", "français"].includes(token),
-    )
-  ) {
-    return "fr";
-  }
-
-  return sub.language?.trim().toLowerCase() || getSubtitleFileName(sub.path).toLowerCase();
-}
-
-function getSubtitleDisplayLabel(sub: Subtitle, fallback: string): string {
-  const key = getSubtitleLanguageKey(sub);
-  if (key === "zh") return CHINESE_SUBTITLE_LABEL;
-  if (key === "en") return "English";
-  if (key === "fr") return "Français";
-  return sub.language?.trim() || getSubtitleFileName(sub.path) || fallback;
-}
-
-function getDefaultSubtitleIndex(subtitles: Subtitle[]): number {
-  return subtitles.findIndex((sub) => getSubtitleLanguageKey(sub) === "zh");
-}
-
-function getTranslationSourceSubtitleIndex(subtitles: Subtitle[]): number {
-  const englishIdx = subtitles.findIndex((sub) => getSubtitleLanguageKey(sub) === "en");
-  if (englishIdx >= 0) return englishIdx;
-
-  const nonChineseIdx = subtitles.findIndex((sub) => getSubtitleLanguageKey(sub) !== "zh");
-  return nonChineseIdx >= 0 ? nonChineseIdx : subtitles.length > 0 ? 0 : -1;
-}
-
-function getBilingualSubtitleIndexes(subtitles: Subtitle[]): [number, number] | null {
-  const chineseIdx = subtitles.findIndex((sub) => getSubtitleLanguageKey(sub) === "zh");
-  if (chineseIdx < 0) return null;
-
-  const englishIdx = subtitles.findIndex((sub, idx) => idx !== chineseIdx && getSubtitleLanguageKey(sub) === "en");
-  const otherLanguageIdx = subtitles.findIndex((sub, idx) => idx !== chineseIdx && getSubtitleLanguageKey(sub) !== "zh");
-  const sourceIdx = englishIdx >= 0 ? englishIdx : otherLanguageIdx;
-
-  return sourceIdx >= 0 ? [sourceIdx, chineseIdx] : null;
-}
-
 function getPreferredSubtitleKey(idx: number, subtitles: Subtitle[]): string {
   if (idx === BILINGUAL_SUBTITLE_IDX) return BILINGUAL_SUBTITLE_KEY;
   if (idx < 0) return SUBTITLE_OFF_KEY;
   return subtitles[idx] ? getSubtitleLanguageKey(subtitles[idx]) : SUBTITLE_OFF_KEY;
 }
 
-function normalizeLiveSubtitleText(text: string): string {
-  return text
-    .replace(/\[[^\]]*]/g, " ")
-    .replace(/\([^)]*\)/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+function getAiTranslationCacheKey(sourceText: string, targetLanguage: string): string {
+  return `${targetLanguage}:${sourceText.toLowerCase()}`;
 }
 
 function setLimitedCacheValue(cache: Map<string, string>, key: string, value: string) {
@@ -276,6 +211,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const aiEmptySegmentCountRef = useRef(0);
   const aiSegmentCacheRef = useRef(new Map<string, string>());
   const aiTranslationCacheRef = useRef(new Map<string, string>());
+  const aiTranslationPromiseRef = useRef(new Map<string, Promise<string>>());
 
   useImperativeHandle(ref, () => ({
     seekTo(seconds: number) {
@@ -322,11 +258,13 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const [autoSkipRemaining, setAutoSkipRemaining] = useState(AUTO_SKIP_SECONDS);
   const [autoSkipCancelled, setAutoSkipCancelled] = useState(false);
   const [aiTranslatedText, setAiTranslatedText] = useState("");
+  const [aiTranslatedKey, setAiTranslatedKey] = useState("");
   const [aiStatus, setAiStatus] = useState("");
   const [aiError, setAiError] = useState("");
   const [isAiTranslating, setIsAiTranslating] = useState(false);
-  const updateAiSubtitleText = useCallback((text: string) => {
+  const updateAiSubtitleText = useCallback((text: string, cacheKey = "") => {
     aiVisibleSubtitleRef.current = text;
+    setAiTranslatedKey(cacheKey);
     setAiTranslatedText(text);
   }, []);
   const hasSubtitles = subtitles.length > 0;
@@ -367,7 +305,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
 
   // Parsed subtitle cues per track index
   const [parsedTracks, setParsedTracks] = useState<
-    Map<number, { start: number; end: number; text: string }[]>
+    Map<number, SubtitleCue[]>
   >(new Map());
 
   // Track preferred subtitle language and speed across lesson changes
@@ -376,6 +314,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
 
   const activeVideoPath = preparedVideoPath ?? lesson?.videoPath;
   const videoSrc = activeVideoPath ? convertFileSrc(activeVideoPath, "stream") : undefined;
+  const bilingualSubtitleIndexes = useMemo(
+    () => getBilingualSubtitleIndexes(subtitles),
+    [subtitles],
+  );
   activeVideoPathRef.current = activeVideoPath;
 
   useEffect(() => {
@@ -447,7 +389,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
 
     if (preferredKey === BILINGUAL_SUBTITLE_KEY) {
       setActiveSubtitleIdx(
-        getBilingualSubtitleIndexes(subtitles) ? BILINGUAL_SUBTITLE_IDX : getDefaultSubtitleIndex(subtitles),
+        bilingualSubtitleIndexes ? BILINGUAL_SUBTITLE_IDX : getDefaultSubtitleIndex(subtitles),
       );
       return;
     }
@@ -461,7 +403,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     }
 
     setActiveSubtitleIdx(getDefaultSubtitleIndex(subtitles));
-  }, [lesson?.id, subtitles]);
+  }, [bilingualSubtitleIndexes, lesson?.id, subtitles]);
 
   // Track whether we've applied initial setup for the current lesson
   const initialSeekAppliedRef = useRef<number | null>(null);
@@ -512,7 +454,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         const vtt = await getSubtitleVtt(sub.path);
         return [idx, parseVttCues(vtt)] as [
           number,
-          { start: number; end: number; text: string }[],
+          SubtitleCue[],
         ];
       }),
     ).then((entries) => {
@@ -529,38 +471,112 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     activeSubtitleIdx >= 0
       ? getActiveCue(parsedTracks.get(activeSubtitleIdx), videoTime)
       : null;
-  const bilingualSubtitleIndexes = getBilingualSubtitleIndexes(subtitles);
+  const displayActiveCueText =
+    activeSubtitleIdx >= 0 && subtitles[activeSubtitleIdx]
+      ? getDisplaySubtitleCueText(subtitles[activeSubtitleIdx], activeCueText)
+      : null;
   const bilingualCueTexts =
     activeSubtitleIdx === BILINGUAL_SUBTITLE_IDX && bilingualSubtitleIndexes
-      ? bilingualSubtitleIndexes
-          .map((idx) => getActiveCue(parsedTracks.get(idx), videoTime))
-          .filter((text): text is string => Boolean(text))
+      ? uniqueSubtitleCueTexts(
+          bilingualSubtitleIndexes
+            .map((idx) =>
+              getDisplaySubtitleCueText(
+                subtitles[idx],
+                getActiveCue(parsedTracks.get(idx), videoTime),
+              ),
+            )
+            .filter((text): text is string => Boolean(text)),
+        )
       : [];
   const subtitleCueTexts =
     activeSubtitleIdx === BILINGUAL_SUBTITLE_IDX
       ? bilingualCueTexts
-      : activeCueText
-        ? [activeCueText]
+      : displayActiveCueText
+        ? [displayActiveCueText]
         : [];
   const hasSelectedSubtitleSource =
     activeSubtitleIdx === BILINGUAL_SUBTITLE_IDX
       ? Boolean(bilingualSubtitleIndexes)
       : activeSubtitleIdx >= 0;
+  const sourceSubtitleTextForAi =
+    activeSubtitleIdx === BILINGUAL_SUBTITLE_IDX && bilingualSubtitleIndexes
+      ? getAiSourceSubtitleCueText(
+          subtitles[bilingualSubtitleIndexes[0]],
+          getActiveCue(parsedTracks.get(bilingualSubtitleIndexes[0]), videoTime),
+        )
+      : activeSubtitleIdx >= 0 && subtitles[activeSubtitleIdx]
+        ? getAiSourceSubtitleCueText(subtitles[activeSubtitleIdx], activeCueText)
+        : "";
+  const isAiSubtitleMode =
+    showAiPanel && aiConfigured && Boolean(sourceSubtitleTextForAi);
+  const currentAiTranslationKey = isAiSubtitleMode
+    ? getAiTranslationCacheKey(sourceSubtitleTextForAi, settings.ai_translation_target)
+    : "";
+  const cachedAiSubtitleCueText = currentAiTranslationKey
+    ? aiTranslationCacheRef.current.get(currentAiTranslationKey) || ""
+    : "";
+  const currentAiTranslatedText = isAiSubtitleMode
+    ? cachedAiSubtitleCueText ||
+      (aiTranslatedKey === currentAiTranslationKey ? aiTranslatedText : "")
+    : aiTranslatedText;
   const aiSubtitleCueText =
-    showAiPanel && (aiError || aiTranslatedText || isAiTranslating || aiStatus)
+    showAiPanel &&
+    (aiError || currentAiTranslatedText || aiStatus || isAiTranslating || isAiSubtitleMode)
       ? aiError ||
-        aiTranslatedText ||
-        (isAiTranslating ? t.aiTranslating : aiStatus || t.aiListening)
+        currentAiTranslatedText ||
+        aiStatus ||
+        (isAiTranslating
+          ? t.aiTranslating
+          : isAiSubtitleMode
+            ? t.aiUsingSubtitle
+            : t.aiListening)
       : null;
   const displaySubtitleCueTexts = aiSubtitleCueText
     ? [aiSubtitleCueText]
     : subtitleCueTexts;
-  const sourceSubtitleTextForAi = normalizeLiveSubtitleText(subtitleCueTexts.join("\n"));
   const shouldTranslateVisibleSubtitle =
-    showAiPanel &&
-    aiConfigured &&
-    Boolean(sourceSubtitleTextForAi) &&
-    sourceSubtitleTextForAi !== normalizeLiveSubtitleText(aiTranslatedText);
+    isAiSubtitleMode &&
+    !currentAiTranslatedText;
+
+  const translateAiSubtitleText = useCallback(
+    (sourceText: string) => {
+      const normalizedSourceText = normalizeLiveSubtitleText(sourceText);
+      if (!normalizedSourceText) return Promise.resolve("");
+
+      const translationKey = getAiTranslationCacheKey(
+        normalizedSourceText,
+        settings.ai_translation_target,
+      );
+      const cachedTranslation = aiTranslationCacheRef.current.get(translationKey);
+      if (cachedTranslation) return Promise.resolve(cachedTranslation);
+
+      const existingRequest = aiTranslationPromiseRef.current.get(translationKey);
+      if (existingRequest) return existingRequest;
+
+      const request = translateLiveSubtitleText(
+        normalizedSourceText,
+        settings.ai_translation_target,
+      )
+        .then((translation) => {
+          const normalizedTranslation = normalizeLiveSubtitleText(translation);
+          if (normalizedTranslation) {
+            setLimitedCacheValue(
+              aiTranslationCacheRef.current,
+              translationKey,
+              normalizedTranslation,
+            );
+          }
+          return normalizedTranslation;
+        })
+        .finally(() => {
+          aiTranslationPromiseRef.current.delete(translationKey);
+        });
+
+      aiTranslationPromiseRef.current.set(translationKey, request);
+      return request;
+    },
+    [settings.ai_translation_target],
+  );
 
   const stopAiAudioTranslation = useCallback(() => {
     if (aiSegmentTimerRef.current) {
@@ -606,10 +622,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     const sourceText = sourceSubtitleTextForAi;
     const requestId = aiTranslateRequestRef.current + 1;
     aiTranslateRequestRef.current = requestId;
-    const translationKey = `${settings.ai_translation_target}:${sourceText.toLowerCase()}`;
+    const translationKey = getAiTranslationCacheKey(sourceText, settings.ai_translation_target);
     const cachedTranslation = aiTranslationCacheRef.current.get(translationKey);
     if (cachedTranslation) {
-      updateAiSubtitleText(cachedTranslation);
+      updateAiSubtitleText(cachedTranslation, translationKey);
       setAiError("");
       setAiStatus("");
       setIsAiTranslating(false);
@@ -622,17 +638,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     setIsAiTranslating(true);
 
     let cancelled = false;
-    translateLiveSubtitleText(sourceText, settings.ai_translation_target)
+    translateAiSubtitleText(sourceText)
       .then((translation) => {
         if (cancelled || aiTranslateRequestRef.current !== requestId) return;
         const normalizedTranslation = normalizeLiveSubtitleText(translation);
         if (normalizedTranslation) {
-          setLimitedCacheValue(
-            aiTranslationCacheRef.current,
-            translationKey,
-            normalizedTranslation,
-          );
-          updateAiSubtitleText(normalizedTranslation);
+          updateAiSubtitleText(normalizedTranslation, translationKey);
           setAiStatus("");
         } else {
           updateAiSubtitleText("");
@@ -665,7 +676,68 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     settings.ai_translation_target,
     t.aiTranslationFailed,
     t.aiUsingSubtitle,
+    translateAiSubtitleText,
     updateAiSubtitleText,
+  ]);
+
+  useEffect(() => {
+    if (!showAiPanel || !aiConfigured || activeSubtitleIdx < 0) return;
+
+    const sourceIdx =
+      activeSubtitleIdx === BILINGUAL_SUBTITLE_IDX
+        ? bilingualSubtitleIndexes?.[0]
+        : activeSubtitleIdx;
+    if (sourceIdx === undefined || !subtitles[sourceIdx]) return;
+
+    const cues = parsedTracks.get(sourceIdx);
+    if (!cues?.length) return;
+
+    let cancelled = false;
+    const upcomingSourceTexts = uniqueSubtitleCueTexts(
+      findUpcomingCues(cues, videoTime, LIVE_AI_PREFETCH_CUE_COUNT)
+        .map((cue) => getAiSourceSubtitleCueText(subtitles[sourceIdx], cue.text))
+        .filter(Boolean),
+    );
+
+    const missingSourceTexts = upcomingSourceTexts.filter((sourceText) => {
+      const translationKey = getAiTranslationCacheKey(
+        sourceText,
+        settings.ai_translation_target,
+      );
+      return (
+        !aiTranslationCacheRef.current.has(translationKey) &&
+        !aiTranslationPromiseRef.current.has(translationKey)
+      );
+    });
+
+    if (missingSourceTexts.length === 0) return;
+
+    const prefetch = async () => {
+      for (let i = 0; i < missingSourceTexts.length; i += LIVE_AI_PREFETCH_CONCURRENCY) {
+        if (cancelled) return;
+        await Promise.allSettled(
+          missingSourceTexts
+            .slice(i, i + LIVE_AI_PREFETCH_CONCURRENCY)
+            .map((sourceText) => translateAiSubtitleText(sourceText)),
+        );
+      }
+    };
+
+    void prefetch();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    showAiPanel,
+    aiConfigured,
+    activeSubtitleIdx,
+    bilingualSubtitleIndexes,
+    parsedTracks,
+    subtitles,
+    videoTime,
+    settings.ai_translation_target,
+    translateAiSubtitleText,
   ]);
 
   useEffect(() => {
@@ -724,7 +796,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         return;
       }
 
-      const translationKey = `${settings.ai_translation_target}:${normalizedTranscript.toLowerCase()}`;
+      const translationKey = getAiTranslationCacheKey(
+        normalizedTranscript,
+        settings.ai_translation_target,
+      );
       const cachedTranslation = aiTranslationCacheRef.current.get(translationKey);
       if (cachedTranslation) {
         updateAiSubtitleText(cachedTranslation);
@@ -739,11 +814,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
 
       try {
         const translation = normalizeLiveSubtitleText(
-          await translateLiveSubtitleText(normalizedTranscript, settings.ai_translation_target),
+          await translateAiSubtitleText(normalizedTranscript),
         );
         if (cancelled || aiTranslateRequestRef.current !== requestId) return;
         if (translation) {
-          setLimitedCacheValue(aiTranslationCacheRef.current, translationKey, translation);
           if (aiLastTranscriptRef.current === normalizedTranscript) {
             updateAiSubtitleText(translation);
           }
@@ -836,13 +910,21 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
           aiEmptySegmentCountRef.current = 0;
           if (transcript !== aiLastTranscriptRef.current) {
             aiLastTranscriptRef.current = transcript;
-            const translationKey = `${settings.ai_translation_target}:${transcript.toLowerCase()}`;
+            const translationKey = getAiTranslationCacheKey(
+              transcript,
+              settings.ai_translation_target,
+            );
             const cachedTranslation = aiTranslationCacheRef.current.get(translationKey);
-            updateAiSubtitleText(cachedTranslation || transcript);
-            setAiStatus(cachedTranslation ? "" : t.aiTranslating);
+            if (cachedTranslation) {
+              updateAiSubtitleText(cachedTranslation);
+              setAiStatus("");
+            } else {
+              updateAiSubtitleText("");
+              setAiStatus(t.aiTranslating);
+            }
             void translateTranscript(transcript);
           } else if (!aiVisibleSubtitleRef.current) {
-            updateAiSubtitleText(transcript);
+            setAiStatus(t.aiTranslating);
           }
           setAiError("");
         } else {
@@ -885,6 +967,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     hasSelectedSubtitleSource,
     settings.ai_translation_target,
     stopAiAudioTranslation,
+    translateAiSubtitleText,
     updateAiSubtitleText,
     t.aiListening,
     t.aiNoSource,
@@ -1075,7 +1158,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     setActiveSubtitleIdx((prev) => {
       const options = [
         -1,
-        ...(getBilingualSubtitleIndexes(subtitles) ? [BILINGUAL_SUBTITLE_IDX] : []),
+        ...(bilingualSubtitleIndexes ? [BILINGUAL_SUBTITLE_IDX] : []),
         ...subtitles.map((_, idx) => idx),
       ];
       const current = options.includes(prev) ? options.indexOf(prev) : 0;
@@ -1083,7 +1166,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       preferredSubLangRef.current = getPreferredSubtitleKey(next, subtitles);
       return next;
     });
-  }, [hasSubtitles, subtitles]);
+  }, [bilingualSubtitleIndexes, hasSubtitles, subtitles]);
 
   const selectSubtitle = useCallback(
     (idx: number) => {
@@ -1200,37 +1283,50 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     }
   }, []);
 
+  const { scheduleSeekTime, flushSeekTime } = useRafSeek({
+    videoRef,
+    duration: videoDuration,
+    onTimeChange: useCallback(
+      (time: number) => {
+        setVideoTime(time);
+        onTimeUpdate?.(time);
+      },
+      [onTimeUpdate],
+    ),
+  });
+
   const getSeekRatio = (e: ReactMouseEvent | MouseEvent) => {
     if (!seekBarRef.current) return 0;
     const rect = seekBarRef.current.getBoundingClientRect();
+    if (rect.width <= 0) return 0;
     return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
   };
 
   const handleSeekMouseDown = useCallback(
     (e: ReactMouseEvent<HTMLDivElement>) => {
-      if (!videoRef.current || !videoDuration) return;
+      if (!videoRef.current || videoDuration <= 0) return;
       e.preventDefault();
       setIsSeeking(true);
-      const ratio = getSeekRatio(e);
-      videoRef.current.currentTime = ratio * videoDuration;
+      scheduleSeekTime(getSeekRatio(e) * videoDuration);
 
       const handleMouseMove = (ev: MouseEvent) => {
-        if (!videoRef.current) return;
-        const r = getSeekRatio(ev);
-        videoRef.current.currentTime = r * videoDuration;
-        setVideoTime(r * videoDuration);
+        ev.preventDefault();
+        scheduleSeekTime(getSeekRatio(ev) * videoDuration);
       };
 
       const handleMouseUp = () => {
+        flushSeekTime();
         setIsSeeking(false);
         window.removeEventListener("mousemove", handleMouseMove);
         window.removeEventListener("mouseup", handleMouseUp);
+        window.removeEventListener("blur", handleMouseUp);
       };
 
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
+      window.addEventListener("blur", handleMouseUp);
     },
-    [videoDuration],
+    [flushSeekTime, scheduleSeekTime, videoDuration],
   );
 
   const handleSeekHover = useCallback(
@@ -1995,69 +2091,4 @@ function SubSettingChip({
       {label}
     </button>
   );
-}
-
-function parseVttTimestamp(ts: string): number {
-  // Handles both "HH:MM:SS.mmm" and "MM:SS.mmm"
-  const parts = ts.trim().split(":");
-  if (parts.length === 3) {
-    const [h, m, rest] = parts;
-    const [s, ms] = rest.split(".");
-    return (
-      parseInt(h) * 3600 +
-      parseInt(m) * 60 +
-      parseInt(s) +
-      parseInt(ms || "0") / 1000
-    );
-  }
-  if (parts.length === 2) {
-    const [m, rest] = parts;
-    const [s, ms] = rest.split(".");
-    return parseInt(m) * 60 + parseInt(s) + parseInt(ms || "0") / 1000;
-  }
-  return 0;
-}
-
-function parseVttCues(
-  vtt: string,
-): { start: number; end: number; text: string }[] {
-  const cues: { start: number; end: number; text: string }[] = [];
-  const blocks = vtt
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .split("\n\n");
-
-  for (const block of blocks) {
-    const lines = block.trim().split("\n");
-    const tsLine = lines.find((l) => l.includes(" --> "));
-    if (!tsLine) continue;
-
-    const [startStr, endStr] = tsLine.split(" --> ");
-    const start = parseVttTimestamp(startStr);
-    const end = parseVttTimestamp(endStr.split(" ")[0]); // strip position metadata
-
-    const tsIdx = lines.indexOf(tsLine);
-    const text = lines
-      .slice(tsIdx + 1)
-      .join("\n")
-      .trim();
-    if (text) {
-      cues.push({ start, end, text });
-    }
-  }
-
-  return cues;
-}
-
-function getActiveCue(
-  cues: { start: number; end: number; text: string }[] | undefined,
-  time: number,
-): string | null {
-  if (!cues) return null;
-  for (const cue of cues) {
-    if (time >= cue.start && time <= cue.end) {
-      return cue.text;
-    }
-  }
-  return null;
 }

@@ -20,6 +20,7 @@ import {
   useStartupUpdateCheck,
 } from "@/hooks/useUpdater";
 import { UpdateBanner } from "@/components/UpdateBanner";
+import { ReleaseNotesDialog } from "@/components/ReleaseNotesDialog";
 
 function routeKey(pathname: string, search: string): string {
   if (pathname.startsWith("/course/")) {
@@ -125,6 +126,7 @@ function MainApp() {
         <AppShell>
           <KeepAliveRoutes />
         </AppShell>
+        <ReleaseNotesDialog />
         <UpdateBanner />
       </UpdaterContext.Provider>
     </SettingsContext.Provider>
