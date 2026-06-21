@@ -25,9 +25,15 @@ Commit that change.
 
 ### 3. Add GitHub Actions secrets
 
-Add two secrets to the repo (Settings → Secrets and variables → Actions):
+Add these secrets to the repo (Settings → Secrets and variables → Actions):
 
 - `TAURI_SIGNING_PRIVATE_KEY` — contents of `~/.tauri/ckourse.key`
+- `JULYRES_PLAYER_RELEASE_TOKEN` — JulyRes player release upload token
+
+Do not leave `JULYRES_PLAYER_RELEASE_TOKEN` empty. The release workflow fails on purpose when this token is missing so a package cannot be published to GitHub while silently skipping the JulyRes upload.
+
+If your Tauri signing key has a password, also add:
+
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — the password you chose
 
 ## Cutting a release
@@ -43,7 +49,9 @@ Add two secrets to the repo (Settings → Secrets and variables → Actions):
    - platform installers (`.dmg`, `.msi`, `.exe`)
    - `latest.json` (the update manifest the app polls)
    - `.sig` signature files
-4. Review the draft release on GitHub, then **publish** it. Publishing makes `https://github.com/WaYan1999/july-Player/releases/latest/download/latest.json` resolve, which is the endpoint the app checks.
+4. The workflow uploads the signed installer artifacts to JulyRes. This step requires `JULYRES_PLAYER_RELEASE_TOKEN` and will fail if the secret is missing or any package/signature pair is incomplete.
+5. In the JulyRes WordPress admin, open **播放器发布**, review the uploaded 1.x.x artifacts, check **发布到 latest.json**, and save.
+6. Verify `https://julyres.top/july-player/latest.json` returns the new version. GitHub Release remains the fallback update endpoint.
 
 ## How clients update
 
@@ -60,3 +68,4 @@ Users can hit the **Check for updates** button in Settings at any time.
 - **"signature error"** on install: public key in `tauri.conf.json` doesn't match the private key used to sign. Regenerate, or re-paste the pubkey.
 - **No update detected** after publishing: make sure the release is **published** (not draft) and that the `version` in `latest.json` is greater than the installed app's version (semver compared).
 - **`createUpdaterArtifacts: true` missing**: without it, `tauri-action` won't emit `latest.json`.
+- **JulyRes upload skipped or missing on website**: it should not skip anymore. Confirm `JULYRES_PLAYER_RELEASE_TOKEN` exists in GitHub Actions secrets, then rerun the release workflow or re-push the release tag.

@@ -200,6 +200,12 @@ jobs:
           JULYRES_PLAYER_RELEASE_TOKEN: ${{ secrets.JULYRES_PLAYER_RELEASE_TOKEN }}
           JULYRES_SITE_URL: https://julyres.top
         run: |
+          if [ -z "${JULYRES_PLAYER_RELEASE_TOKEN}" ]; then
+            echo "::error::Missing required GitHub Actions secret: JULYRES_PLAYER_RELEASE_TOKEN"
+            echo "::error::Add it in Settings > Secrets and variables > Actions before cutting a release."
+            exit 1
+          fi
+
           VERSION="$(node -p "require('./package.json').version")"
           rm -rf release-artifacts
           mkdir -p release-artifacts
@@ -217,4 +223,4 @@ jobs:
             --notes "修复书签课程卡片变形和全屏控制条布局，优化切换视频卡顿、字幕懒加载、蓝灰主题与 JulyRes 发布上传流程。" \
             --panel-title "七月播放器 ${VERSION}" \
             --panel-description "本次版本优化 <b>视频切换性能</b>、<b>全屏控制条</b>、<b>书签排版</b>、<b>字幕懒加载</b> 与 <b>蓝灰主题</b>，上传后请在后台人工核对并发布到 latest.json。" \
-            --skip-without-token
+            --require-complete
