@@ -83,6 +83,11 @@ const QUALITY_OPTIONS: { label: string; value: VideoQuality }[] = [
   { label: "1080P", value: "1080p" },
   { label: "2K", value: "2k" },
 ];
+const DEFAULT_QUALITY: VideoQuality = "1080p";
+interface QualityRequest {
+  lessonId: number;
+  quality: VideoQuality;
+}
 const LIVE_AI_SEGMENT_SECONDS = 1.8;
 const LIVE_AI_SEGMENT_OVERLAP_SECONDS = 0.25;
 const LIVE_AI_SEGMENT_STEP_SECONDS = 0.75;
@@ -104,7 +109,7 @@ const SUB_COLOR_OPTIONS: { labelKey: PlayerTranslationKey; value: string }[] = [
   { labelKey: "white", value: "#FFFFFF" },
   { labelKey: "yellow", value: "#FFFF00" },
   { labelKey: "cyan", value: "#00FFFF" },
-  { labelKey: "lime", value: "#C8F135" },
+  { labelKey: "lime", value: "#AFC7F1" },
 ] as const;
 
 const SUB_BG_OPTIONS: { labelKey?: PlayerTranslationKey; label?: string; value: number }[] = [
@@ -244,7 +249,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(defaultSpeed);
-  const [selectedQuality, setSelectedQuality] = useState<VideoQuality>("1080p");
+  const [selectedQuality, setSelectedQuality] = useState<VideoQuality>(DEFAULT_QUALITY);
+  const [requestedQuality, setRequestedQuality] = useState<QualityRequest | null>(null);
   const [preparedVideoPath, setPreparedVideoPath] = useState<string | null>(null);
   const [isPreparingQuality, setIsPreparingQuality] = useState(false);
   const [qualityError, setQualityError] = useState<string | null>(null);
@@ -329,7 +335,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   activeVideoPathRef.current = activeVideoPath;
 
   useEffect(() => {
-    if (!lesson?.videoPath) {
+    if (!lesson?.id || !lesson.videoPath || requestedQuality?.lessonId !== lesson.id) {
       setPreparedVideoPath(null);
       setIsPreparingQuality(false);
       setQualityError(null);
@@ -340,7 +346,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     setIsPreparingQuality(true);
     setQualityError(null);
 
-    prepareVideoQuality(lesson.videoPath, selectedQuality)
+    prepareVideoQuality(lesson.videoPath, requestedQuality.quality)
       .then((result) => {
         if (cancelled) return;
         const currentVideo = videoRef.current;
@@ -353,11 +359,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
               }
             : null;
         setPreparedVideoPath(result.path);
+        setSelectedQuality(requestedQuality.quality);
       })
       .catch((err) => {
         if (cancelled) return;
         console.error("[video-quality] prepare failed", err);
-        setPreparedVideoPath(lesson.videoPath);
+        setPreparedVideoPath(null);
         setQualityError(typeof err === "string" ? err : t.qualityFailed);
       })
       .finally(() => {
@@ -367,7 +374,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     return () => {
       cancelled = true;
     };
-  }, [lesson?.id, lesson?.videoPath, selectedQuality, t.qualityFailed]);
+  }, [lesson?.id, lesson?.videoPath, requestedQuality, t.qualityFailed]);
 
   // Reset state when lesson changes
   useEffect(() => {
@@ -378,6 +385,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     setShowControls(true);
     setParsedTracks(new Map());
     setPreparedVideoPath(null);
+    setRequestedQuality(null);
+    setSelectedQuality(DEFAULT_QUALITY);
     setQualityError(null);
     pendingQualityRestoreRef.current = null;
   }, [lesson?.id]);
@@ -451,28 +460,47 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     }
   }, [lesson?.id, initialTime, autoPlay, defaultVolume]);
 
-  // Parse subtitle files into cue arrays
+  const requiredSubtitleIndexes = useMemo(() => {
+    if (subtitles.length === 0 || activeSubtitleIdx === -1) return [];
+    if (activeSubtitleIdx === BILINGUAL_SUBTITLE_IDX) {
+      return bilingualSubtitleIndexes ?? [];
+    }
+    return subtitles[activeSubtitleIdx] ? [activeSubtitleIdx] : [];
+  }, [activeSubtitleIdx, bilingualSubtitleIndexes, subtitles]);
+
+  // Parse only the selected subtitle tracks. Loading every track during a
+  // lesson switch can noticeably block slower disks when a course has many SRTs.
   useEffect(() => {
-    setParsedTracks(new Map());
-    if (subtitles.length === 0) return;
+    if (requiredSubtitleIndexes.length === 0) return;
+
+    const missingIndexes = requiredSubtitleIndexes.filter(
+      (idx) => !parsedTracks.has(idx) && subtitles[idx],
+    );
+    if (missingIndexes.length === 0) return;
 
     let cancelled = false;
     Promise.all(
-      subtitles.map(async (sub, idx) => {
-        const vtt = await getSubtitleVtt(sub.path);
-        return [idx, parseVttCues(vtt)] as [
-          number,
-          SubtitleCue[],
-        ];
+      missingIndexes.map(async (idx) => {
+        const vtt = await getSubtitleVtt(subtitles[idx].path);
+        return [idx, parseVttCues(vtt)] as [number, SubtitleCue[]];
       }),
-    ).then((entries) => {
-      if (!cancelled) setParsedTracks(new Map(entries));
-    });
+    )
+      .then((entries) => {
+        if (cancelled) return;
+        setParsedTracks((prev) => {
+          const next = new Map(prev);
+          for (const [idx, cues] of entries) {
+            next.set(idx, cues);
+          }
+          return next;
+        });
+      })
+      .catch(() => {});
 
     return () => {
       cancelled = true;
     };
-  }, [subtitles]);
+  }, [parsedTracks, requiredSubtitleIndexes, subtitles]);
 
   // Get the active cue text for the current time
   const activeCueText =
@@ -1190,9 +1218,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   }, []);
 
   const changeQuality = useCallback((quality: VideoQuality) => {
+    if (!lesson?.id) return;
+    setQualityError(null);
     setSelectedQuality(quality);
+    setRequestedQuality({ lessonId: lesson.id, quality });
     setShowQualityMenu(false);
-  }, []);
+  }, [lesson?.id]);
 
   const cycleSubtitles = useCallback(() => {
     if (!hasSubtitles) return;
@@ -1456,7 +1487,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   return (
     <div
       ref={containerRef}
-      className="group/player relative overflow-hidden rounded-xl border border-border bg-black"
+      className={cn(
+        "group/player relative overflow-hidden rounded-xl border border-border bg-black",
+        isFullscreen && "h-screen w-screen rounded-none border-0",
+      )}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       style={{ cursor: showControls ? "default" : "none" }}
@@ -1464,7 +1498,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       <video
         ref={videoRef}
         key={lesson?.id}
-        className="aspect-video w-full bg-black"
+        className={cn(
+          "w-full bg-black",
+          isFullscreen ? "h-full object-contain" : "aspect-video",
+        )}
         src={videoSrc}
         muted={isMuted}
         onTimeUpdate={handleTimeUpdate}
@@ -1649,7 +1686,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
 
       <div
         className={cn(
-          "absolute inset-x-0 bottom-0 flex flex-col bg-linear-to-t from-black/80 via-black/40 to-transparent px-3 pb-2.5 pt-10 transition-opacity duration-300",
+          "absolute inset-x-0 bottom-0 flex flex-col bg-linear-to-t from-black/80 via-black/40 to-transparent px-4 pb-3 pt-10 transition-opacity duration-300 sm:px-5 sm:pb-4",
+          isFullscreen && "px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-16 md:px-8",
           showControls || isSeeking ? "opacity-100" : "opacity-0 pointer-events-none",
         )}
       >
@@ -1683,62 +1721,64 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
           )}
         </div>
 
-        <div className="flex items-center gap-1">
-          <ControlButton onClick={togglePlay} tooltip={`${isPlaying ? t.pause : t.play} (K)`}>
-            {isPlaying ? (
-              <Pause className="size-5" weight="fill" />
-            ) : (
-              <Play className="size-5" weight="fill" />
-            )}
-          </ControlButton>
-
-          <ControlButton
-            onClick={skipBackward}
-            tooltip={`${t.backSeconds.replace("{seconds}", String(skipSeconds))} (J)`}
-          >
-            <CounterClockwise className="size-4" weight="bold" />
-          </ControlButton>
-
-          <ControlButton
-            onClick={skipForward}
-            tooltip={`${t.forwardSeconds.replace("{seconds}", String(skipSeconds))} (L)`}
-          >
-            <Clockwise className="size-4" weight="bold" />
-          </ControlButton>
-
-          {hasNext && (
-            <ControlButton onClick={onNext} tooltip={t.nextLessonTooltip}>
-              <SkipForward className="size-4" weight="fill" />
-            </ControlButton>
-          )}
-
-          <div
-            className="relative flex items-center"
-            onMouseEnter={() => setShowVolumeSlider(true)}
-            onMouseLeave={() => setShowVolumeSlider(false)}
-          >
-            <ControlButton onClick={toggleMute} tooltip={`${isMuted ? t.unmute : t.mute} (M)`}>
-              <VolumeIcon className="size-4" />
-            </ControlButton>
-            <div
-              className={cn(
-                "flex items-center overflow-hidden transition-all duration-200",
-                showVolumeSlider ? "w-20 opacity-100 ml-0.5" : "w-0 opacity-0",
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1">
+            <ControlButton onClick={togglePlay} tooltip={`${isPlaying ? t.pause : t.play} (K)`}>
+              {isPlaying ? (
+                <Pause className="size-5" weight="fill" />
+              ) : (
+                <Play className="size-5" weight="fill" />
               )}
+            </ControlButton>
+
+            <ControlButton
+              onClick={skipBackward}
+              tooltip={`${t.backSeconds.replace("{seconds}", String(skipSeconds))} (J)`}
             >
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={isMuted ? 0 : volume}
-                onChange={handleVolumeChange}
-                className="volume-slider h-1 w-full cursor-pointer appearance-none rounded-full bg-white/20 accent-primary [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
-              />
+              <CounterClockwise className="size-4" weight="bold" />
+            </ControlButton>
+
+            <ControlButton
+              onClick={skipForward}
+              tooltip={`${t.forwardSeconds.replace("{seconds}", String(skipSeconds))} (L)`}
+            >
+              <Clockwise className="size-4" weight="bold" />
+            </ControlButton>
+
+            {hasNext && (
+              <ControlButton onClick={onNext} tooltip={t.nextLessonTooltip}>
+                <SkipForward className="size-4" weight="fill" />
+              </ControlButton>
+            )}
+
+            <div
+              className="relative flex items-center"
+              onMouseEnter={() => setShowVolumeSlider(true)}
+              onMouseLeave={() => setShowVolumeSlider(false)}
+            >
+              <ControlButton onClick={toggleMute} tooltip={`${isMuted ? t.unmute : t.mute} (M)`}>
+                <VolumeIcon className="size-4" />
+              </ControlButton>
+              <div
+                className={cn(
+                  "flex items-center overflow-hidden transition-all duration-200",
+                  showVolumeSlider ? "w-20 opacity-100 ml-0.5" : "w-0 opacity-0",
+                )}
+              >
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={isMuted ? 0 : volume}
+                  onChange={handleVolumeChange}
+                  className="volume-slider h-1 w-full cursor-pointer appearance-none rounded-full bg-white/20 accent-primary [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
+                />
+              </div>
             </div>
           </div>
 
-          <span className="ml-1 font-mono text-[11px] text-white/70 select-none">
+          <span className="min-w-0 truncate whitespace-nowrap font-mono text-[11px] text-white/70 select-none">
             {formatVideoTime(videoTime)}
             {videoDuration > 0 && (
               <span className="text-white/40">
@@ -1748,122 +1788,121 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
             )}
           </span>
 
-          <div className="flex-1" />
-
-          <ControlButton
-            onClick={handleAiTranslateClick}
-            tooltip={
-              aiConfigured
-                ? sourceSubtitleTextForAi
-                  ? t.aiUsingSubtitle
-                  : t.aiVoiceTranslate
-                : t.aiTranslateUnavailable
-            }
-            active={showAiPanel}
-            muted={!aiConfigured}
-          >
-            <Sparkle className="size-4" weight={showAiPanel ? "fill" : "regular"} />
-          </ControlButton>
-
-          <div className="relative">
+          <div className="ml-auto flex min-w-fit shrink-0 items-center gap-1">
             <ControlButton
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowSpeedMenu((s) => !s);
-                setShowQualityMenu(false);
-                setShowSubtitleMenu(false);
-              }}
-              tooltip={t.playbackSpeed}
-              active={playbackSpeed !== 1}
+              onClick={handleAiTranslateClick}
+              tooltip={
+                aiConfigured
+                  ? sourceSubtitleTextForAi
+                    ? t.aiUsingSubtitle
+                    : t.aiVoiceTranslate
+                  : t.aiTranslateUnavailable
+              }
+              active={showAiPanel}
+              muted={!aiConfigured}
             >
-              {playbackSpeed !== 1 ? (
-                <span className="font-mono text-[11px] font-bold">{playbackSpeed}x</span>
-              ) : (
-                <Gauge className="size-4" />
-              )}
+              <Sparkle className="size-4" weight={showAiPanel ? "fill" : "regular"} />
             </ControlButton>
-            {showSpeedMenu && (
-              <PopupMenu>
-                <p className="mb-1 px-2 font-sans text-[10px] font-semibold uppercase tracking-wider text-white/40">
-                  {t.speed}
-                </p>
-                {SPEED_OPTIONS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      changeSpeed(s);
-                    }}
-                    className={cn(
-                      "flex w-full items-center justify-between rounded px-2 py-1 font-mono text-xs transition-colors hover:bg-white/10",
-                      s === playbackSpeed
-                        ? "text-primary font-semibold"
-                        : "text-white/80",
-                    )}
-                  >
-                    {s}x
-                    {s === 1 && (
-                      <span className="text-[10px] text-white/30">{t.normal}</span>
-                    )}
-                  </button>
-                ))}
-              </PopupMenu>
-            )}
-          </div>
 
-          <div className="relative">
-            <ControlButton
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowQualityMenu((s) => !s);
-                setShowSpeedMenu(false);
-                setShowSubtitleMenu(false);
-              }}
-              tooltip={t.quality}
-              active={selectedQuality !== "1080p" || isPreparingQuality}
-            >
-              <span className="flex min-w-10 items-center justify-center gap-1 font-mono text-[11px] font-bold">
-                {QUALITY_OPTIONS.find((opt) => opt.value === selectedQuality)?.label ?? "1080P"}
-                {isPreparingQuality && (
-                  <span className="size-1.5 animate-pulse rounded-full bg-primary" />
+            <div className="relative">
+              <ControlButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowSpeedMenu((s) => !s);
+                  setShowQualityMenu(false);
+                  setShowSubtitleMenu(false);
+                }}
+                tooltip={t.playbackSpeed}
+                active={playbackSpeed !== 1}
+              >
+                {playbackSpeed !== 1 ? (
+                  <span className="font-mono text-[11px] font-bold">{playbackSpeed}x</span>
+                ) : (
+                  <Gauge className="size-4" />
                 )}
-              </span>
-            </ControlButton>
-            {showQualityMenu && (
-              <PopupMenu>
-                <p className="mb-1 px-2 font-sans text-[10px] font-semibold uppercase tracking-wider text-white/40">
-                  {t.quality}
-                </p>
-                {QUALITY_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      changeQuality(option.value);
-                    }}
-                    className={cn(
-                      "flex w-full items-center justify-between rounded px-2 py-1 font-mono text-xs transition-colors hover:bg-white/10",
-                      option.value === selectedQuality
-                        ? "text-primary font-semibold"
-                        : "text-white/80",
-                    )}
-                  >
-                    {option.label}
-                    {option.value === "1080p" && (
-                      <span className="font-sans text-[10px] text-white/30">
-                        {t.default}
-                      </span>
-                    )}
-                  </button>
-                ))}
-                <p className="mt-1 max-w-36 px-2 pb-1 font-sans text-[10px] leading-snug text-white/35">
-                  {qualityError ?? (isPreparingQuality ? t.preparingQuality : t.qualityHint)}
-                </p>
-              </PopupMenu>
-            )}
-          </div>
+              </ControlButton>
+              {showSpeedMenu && (
+                <PopupMenu>
+                  <p className="mb-1 px-2 font-sans text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                    {t.speed}
+                  </p>
+                  {SPEED_OPTIONS.map((s) => (
+                    <button
+                      key={s}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        changeSpeed(s);
+                      }}
+                      className={cn(
+                        "flex w-full items-center justify-between rounded px-2 py-1 font-mono text-xs transition-colors hover:bg-white/10",
+                        s === playbackSpeed
+                          ? "text-primary font-semibold"
+                          : "text-white/80",
+                      )}
+                    >
+                      {s}x
+                      {s === 1 && (
+                        <span className="text-[10px] text-white/30">{t.normal}</span>
+                      )}
+                    </button>
+                  ))}
+                </PopupMenu>
+              )}
+            </div>
 
-          <div className="relative">
+            <div className="relative">
+              <ControlButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowQualityMenu((s) => !s);
+                  setShowSpeedMenu(false);
+                  setShowSubtitleMenu(false);
+                }}
+                tooltip={t.quality}
+                active={selectedQuality !== "1080p" || isPreparingQuality}
+              >
+                <span className="flex min-w-10 items-center justify-center gap-1 font-mono text-[11px] font-bold">
+                  {QUALITY_OPTIONS.find((opt) => opt.value === selectedQuality)?.label ?? "1080P"}
+                  {isPreparingQuality && (
+                    <span className="size-1.5 animate-pulse rounded-full bg-primary" />
+                  )}
+                </span>
+              </ControlButton>
+              {showQualityMenu && (
+                <PopupMenu>
+                  <p className="mb-1 px-2 font-sans text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                    {t.quality}
+                  </p>
+                  {QUALITY_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        changeQuality(option.value);
+                      }}
+                      className={cn(
+                        "flex w-full items-center justify-between rounded px-2 py-1 font-mono text-xs transition-colors hover:bg-white/10",
+                        option.value === selectedQuality
+                          ? "text-primary font-semibold"
+                          : "text-white/80",
+                      )}
+                    >
+                      {option.label}
+                      {option.value === "1080p" && (
+                        <span className="font-sans text-[10px] text-white/30">
+                          {t.default}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                  <p className="mt-1 max-w-36 px-2 pb-1 font-sans text-[10px] leading-snug text-white/35">
+                    {qualityError ?? (isPreparingQuality ? t.preparingQuality : t.qualityHint)}
+                  </p>
+                </PopupMenu>
+              )}
+            </div>
+
+            <div className="relative">
               <ControlButton
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1905,53 +1944,53 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                       )}
                       {hasSubtitles && (
                         <>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          selectSubtitle(-1);
-                        }}
-                        className={cn(
-                          "w-full rounded px-2 py-1 text-left font-sans text-xs transition-colors hover:bg-white/10",
-                          activeSubtitleIdx === -1
-                            ? "text-primary font-semibold"
-                            : "text-white/80",
-                        )}
-                      >
-                        {t.subtitlesOff}
-                      </button>
-                      {bilingualSubtitleIndexes && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            selectSubtitle(BILINGUAL_SUBTITLE_IDX);
-                          }}
-                          className={cn(
-                            "w-full rounded px-2 py-1 text-left font-sans text-xs transition-colors hover:bg-white/10",
-                            activeSubtitleIdx === BILINGUAL_SUBTITLE_IDX
-                              ? "text-primary font-semibold"
-                              : "text-white/80",
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              selectSubtitle(-1);
+                            }}
+                            className={cn(
+                              "w-full rounded px-2 py-1 text-left font-sans text-xs transition-colors hover:bg-white/10",
+                              activeSubtitleIdx === -1
+                                ? "text-primary font-semibold"
+                                : "text-white/80",
+                            )}
+                          >
+                            {t.subtitlesOff}
+                          </button>
+                          {bilingualSubtitleIndexes && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                selectSubtitle(BILINGUAL_SUBTITLE_IDX);
+                              }}
+                              className={cn(
+                                "w-full rounded px-2 py-1 text-left font-sans text-xs transition-colors hover:bg-white/10",
+                                activeSubtitleIdx === BILINGUAL_SUBTITLE_IDX
+                                  ? "text-primary font-semibold"
+                                  : "text-white/80",
+                              )}
+                            >
+                              {BILINGUAL_SUBTITLE_LABEL}
+                            </button>
                           )}
-                        >
-                          {BILINGUAL_SUBTITLE_LABEL}
-                        </button>
-                      )}
-                      {subtitles.map((sub, i) => (
-                        <button
-                          key={sub.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            selectSubtitle(i);
-                          }}
-                          className={cn(
-                            "w-full rounded px-2 py-1 text-left font-sans text-xs transition-colors hover:bg-white/10",
-                            activeSubtitleIdx === i
-                              ? "text-primary font-semibold"
-                              : "text-white/80",
-                          )}
-                        >
-                          {getSubtitleDisplayLabel(sub, t.subtitles)}
-                        </button>
-                      ))}
+                          {subtitles.map((sub, i) => (
+                            <button
+                              key={sub.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                selectSubtitle(i);
+                              }}
+                              className={cn(
+                                "w-full rounded px-2 py-1 text-left font-sans text-xs transition-colors hover:bg-white/10",
+                                activeSubtitleIdx === i
+                                  ? "text-primary font-semibold"
+                                  : "text-white/80",
+                              )}
+                            >
+                              {getSubtitleDisplayLabel(sub, t.subtitles)}
+                            </button>
+                          ))}
                         </>
                       )}
                     </>
@@ -2039,20 +2078,21 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
               )}
             </div>
 
-          <ControlButton onClick={togglePiP} tooltip={`${t.pictureInPicture} (P)`}>
-            <PictureInPicture className="size-4" />
-          </ControlButton>
+            <ControlButton onClick={togglePiP} tooltip={`${t.pictureInPicture} (P)`}>
+              <PictureInPicture className="size-4" />
+            </ControlButton>
 
-          <ControlButton
-            onClick={toggleFullscreen}
-            tooltip={isFullscreen ? `${t.exitFullscreen} (Esc)` : `${t.fullscreen} (F)`}
-          >
-            {isFullscreen ? (
-              <CornersIn className="size-4" />
-            ) : (
-              <CornersOut className="size-4" />
-            )}
-          </ControlButton>
+            <ControlButton
+              onClick={toggleFullscreen}
+              tooltip={isFullscreen ? `${t.exitFullscreen} (Esc)` : `${t.fullscreen} (F)`}
+            >
+              {isFullscreen ? (
+                <CornersIn className="size-4" />
+              ) : (
+                <CornersOut className="size-4" />
+              )}
+            </ControlButton>
+          </div>
         </div>
       </div>
 

@@ -10,7 +10,7 @@ import { EASE_OUT } from "@/lib/constants";
 import { useSettings } from "@/hooks/useSettings";
 import type { AppLanguage } from "@/lib/i18n";
 
-const RELEASE_NOTES_VERSION = "1.1.8";
+const RELEASE_NOTES_VERSION = "1.1.9";
 const RELEASE_NOTES_STORAGE_KEY = `july-player:release-notes-seen:${RELEASE_NOTES_VERSION}`;
 
 type ReleaseNotesCopy = {
@@ -25,47 +25,47 @@ type ReleaseNotesCopy = {
 const RELEASE_NOTES: Record<AppLanguage, ReleaseNotesCopy> = {
   zh: {
     eyebrow: "\u7248\u672c\u66f4\u65b0",
-    title: "\u4e03\u6708\u64ad\u653e\u5668 1.1.8",
+    title: "\u4e03\u6708\u64ad\u653e\u5668 1.1.9",
     description:
-      "\u672c\u6b21\u91cd\u70b9\u4f18\u5316\u64ad\u653e\u5668\u754c\u9762\u3001\u5ba0\u7269\u73a9\u6cd5\u3001AI \u7b14\u8bb0\u548c\u66f4\u65b0\u53d1\u5e03\u6d41\u7a0b\u3002",
+      "\u672c\u6b21\u91cd\u70b9\u4f18\u5316\u89c6\u9891\u5207\u6362\u6027\u80fd\u3001\u4e66\u7b7e\u6392\u7248\u3001\u5168\u5c4f\u64ad\u653e\u4f53\u9a8c\u548c\u53d1\u5e03\u4e0a\u4f20\u6d41\u7a0b\u3002",
     highlights: [
-      "\u5168\u9762\u4f18\u5316 HeroUI \u64ad\u653e\u5668\u754c\u9762\uff0c\u6539\u5584\u4fa7\u8fb9\u680f\u3001\u8bfe\u7a0b\u9875\u3001\u8bbe\u7f6e\u9875\u548c\u7a84\u5c4f\u81ea\u9002\u5e94\u5e03\u5c40\u3002",
-      "\u4fee\u590d\u5ba0\u7269\u9875\u54cd\u5e94\u5f0f\u6392\u7248\u548c\u684c\u9762\u5ba0\u7269\u7a33\u5b9a\u6027\uff0c\u4f18\u5316\u5ba0\u7269\u72b6\u6001\u3001\u53cd\u9988\u548c\u6e38\u620f\u6570\u503c\u4f53\u9a8c\u3002",
-      "\u65b0\u589e AI \u7b14\u8bb0\u52a9\u624b\uff0c\u53ef\u4ece\u8bfe\u7a0b\u5185\u5bb9\u63d0\u53d6\u7b14\u8bb0\u5e76\u7ee7\u7eed\u8ffd\u95ee\u3002",
-      "\u4f18\u5316\u89c6\u9891\u62d6\u52a8\u8fdb\u5ea6\u548c\u64ad\u653e\u53cd\u9988\uff0c\u51cf\u5c11\u62d6\u62fd\u65f6\u7684\u5361\u987f\u611f\u3002",
-      "\u79fb\u9664 lottie \u52a0\u8f7d\u8d44\u6e90\uff0c\u6362\u6210\u8f7b\u91cf LoadingOrbit\uff0c\u51cf\u5c11\u6784\u5efa\u8b66\u544a\u548c\u4e3b\u5305\u538b\u529b\u3002",
-      "\u65b0\u589e\u767b\u5f55\u6a21\u5757\u548c\u5ba0\u7269\u6570\u636e\u8868\u8bbe\u8ba1\u6587\u6863\uff0c\u4fbf\u4e8e\u540e\u7eed\u63a5\u5165\u8d26\u53f7\u3001\u5546\u5e97\u548c\u4e91\u540c\u6b65\u3002",
+      "\u4fee\u590d\u4e66\u7b7e\u9875\u8bfe\u7a0b\u5361\u7247\u53d8\u5f62\uff0c\u6062\u590d\u5355\u5217\u6a2a\u5411\u5927\u5361\u7247\u6392\u7248\u3002",
+      "\u4fee\u590d\u5168\u5c4f\u64ad\u653e\u65f6\u5e95\u90e8\u63a7\u5236\u6761\u6324\u538b\u3001\u8d34\u8fb9\u548c\u53f3\u4fa7\u6309\u94ae\u88c1\u5207\u95ee\u9898\u3002",
+      "\u5207\u6362\u89c6\u9891\u66f4\u6d41\u7545\uff0c\u9ad8\u6e05\u8f6c\u7801\u6539\u4e3a\u7528\u6237\u9009\u62e9\u6e05\u6670\u5ea6\u65f6\u624d\u89e6\u53d1\u3002",
+      "\u5b57\u5e55\u89e3\u6790\u6539\u4e3a\u6309\u9700\u61d2\u52a0\u8f7d\uff0c\u964d\u4f4e\u5207\u8bfe\u548c\u5207\u6362\u89c6\u9891\u65f6\u7684\u5361\u987f\u3002",
+      "\u6574\u4f53\u914d\u8272\u5207\u6362\u4e3a\u66f4\u67d4\u548c\u7684\u84dd\u7070\u4e3b\u9898\uff0c\u51cf\u5c11\u9ed1\u767d\u5bf9\u6bd4\u8fc7\u786c\u7684\u89c6\u89c9\u95ee\u9898\u3002",
+      "\u65b0\u589e JulyRes \u6784\u5efa\u4ea7\u7269\u4e0a\u4f20\u6d41\u7a0b\uff0c\u4fbf\u4e8e\u540e\u53f0\u4eba\u5de5\u6838\u5bf9\u5e76\u53d1\u5e03 latest.json\u3002",
     ],
     close: "\u5f00\u59cb\u4f7f\u7528",
     dismiss: "\u5173\u95ed\u66f4\u65b0\u8bf4\u660e",
   },
   en: {
     eyebrow: "Release notes",
-    title: "July Player 1.1.8",
-    description: "This update polishes the player UI, pet experience, AI notes, and release flow.",
+    title: "July Player 1.1.9",
+    description: "This update improves video switching, bookmarks, fullscreen playback, and release uploads.",
     highlights: [
-      "Refined the HeroUI interface across navigation, course pages, settings, and responsive layouts.",
-      "Improved pet page responsiveness, desktop pet stability, feedback, state, and game-system feel.",
-      "Added the AI notes assistant for extracting course notes and follow-up questions.",
-      "Improved video seek feedback to reduce stutter while dragging the progress bar.",
-      "Replaced lottie loading assets with a lightweight LoadingOrbit to reduce warnings and bundle pressure.",
-      "Added login-module and pet-data design docs for account, shop, and cloud-sync integration.",
+      "Fixed deformed course cards on the bookmarks page with a dedicated horizontal card layout.",
+      "Fixed fullscreen player controls being clipped or squeezed near the bottom edge.",
+      "Made video switching smoother by running HD upscaling only after the user selects a quality.",
+      "Lazy-loads subtitle parsing for the selected and bilingual tracks to reduce lesson-switch stutter.",
+      "Updated the app palette to a softer blue-gray theme with less harsh black-and-white contrast.",
+      "Added the JulyRes release-artifact upload flow for manual backend publishing.",
     ],
     close: "Start watching",
     dismiss: "Dismiss release notes",
   },
   fr: {
     eyebrow: "Notes de version",
-    title: "July Player 1.1.8",
+    title: "July Player 1.1.9",
     description:
-      "Cette version am\u00e9liore l'interface, l'animal compagnon, les notes IA et le flux de publication.",
+      "Cette version am\u00e9liore le changement de vid\u00e9o, les favoris, le plein \u00e9cran et le flux de publication.",
     highlights: [
-      "Interface HeroUI affin\u00e9e pour la navigation, les cours, les r\u00e9glages et les layouts responsives.",
-      "Stabilit\u00e9 et retours am\u00e9lior\u00e9s pour la page animal et le mode bureau.",
-      "Ajout de l'assistant de notes IA pour extraire les notes de cours et poser des questions.",
-      "Meilleur retour lors du d\u00e9placement dans la vid\u00e9o afin de r\u00e9duire les saccades.",
-      "Remplacement des assets lottie par LoadingOrbit pour r\u00e9duire les avertissements et le poids du bundle.",
-      "Ajout de documents de conception pour le compte, la boutique et la synchronisation des donn\u00e9es animal.",
+      "Correction des cartes de cours d\u00e9form\u00e9es dans les favoris avec une carte horizontale d\u00e9di\u00e9e.",
+      "Correction des contr\u00f4les plein \u00e9cran coup\u00e9s ou comprim\u00e9s en bas du lecteur.",
+      "Changement de vid\u00e9o plus fluide gr\u00e2ce \u00e0 la conversion HD lanc\u00e9e seulement sur choix utilisateur.",
+      "Analyse des sous-titres charg\u00e9e \u00e0 la demande pour r\u00e9duire les saccades.",
+      "Palette bleu-gris plus douce pour r\u00e9duire le contraste noir et blanc trop dur.",
+      "Ajout du flux d'envoi des fichiers de build vers JulyRes pour publication manuelle.",
     ],
     close: "Commencer",
     dismiss: "Fermer les notes",

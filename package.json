@@ -1,13 +1,14 @@
 {
   "name": "ckourse",
   "private": true,
-  "version": "1.1.8",
+  "version": "1.1.9",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "upload:release-artifacts": "node scripts/upload-player-release-artifacts.mjs",
     "release": "bash scripts/release.sh"
   },
   "dependencies": {

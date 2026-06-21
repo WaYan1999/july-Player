@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useContext } from "react";
+import { useState, useEffect, useCallback, useRef, useContext, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { ActivePathContext } from "@/hooks/usePageVisible";
 import { openPath } from "@tauri-apps/plugin-opener";
@@ -224,7 +224,10 @@ function CourseDetailInner({
   const { settings, loaded: settingsLoaded } = useSettings();
   const { t, language, formatMessage } = useI18n();
   const { setTitle: setBreadcrumbTitle } = useCourseTitles();
-  const allLessons = courseData.sections.flatMap((s) => s.lessons);
+  const allLessons = useMemo(
+    () => courseData.sections.flatMap((s) => s.lessons),
+    [courseData.sections],
+  );
 
   useEffect(() => {
     setBreadcrumbTitle(course.id, course.title);
@@ -253,15 +256,17 @@ function CourseDetailInner({
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<"resources" | "notes">("notes");
   const [notes, setNotes] = useState<Note[]>([]);
-  const lessonNotes = activeLesson
-    ? notes.filter((n) => n.lessonId === activeLesson.id)
-    : [];
+  const lessonNotes = useMemo(
+    () => activeLesson ? notes.filter((n) => n.lessonId === activeLesson.id) : [],
+    [activeLesson?.id, notes],
+  );
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [autoPlay, setAutoPlay] = useState(false);
   const [curriculumOpen, setCurriculumOpen] = useState(true);
   const [videoTime, setVideoTime] = useState(0);
   const videoTimeRef = useRef(0);
+  const lastVideoTimeDisplayRef = useRef(-1);
   const videoPlayerRef = useRef<VideoPlayerHandle>(null);
   const [pendingTimestampNav, setPendingTimestampNav] = useState<{
     seconds: number;
@@ -272,15 +277,19 @@ function CourseDetailInner({
   const prevCompletedRef = useRef(course.completedLessons);
 
   const handleTimeUpdate = useCallback((time: number) => {
-    setVideoTime(time);
     videoTimeRef.current = time;
+    const displaySecond = Math.floor(time);
+    if (displaySecond !== lastVideoTimeDisplayRef.current) {
+      lastVideoTimeDisplayRef.current = displaySecond;
+      setVideoTime(time);
+    }
   }, []);
 
   // Save position when leaving the page
   useEffect(() => {
     return () => {
       if (activeLesson && videoTimeRef.current > 0) {
-        saveLessonPosition(activeLesson.id, videoTimeRef.current);
+        void saveLessonPosition(activeLesson.id, videoTimeRef.current).catch(() => {});
       }
     };
   }, [activeLesson?.id]);
@@ -290,7 +299,7 @@ function CourseDetailInner({
     if (!isVisible) {
       videoPlayerRef.current?.pause();
       if (activeLesson && videoTimeRef.current > 0) {
-        saveLessonPosition(activeLesson.id, videoTimeRef.current);
+        void saveLessonPosition(activeLesson.id, videoTimeRef.current).catch(() => {});
       }
     }
   }, [isVisible, activeLesson?.id]);
@@ -324,28 +333,39 @@ function CourseDetailInner({
   }, [course]);
 
   useEffect(() => {
-    if (activeLesson) {
-      getLessonSubtitles(activeLesson.id).then(setSubtitles).catch(() => setSubtitles([]));
-    } else {
+    let cancelled = false;
+    setSubtitles([]);
+    if (!activeLesson) {
       setSubtitles([]);
+      return;
     }
+    getLessonSubtitles(activeLesson.id)
+      .then((items) => {
+        if (!cancelled) setSubtitles(items);
+      })
+      .catch(() => {
+        if (!cancelled) setSubtitles([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [activeLesson?.id]);
 
   const handleSelectLesson = useCallback(
     async (lesson: Lesson) => {
       // Save position of current lesson before switching
       if (activeLesson && videoTimeRef.current > 0) {
-        saveLessonPosition(activeLesson.id, videoTimeRef.current);
+        void saveLessonPosition(activeLesson.id, videoTimeRef.current).catch(() => {});
       }
 
       setActiveLessonId(lesson.id);
       setVideoTime(0);
+      lastVideoTimeDisplayRef.current = -1;
       videoTimeRef.current = 0;
 
-      await setLastWatched(course.id, lesson.id);
-      await onDataChange();
+      void setLastWatched(course.id, lesson.id).catch(() => {});
     },
-    [course.id, activeLesson?.id, onDataChange],
+    [course.id, activeLesson?.id],
   );
 
   const handlePlayStateChange = useCallback(
@@ -354,7 +374,7 @@ function CourseDetailInner({
         setAutoPlay(false);
       }
       if (!playing && activeLesson && videoTimeRef.current > 0) {
-        saveLessonPosition(activeLesson.id, videoTimeRef.current);
+        void saveLessonPosition(activeLesson.id, videoTimeRef.current).catch(() => {});
       }
     },
     [activeLesson?.id],
@@ -367,16 +387,16 @@ function CourseDetailInner({
       const next = allLessons[idx + 1];
       // Save position of current lesson before switching
       if (videoTimeRef.current > 0) {
-        saveLessonPosition(activeLesson.id, videoTimeRef.current);
+        void saveLessonPosition(activeLesson.id, videoTimeRef.current).catch(() => {});
       }
       setActiveLessonId(next.id);
       setVideoTime(0);
+      lastVideoTimeDisplayRef.current = -1;
       videoTimeRef.current = 0;
       setAutoPlay(true);
-      await setLastWatched(course.id, next.id);
-      await onDataChange();
+      void setLastWatched(course.id, next.id).catch(() => {});
     }
-  }, [activeLesson, allLessons, course.id, onDataChange]);
+  }, [activeLesson, allLessons, course.id]);
 
   const showPetReward = useCallback(
     (result: Awaited<ReturnType<typeof awardPetCare>>, lessonTitle: string) => {
@@ -508,10 +528,10 @@ function CourseDetailInner({
       if (!activeLesson) return;
       const mins = Math.round(duration / 60);
       if (mins > 0 && mins !== activeLesson.duration) {
-        updateLessonDuration(activeLesson.id, mins).then(onDataChange);
+        void updateLessonDuration(activeLesson.id, mins).catch(() => {});
       }
     },
-    [activeLesson, onDataChange],
+    [activeLesson],
   );
 
   async function handleAddNote(content: string) {
@@ -600,16 +620,16 @@ function CourseDetailInner({
 
     // Save current position
     if (activeLesson && videoTimeRef.current > 0) {
-      saveLessonPosition(activeLesson.id, videoTimeRef.current);
+      void saveLessonPosition(activeLesson.id, videoTimeRef.current).catch(() => {});
     }
 
     setActiveLessonId(lessonId);
     setVideoTime(0);
+    lastVideoTimeDisplayRef.current = -1;
     videoTimeRef.current = 0;
     setPendingTimestampNav(null);
 
-    await setLastWatched(course.id, lessonId);
-    await onDataChange();
+    void setLastWatched(course.id, lessonId).catch(() => {});
 
     // Seek after the new video loads
     requestAnimationFrame(() => {
@@ -617,7 +637,7 @@ function CourseDetailInner({
         videoPlayerRef.current?.seekTo(seconds);
       }, 200);
     });
-  }, [pendingTimestampNav, activeLesson, allLessons, course.id, onDataChange]);
+  }, [pendingTimestampNav, activeLesson, allLessons, course.id]);
 
   const handleOpenResource = async (path: string) => {
     try {
@@ -708,7 +728,7 @@ function CourseDetailInner({
         }}
       >
         <div
-          className="flex flex-1 flex-col gap-4"
+          className="flex min-w-0 flex-1 flex-col gap-4"
           style={{
             opacity: mounted ? 1 : 0,
             transform: mounted ? "translateY(0)" : "translateY(12px)",

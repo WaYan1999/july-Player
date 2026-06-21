@@ -60,18 +60,18 @@ const builtinCategories: { value: CourseCategory; label: string }[] = [
 ];
 
 const accentColors = [
-  "#61DAFB",
-  "#F74C00",
-  "#8B5CF6",
-  "#3178C6",
-  "#2496ED",
-  "#336791",
-  "#E44D26",
-  "#38BDF8",
-  "#10B981",
-  "#F59E0B",
-  "#EC4899",
-  "#C8F135",
+  "#6DBEE6",
+  "#AFC7F1",
+  "#526B96",
+  "#75BEEA",
+  "#84D4C8",
+  "#3F8EC4",
+  "#B8CAD8",
+  "#2F9B8E",
+  "#8EA6C9",
+  "#E8B86D",
+  "#E58AAE",
+  "#7C8DA2",
 ];
 
 interface ImportCourseProps {

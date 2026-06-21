@@ -20,13 +20,13 @@ const FRICTION = 0.99;
 const FADE_START = 0.7; // start fading at 70% of lifetime
 
 const COLORS = [
-  "#C8F135", // primary lime
-  "#5B9CF6", // info blue
-  "#FF6B6B", // destructive red
-  "#EDEDED", // foreground white
-  "#A8E620", // darker lime
-  "#7DC4FF", // lighter blue
-  "#FFD93D", // gold
+  "#AFC7F1",
+  "#75BEEA",
+  "#84D4C8",
+  "#F4F8FC",
+  "#5F78A6",
+  "#D9E7F8",
+  "#E8B86D",
 ];
 
 function createParticles(width: number, height: number): Particle[] {

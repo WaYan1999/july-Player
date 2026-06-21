@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import {
   PlayIcon as Play,
   CheckCircleIcon as CheckCircle,
@@ -20,7 +20,7 @@ interface SectionAccordionProps {
   onToggleFavorite: (lessonId: number) => void;
 }
 
-export function SectionAccordion({
+function SectionAccordionComponent({
   section,
   activeLessonId,
   onSelectLesson,
@@ -167,6 +167,8 @@ export function SectionAccordion({
     </div>
   );
 }
+
+export const SectionAccordion = memo(SectionAccordionComponent);
 
 const CIRCLE_R = 6;
 const CIRCLE_C = 2 * Math.PI * CIRCLE_R;
