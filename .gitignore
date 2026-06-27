@@ -33,5 +33,12 @@ local-builds/
 # Specific files
 lemonsqueezy.txt
 
+# Session scratch / build artifacts (not part of the app)
+temp/
+preview-*.png
+ANIMATION_PREVIEW.md
+BUILD_RELEASE_NOTES.md
+PROJECT_COMPLETION_REPORT.md
+
 # Offline ASR resources are downloaded during CI/local packaging.
 src-tauri/resources/asr/

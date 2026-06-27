@@ -23,8 +23,8 @@ export function SquircleSearch({
   return (
     <div
       className={cn(
-        "group/search relative rounded-xl border border-border/70 bg-card/90 transition-[border-color,background-color,box-shadow]",
-        "hover:border-primary/30 hover:bg-secondary/45 focus-within:border-primary/55 focus-within:bg-secondary/70 focus-within:shadow-[0_0_0_2px_color-mix(in_srgb,var(--primary)_13%,transparent)]",
+        "group/search relative rounded-xl border border-border/70 bg-secondary/45 shadow-[inset_0_1px_0_color-mix(in_srgb,var(--foreground)_5%,transparent)] backdrop-blur transition-[border-color,background-color,box-shadow]",
+        "hover:border-primary/30 hover:bg-secondary/60 focus-within:border-primary/55 focus-within:bg-secondary/75 focus-within:shadow-[0_0_0_2px_color-mix(in_srgb,var(--primary)_13%,transparent)]",
         className,
       )}
     >

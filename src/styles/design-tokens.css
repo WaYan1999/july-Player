@@ -1,0 +1,441 @@
+/**
+ * July-Player Enhanced Design System
+ * Three-layer token architecture: Primitive → Semantic → Component
+ *
+ * Layer 1: Primitive tokens (raw values)
+ * Layer 2: Semantic tokens (purpose-driven aliases)
+ * Layer 3: Component tokens (component-specific)
+ */
+
+@layer tokens {
+  :root {
+    /* ==========================================
+       LAYER 1: PRIMITIVE TOKENS
+       Raw color, size, and timing values
+       ========================================== */
+
+    /* --- Color Primitives: Blue Scale --- */
+    --primitive-blue-50: #F0F9FF;
+    --primitive-blue-100: #E0F2FE;
+    --primitive-blue-200: #BAE6FD;
+    --primitive-blue-300: #7DD3FC;
+    --primitive-blue-400: #38BDF8;
+    --primitive-blue-500: #0EA5E9;
+    --primitive-blue-600: #0284C7;
+    --primitive-blue-700: #0369A1;
+    --primitive-blue-800: #075985;
+    --primitive-blue-900: #0C4A6E;
+    --primitive-blue-950: #082F49;
+
+    /* --- Color Primitives: Cyan/Teal Scale --- */
+    --primitive-cyan-50: #ECFEFF;
+    --primitive-cyan-100: #CFFAFE;
+    --primitive-cyan-200: #A5F3FC;
+    --primitive-cyan-300: #67E8F9;
+    --primitive-cyan-400: #22D3EE;
+    --primitive-cyan-500: #06B6D4;
+    --primitive-cyan-600: #0891B2;
+    --primitive-cyan-700: #0E7490;
+    --primitive-cyan-800: #155E75;
+    --primitive-cyan-900: #164E63;
+
+    /* --- Color Primitives: Indigo Scale --- */
+    --primitive-indigo-50: #EEF2FF;
+    --primitive-indigo-100: #E0E7FF;
+    --primitive-indigo-200: #C7D2FE;
+    --primitive-indigo-300: #A5B4FC;
+    --primitive-indigo-400: #818CF8;
+    --primitive-indigo-500: #6366F1;
+    --primitive-indigo-600: #4F46E5;
+    --primitive-indigo-700: #4338CA;
+    --primitive-indigo-800: #3730A3;
+    --primitive-indigo-900: #312E81;
+
+    /* --- Color Primitives: Neutral Scale --- */
+    --primitive-slate-50: #F8FAFC;
+    --primitive-slate-100: #F1F5F9;
+    --primitive-slate-200: #E2E8F0;
+    --primitive-slate-300: #CBD5E1;
+    --primitive-slate-400: #94A3B8;
+    --primitive-slate-500: #64748B;
+    --primitive-slate-600: #475569;
+    --primitive-slate-700: #334155;
+    --primitive-slate-800: #1E293B;
+    --primitive-slate-900: #0F172A;
+    --primitive-slate-950: #020617;
+
+    /* --- Color Primitives: Semantic Colors --- */
+    --primitive-red-400: #F87171;
+    --primitive-red-500: #EF4444;
+    --primitive-red-600: #DC2626;
+    --primitive-green-400: #4ADE80;
+    --primitive-green-500: #22C55E;
+    --primitive-green-600: #16A34A;
+    --primitive-yellow-400: #FACC15;
+    --primitive-yellow-500: #EAB308;
+    --primitive-amber-400: #FBBF24;
+
+    /* --- Typography Primitives --- */
+    --primitive-font-sans: 'DM Sans', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans SC', sans-serif;
+    --primitive-font-heading: 'Syne', 'DM Sans', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+    --primitive-font-mono: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+
+    /* --- Font Size Primitives (8-level scale) --- */
+    --primitive-text-xs: 0.75rem;      /* 12px */
+    --primitive-text-sm: 0.875rem;     /* 14px */
+    --primitive-text-base: 1rem;       /* 16px */
+    --primitive-text-lg: 1.125rem;     /* 18px */
+    --primitive-text-xl: 1.25rem;      /* 20px */
+    --primitive-text-2xl: 1.5rem;      /* 24px */
+    --primitive-text-3xl: 1.875rem;    /* 30px */
+    --primitive-text-4xl: 2.25rem;     /* 36px */
+    --primitive-text-5xl: 3rem;        /* 48px */
+
+    /* --- Line Height Primitives --- */
+    --primitive-leading-tight: 1.25;
+    --primitive-leading-snug: 1.375;
+    --primitive-leading-normal: 1.5;
+    --primitive-leading-relaxed: 1.625;
+    --primitive-leading-loose: 2;
+
+    /* --- Font Weight Primitives --- */
+    --primitive-weight-normal: 400;
+    --primitive-weight-medium: 500;
+    --primitive-weight-semibold: 600;
+    --primitive-weight-bold: 700;
+    --primitive-weight-extrabold: 800;
+
+    /* --- Spacing Primitives (4px grid) --- */
+    --primitive-space-0: 0;
+    --primitive-space-0-5: 0.125rem;   /* 2px */
+    --primitive-space-1: 0.25rem;      /* 4px */
+    --primitive-space-1-5: 0.375rem;   /* 6px */
+    --primitive-space-2: 0.5rem;       /* 8px */
+    --primitive-space-3: 0.75rem;      /* 12px */
+    --primitive-space-4: 1rem;         /* 16px */
+    --primitive-space-5: 1.25rem;      /* 20px */
+    --primitive-space-6: 1.5rem;       /* 24px */
+    --primitive-space-7: 1.75rem;      /* 28px */
+    --primitive-space-8: 2rem;         /* 32px */
+    --primitive-space-10: 2.5rem;      /* 40px */
+    --primitive-space-12: 3rem;        /* 48px */
+    --primitive-space-16: 4rem;        /* 64px */
+    --primitive-space-20: 5rem;        /* 80px */
+    --primitive-space-24: 6rem;        /* 96px */
+
+    /* --- Border Radius Primitives --- */
+    --primitive-radius-none: 0;
+    --primitive-radius-sm: 0.25rem;    /* 4px */
+    --primitive-radius-base: 0.5rem;   /* 8px */
+    --primitive-radius-md: 0.75rem;    /* 12px */
+    --primitive-radius-lg: 1rem;       /* 16px */
+    --primitive-radius-xl: 1.25rem;    /* 20px */
+    --primitive-radius-2xl: 1.5rem;    /* 24px */
+    --primitive-radius-3xl: 2rem;      /* 32px */
+    --primitive-radius-full: 9999px;
+
+    /* --- Animation Timing Primitives --- */
+    --primitive-duration-instant: 0ms;
+    --primitive-duration-fast: 150ms;
+    --primitive-duration-base: 250ms;
+    --primitive-duration-slow: 350ms;
+    --primitive-duration-slower: 500ms;
+    --primitive-duration-slowest: 750ms;
+
+    /* --- Easing Primitives --- */
+    --primitive-ease-linear: linear;
+    --primitive-ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --primitive-ease-out: cubic-bezier(0, 0, 0.2, 1);
+    --primitive-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --primitive-ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+    /* --- Shadow Primitives --- */
+    --primitive-shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --primitive-shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    --primitive-shadow-base: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --primitive-shadow-md: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --primitive-shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    --primitive-shadow-xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+    --primitive-shadow-2xl: 0 30px 60px -15px rgb(0 0 0 / 0.3);
+
+    /* --- Blur Primitives --- */
+    --primitive-blur-none: 0;
+    --primitive-blur-sm: 4px;
+    --primitive-blur-base: 8px;
+    --primitive-blur-md: 12px;
+    --primitive-blur-lg: 16px;
+    --primitive-blur-xl: 24px;
+    --primitive-blur-2xl: 40px;
+    --primitive-blur-3xl: 64px;
+  }
+
+  /* ==========================================
+     LAYER 2: SEMANTIC TOKENS (Light Mode)
+     Purpose-driven aliases
+     ========================================== */
+
+  .light {
+    /* --- Surface Colors --- */
+    --semantic-surface-primary: var(--primitive-slate-50);
+    --semantic-surface-secondary: var(--primitive-slate-100);
+    --semantic-surface-tertiary: var(--primitive-slate-200);
+    --semantic-surface-elevated: #FFFFFF;
+    --semantic-surface-overlay: rgba(255, 255, 255, 0.95);
+
+    /* --- Brand Colors --- */
+    --semantic-brand-primary: var(--primitive-blue-600);
+    --semantic-brand-primary-hover: var(--primitive-blue-700);
+    --semantic-brand-primary-active: var(--primitive-blue-800);
+    --semantic-brand-secondary: var(--primitive-cyan-500);
+    --semantic-brand-accent: var(--primitive-indigo-500);
+
+    /* --- Text Colors --- */
+    --semantic-text-primary: var(--primitive-slate-900);
+    --semantic-text-secondary: var(--primitive-slate-600);
+    --semantic-text-tertiary: var(--primitive-slate-500);
+    --semantic-text-disabled: var(--primitive-slate-400);
+    --semantic-text-inverse: var(--primitive-slate-50);
+    --semantic-text-on-brand: #FFFFFF;
+
+    /* --- Border Colors --- */
+    --semantic-border-primary: var(--primitive-slate-200);
+    --semantic-border-secondary: var(--primitive-slate-300);
+    --semantic-border-focus: var(--primitive-blue-500);
+    --semantic-border-error: var(--primitive-red-500);
+
+    /* --- State Colors --- */
+    --semantic-state-success: var(--primitive-green-500);
+    --semantic-state-success-bg: var(--primitive-green-50);
+    --semantic-state-warning: var(--primitive-amber-400);
+    --semantic-state-warning-bg: var(--primitive-yellow-50);
+    --semantic-state-error: var(--primitive-red-500);
+    --semantic-state-error-bg: var(--primitive-red-50);
+    --semantic-state-info: var(--primitive-blue-500);
+    --semantic-state-info-bg: var(--primitive-blue-50);
+
+    /* --- Interactive States --- */
+    --semantic-interactive-hover: rgba(0, 0, 0, 0.05);
+    --semantic-interactive-active: rgba(0, 0, 0, 0.1);
+    --semantic-interactive-disabled: rgba(0, 0, 0, 0.03);
+
+    /* --- Elevation Shadows --- */
+    --semantic-elevation-1: var(--primitive-shadow-sm);
+    --semantic-elevation-2: var(--primitive-shadow-base);
+    --semantic-elevation-3: var(--primitive-shadow-md);
+    --semantic-elevation-4: var(--primitive-shadow-lg);
+    --semantic-elevation-5: var(--primitive-shadow-xl);
+    --semantic-elevation-6: var(--primitive-shadow-2xl);
+  }
+
+  /* ==========================================
+     LAYER 2: SEMANTIC TOKENS (Dark Mode)
+     ========================================== */
+
+  .dark {
+    /* --- Surface Colors --- */
+    --semantic-surface-primary: #0B121C;
+    --semantic-surface-secondary: #121C2A;
+    --semantic-surface-tertiary: #1B2A3E;
+    --semantic-surface-elevated: #172438;
+    --semantic-surface-overlay: rgba(11, 18, 28, 0.95);
+
+    /* --- Brand Colors --- */
+    --semantic-brand-primary: #A9D6FF;
+    --semantic-brand-primary-hover: #C4E3FF;
+    --semantic-brand-primary-active: #8DC9FF;
+    --semantic-brand-secondary: #78D5E8;
+    --semantic-brand-accent: #A5B4FC;
+
+    /* --- Text Colors --- */
+    --semantic-text-primary: #F5F8FC;
+    --semantic-text-secondary: #9CAABE;
+    --semantic-text-tertiary: #6B7A93;
+    --semantic-text-disabled: #475569;
+    --semantic-text-inverse: var(--primitive-slate-900);
+    --semantic-text-on-brand: #07111C;
+
+    /* --- Border Colors --- */
+    --semantic-border-primary: #26364C;
+    --semantic-border-secondary: #2D3F58;
+    --semantic-border-focus: #A9D6FF;
+    --semantic-border-error: #FF8A8A;
+
+    /* --- State Colors --- */
+    --semantic-state-success: #8BE1C5;
+    --semantic-state-success-bg: rgba(139, 225, 197, 0.1);
+    --semantic-state-warning: #F2C879;
+    --semantic-state-warning-bg: rgba(242, 200, 121, 0.1);
+    --semantic-state-error: #FF8A8A;
+    --semantic-state-error-bg: rgba(255, 138, 138, 0.1);
+    --semantic-state-info: #78D5E8;
+    --semantic-state-info-bg: rgba(120, 213, 232, 0.1);
+
+    /* --- Interactive States --- */
+    --semantic-interactive-hover: rgba(255, 255, 255, 0.05);
+    --semantic-interactive-active: rgba(255, 255, 255, 0.1);
+    --semantic-interactive-disabled: rgba(255, 255, 255, 0.03);
+
+    /* --- Elevation Shadows (Enhanced for dark mode) --- */
+    --semantic-elevation-1: 0 1px 3px 0 rgb(0 0 0 / 0.3);
+    --semantic-elevation-2: 0 4px 8px 0 rgb(0 0 0 / 0.35);
+    --semantic-elevation-3: 0 10px 20px -3px rgb(0 0 0 / 0.4);
+    --semantic-elevation-4: 0 20px 30px -5px rgb(0 0 0 / 0.45);
+    --semantic-elevation-5: 0 25px 50px -12px rgb(0 0 0 / 0.5);
+    --semantic-elevation-6: 0 30px 70px -15px rgb(0 0 0 / 0.6);
+  }
+
+  /* ==========================================
+     LAYER 3: COMPONENT TOKENS
+     Component-specific design decisions
+     ========================================== */
+
+  :root {
+    /* --- Button Tokens --- */
+    --component-button-height-sm: var(--primitive-space-8);
+    --component-button-height-md: var(--primitive-space-10);
+    --component-button-height-lg: var(--primitive-space-12);
+    --component-button-padding-x: var(--primitive-space-4);
+    --component-button-radius: var(--primitive-radius-lg);
+    --component-button-font-size: var(--primitive-text-sm);
+    --component-button-font-weight: var(--primitive-weight-semibold);
+    --component-button-transition: all var(--primitive-duration-base) var(--primitive-ease-out);
+
+    /* Button Primary */
+    --component-button-primary-bg: var(--semantic-brand-primary);
+    --component-button-primary-text: var(--semantic-text-on-brand);
+    --component-button-primary-hover-bg: var(--semantic-brand-primary-hover);
+    --component-button-primary-active-bg: var(--semantic-brand-primary-active);
+    --component-button-primary-shadow: var(--semantic-elevation-2);
+    --component-button-primary-hover-shadow: var(--semantic-elevation-3);
+
+    /* Button Secondary */
+    --component-button-secondary-bg: var(--semantic-surface-secondary);
+    --component-button-secondary-text: var(--semantic-text-primary);
+    --component-button-secondary-border: var(--semantic-border-primary);
+    --component-button-secondary-hover-bg: var(--semantic-surface-tertiary);
+
+    /* Button Ghost */
+    --component-button-ghost-bg: transparent;
+    --component-button-ghost-text: var(--semantic-text-secondary);
+    --component-button-ghost-hover-bg: var(--semantic-interactive-hover);
+
+    /* --- Card Tokens --- */
+    --component-card-bg: var(--semantic-surface-elevated);
+    --component-card-border: var(--semantic-border-primary);
+    --component-card-radius: var(--primitive-radius-2xl);
+    --component-card-padding: var(--primitive-space-6);
+    --component-card-shadow: var(--semantic-elevation-2);
+    --component-card-hover-shadow: var(--semantic-elevation-4);
+    --component-card-transition: all var(--primitive-duration-slow) var(--primitive-ease-out);
+
+    /* --- Input Tokens --- */
+    --component-input-height: var(--primitive-space-10);
+    --component-input-padding-x: var(--primitive-space-4);
+    --component-input-radius: var(--primitive-radius-lg);
+    --component-input-border: var(--semantic-border-primary);
+    --component-input-bg: var(--semantic-surface-elevated);
+    --component-input-text: var(--semantic-text-primary);
+    --component-input-placeholder: var(--semantic-text-tertiary);
+    --component-input-focus-border: var(--semantic-border-focus);
+    --component-input-focus-ring: 0 0 0 3px rgba(169, 214, 255, 0.1);
+
+    /* --- Badge Tokens --- */
+    --component-badge-padding-x: var(--primitive-space-2);
+    --component-badge-padding-y: var(--primitive-space-0-5);
+    --component-badge-radius: var(--primitive-radius-base);
+    --component-badge-font-size: var(--primitive-text-xs);
+    --component-badge-font-weight: var(--primitive-weight-semibold);
+
+    /* --- Navbar Tokens --- */
+    --component-navbar-height: 64px;
+    --component-navbar-bg: var(--semantic-surface-elevated);
+    --component-navbar-border: var(--semantic-border-primary);
+    --component-navbar-shadow: var(--semantic-elevation-2);
+
+    /* --- Sidebar Tokens --- */
+    --component-sidebar-width: 280px;
+    --component-sidebar-bg: var(--semantic-surface-secondary);
+    --component-sidebar-item-height: 40px;
+    --component-sidebar-item-radius: var(--primitive-radius-lg);
+    --component-sidebar-item-hover-bg: var(--semantic-interactive-hover);
+    --component-sidebar-item-active-bg: var(--semantic-brand-primary);
+    --component-sidebar-item-active-text: var(--semantic-text-on-brand);
+
+    /* --- Modal Tokens --- */
+    --component-modal-bg: var(--semantic-surface-elevated);
+    --component-modal-overlay-bg: rgba(0, 0, 0, 0.5);
+    --component-modal-radius: var(--primitive-radius-2xl);
+    --component-modal-shadow: var(--semantic-elevation-6);
+    --component-modal-max-width: 600px;
+
+    /* --- Toast Tokens --- */
+    --component-toast-bg: var(--semantic-surface-elevated);
+    --component-toast-radius: var(--primitive-radius-xl);
+    --component-toast-shadow: var(--semantic-elevation-5);
+    --component-toast-padding: var(--primitive-space-4);
+
+    /* --- Video Player Tokens --- */
+    --component-player-controls-bg: rgba(0, 0, 0, 0.8);
+    --component-player-controls-height: 64px;
+    --component-player-progress-height: 4px;
+    --component-player-progress-bg: var(--semantic-brand-primary);
+    --component-player-button-size: 40px;
+
+    /* --- Glassmorphism Tokens --- */
+    --component-glass-bg: rgba(255, 255, 255, 0.1);
+    --component-glass-border: rgba(255, 255, 255, 0.2);
+    --component-glass-blur: var(--primitive-blur-xl);
+    --component-glass-shadow: var(--semantic-elevation-4);
+  }
+
+  .dark {
+    --component-glass-bg: rgba(255, 255, 255, 0.05);
+    --component-glass-border: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* ==========================================
+   UTILITY CLASSES
+   ========================================== */
+
+/* Elevation utilities */
+.elevation-1 { box-shadow: var(--semantic-elevation-1); }
+.elevation-2 { box-shadow: var(--semantic-elevation-2); }
+.elevation-3 { box-shadow: var(--semantic-elevation-3); }
+.elevation-4 { box-shadow: var(--semantic-elevation-4); }
+.elevation-5 { box-shadow: var(--semantic-elevation-5); }
+.elevation-6 { box-shadow: var(--semantic-elevation-6); }
+
+/* Glassmorphism utility */
+.glass {
+  background: var(--component-glass-bg);
+  border: 1px solid var(--component-glass-border);
+  backdrop-filter: blur(var(--component-glass-blur));
+  box-shadow: var(--component-glass-shadow);
+}
+
+/* Smooth transitions */
+.transition-smooth {
+  transition: all var(--primitive-duration-base) var(--primitive-ease-out);
+}
+
+.transition-slow {
+  transition: all var(--primitive-duration-slow) var(--primitive-ease-out);
+}
+
+/* Interactive hover effects */
+.hover-lift {
+  transition: transform var(--primitive-duration-base) var(--primitive-ease-out);
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+}
+
+.hover-scale {
+  transition: transform var(--primitive-duration-base) var(--primitive-ease-out);
+}
+
+.hover-scale:hover {
+  transform: scale(1.02);
+}

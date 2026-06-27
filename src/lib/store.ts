@@ -12,8 +12,6 @@ import type {
   ProgressData,
   LibraryStats,
   SearchResult,
-  PreparedVideoQuality,
-  VideoQuality,
   AiAudioTranscript,
   AiAudioTranslation,
   AiModelOption,
@@ -145,13 +143,6 @@ export async function getLessonSubtitles(
 
 export async function getSubtitleVtt(path: string): Promise<string> {
   return invoke<string>("get_subtitle_vtt", { path });
-}
-
-export async function prepareVideoQuality(
-  videoPath: string,
-  quality: VideoQuality,
-): Promise<PreparedVideoQuality> {
-  return invoke<PreparedVideoQuality>("prepare_video_quality", { videoPath, quality });
 }
 
 export async function translateWithDeepSeek(

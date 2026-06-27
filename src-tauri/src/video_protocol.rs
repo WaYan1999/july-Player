@@ -73,9 +73,7 @@ fn serve(request: &Request<Vec<u8>>) -> Response<Vec<u8>> {
             .unwrap_or_else(|_| status_only(StatusCode::INTERNAL_SERVER_ERROR));
     }
 
-    let end = file_size
-        .saturating_sub(1)
-        .min(DEFAULT_CHUNK_SIZE.saturating_sub(1));
+    let end = bounded_range_end(0, None, file_size);
     serve_range(&mut file, 0, end, file_size, mime)
 }
 
@@ -136,15 +134,22 @@ fn parse_range(header_value: &HeaderValue, file_size: u64) -> Option<(u64, u64)>
     }
 
     let start: u64 = a.parse().ok()?;
-    let end: u64 = if b.is_empty() {
-        file_size.checked_sub(1)?
+    let requested_end = if b.is_empty() {
+        None
     } else {
-        b.parse().ok()?
+        Some(b.parse().ok()?)
     };
+    let end = bounded_range_end(start, requested_end, file_size);
     if start > end || end >= file_size {
         return None;
     }
     Some((start, end))
+}
+
+fn bounded_range_end(start: u64, requested_end: Option<u64>, file_size: u64) -> u64 {
+    let chunk_end = start.saturating_add(DEFAULT_CHUNK_SIZE.saturating_sub(1));
+    let max_end = file_size.saturating_sub(1);
+    requested_end.unwrap_or(chunk_end).min(chunk_end).min(max_end)
 }
 
 fn guess_mime(path: &Path) -> &'static str {

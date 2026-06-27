@@ -39,8 +39,6 @@ export type { NavItem, BreadcrumbItem, SectionMemory } from "./navigation";
 
 export type {
   VideoPlayerHandle,
-  VideoQuality,
-  PreparedVideoQuality,
   AiAudioTranslation,
   AiAudioTranscript,
 } from "./video";

@@ -134,12 +134,12 @@ function AppShellInner({ children }: AppShellProps) {
   const effectiveCollapsed = isSmallScreen || collapsed;
 
   return (
-    <div className="flex h-screen flex-col bg-linear-to-b from-background to-sidebar text-foreground">
+    <div className="app-shell-root flex h-screen flex-col text-foreground">
       <SquircleClipDefs />
 
       <AppWindowTitleBar />
 
-      <header className="flex h-15 shrink-0 items-center">
+      <header className="app-topbar flex h-15 shrink-0 items-center">
         <div
           className="flex shrink-0 items-center px-3"
           style={{
@@ -225,7 +225,7 @@ function AppShellInner({ children }: AppShellProps) {
 
       <div className="flex min-h-0 flex-1">
         <aside
-          className="flex shrink-0 flex-col will-change-[width]"
+          className="app-sidebar flex shrink-0 flex-col will-change-[width]"
           style={{
             width: effectiveCollapsed ? 68 : 240,
             transition: `width ${spring()}`,
@@ -245,11 +245,7 @@ function AppShellInner({ children }: AppShellProps) {
         </aside>
 
         <main
-          className="app-main flex-1 overflow-y-auto rounded-tl-2xl bg-background px-4 pb-7 pt-6 sm:px-6 sm:pb-8 sm:pt-8 [scrollbar-gutter:stable]"
-          style={{
-            backgroundImage:
-              "radial-gradient(ellipse 80% 60% at 10% 0%, var(--gradient-spot) 0%, transparent 70%)",
-          }}
+          className="app-main flex-1 overflow-y-auto px-4 pb-7 pt-6 sm:px-6 sm:pb-8 sm:pt-8 [scrollbar-gutter:stable]"
         >
           {children}
         </main>

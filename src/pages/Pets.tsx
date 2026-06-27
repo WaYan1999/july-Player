@@ -1176,8 +1176,9 @@ export function Pets({ className }: PetsProps) {
   const previewPet = PET_CATALOG.find((pet) => pet.id === previewPetId) ?? currentPet;
   const currentPetName = careState.petName || currentPet.displayName;
   const growthProgress = getPetCareProgress(careState.xp);
-  const previewPetProgress = getPetCareProgress(getPetXp(careState, previewPet.id));
-  const currentPetProgress = getPetCareProgress(getPetXp(careState, currentPet.id));
+  // Sync pet level with personal level - pets now reflect user's overall progress
+  const previewPetProgress = growthProgress;
+  const currentPetProgress = growthProgress;
   const petStats = getPetVitals(careState, currentPet.id);
   const dailyGoalProgress = getDailyGoalProgress(careState);
   const completedDailyGoals = getCompletedDailyGoalCount(careState);
@@ -2381,13 +2382,6 @@ export function Pets({ className }: PetsProps) {
                             </span>
                           </span>
                         </div>
-                        <span className="shrink-0 rounded-full bg-secondary px-2 py-1 text-[10px] font-bold text-muted-foreground">
-                          {pending
-                            ? copy.applying
-                            : copy.playDailyLeft
-                                .replace("{left}", String(left))
-                                .replace("{total}", String(rule.dailyLimit))}
-                        </span>
                       </div>
                       <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
                         {copy[item.descriptionKey]}
@@ -2707,12 +2701,15 @@ export function Pets({ className }: PetsProps) {
                   });
                 }}
                 variant="ghost"
-                className="group flex h-auto w-full items-end justify-center rounded-lg bg-background/45 py-4 transition-colors hover:bg-background/70"
+                className="group flex h-auto min-h-[200px] w-full items-end justify-center rounded-lg py-4 transition-all"
+                style={{
+                  background: "radial-gradient(ellipse at 50% 75%, color-mix(in srgb, var(--color-primary) 15%, transparent), transparent 70%)",
+                }}
               >
                 <PetSprite
                   variantId={currentPet.id}
                   state={previewMood === "idle" ? "idle" : previewMood}
-                  width={112}
+                  width={160}
                   className="transition-transform duration-200 group-hover:scale-105"
                 />
               </Button>
@@ -2747,9 +2744,9 @@ export function Pets({ className }: PetsProps) {
                         })
                       }
                       variant="secondary"
-                      className="pet-care-action-button pet-action-button july-heroui-button flex h-auto min-h-16 flex-col items-center justify-center gap-1 overflow-hidden rounded-lg border-border bg-background/60 px-2 py-2 text-center text-[11px] font-bold text-foreground whitespace-normal transition-colors hover:border-primary/45 hover:bg-primary/10 disabled:cursor-wait disabled:opacity-70"
+                      className="pet-care-action-button pet-action-button july-heroui-button flex h-auto min-h-20 flex-col items-center justify-center gap-1.5 overflow-hidden rounded-xl border-border bg-secondary/30 px-3 py-3 text-center text-xs font-bold text-foreground whitespace-normal transition-all hover:border-primary/50 hover:bg-primary/12 hover:scale-105 disabled:cursor-wait disabled:opacity-70"
                     >
-                      <Icon className="size-4 text-primary" weight={pending ? "fill" : "regular"} />
+                      <Icon className="size-5 text-primary" weight={pending ? "fill" : "regular"} />
                       <span className="truncate">{copy[item.labelKey]}</span>
                       <span className="max-w-full truncate text-[9px] font-semibold text-muted-foreground">
                         {formatCareActionMeta(copy, item.action)}

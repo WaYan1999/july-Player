@@ -433,10 +433,10 @@ export function Settings({ className }: SettingsProps) {
   return (
     <div className={cn("july-page-narrow", className)}>
       <div
-        className="mb-8 flex items-center gap-3"
+        className="july-page-header mb-6 flex items-center gap-3 p-4 sm:p-5"
         style={{ animation: `card-in 350ms ${EASE_OUT} both` }}
       >
-        <div className="squircle flex size-10 items-center justify-center bg-primary/15">
+        <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-primary/18 bg-primary/12">
           <GearSix className="size-5 text-primary" weight="bold" />
         </div>
         <div>

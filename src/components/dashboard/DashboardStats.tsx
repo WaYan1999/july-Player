@@ -50,15 +50,15 @@ interface StatCardProps {
 function StatCard({ icon, label, value, sub, index }: StatCardProps) {
   return (
     <div
-      className="relative"
+      className="july-stat-card relative overflow-hidden"
       style={{
         animation: `card-in 350ms ${EASE_OUT} ${index * 50}ms both`,
       }}
     >
-      <div className="squircle absolute inset-0 bg-card" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--primary)_9%,transparent),transparent_52%)]" />
 
-      <div className="relative flex items-center gap-3 px-4 py-3">
-        <div className="squircle flex size-9 shrink-0 items-center justify-center bg-secondary">
+      <div className="relative flex items-center gap-3 px-4 py-3.5">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-border/55 bg-secondary/70">
           {icon}
         </div>
         <div className="min-w-0">
@@ -88,15 +88,15 @@ function WeekActivity({ activity, index }: WeekActivityProps) {
 
   return (
     <div
-      className="relative"
+      className="july-stat-card relative overflow-hidden"
       style={{
         animation: `card-in 350ms ${EASE_OUT} ${index * 50}ms both`,
       }}
     >
-      <div className="squircle absolute inset-0 bg-card" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--primary)_9%,transparent),transparent_52%)]" />
 
-      <div className="relative flex items-center gap-3 px-4 py-3">
-        <div className="squircle flex size-9 shrink-0 items-center justify-center bg-secondary">
+      <div className="relative flex items-center gap-3 px-4 py-3.5">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-border/55 bg-secondary/70">
           <Lightning className="size-4 text-primary" weight="fill" />
         </div>
         <div className="min-w-0">
@@ -155,18 +155,18 @@ function LevelCard({ level, lessonsToNext, index }: LevelCardProps) {
 
   return (
     <div
-      className="relative"
+      className="july-stat-card relative overflow-hidden"
       style={{
         animation: `card-in 350ms ${EASE_OUT} ${index * 50}ms both`,
       }}
     >
-      <div className="squircle absolute inset-0 bg-card" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--primary)_9%,transparent),transparent_52%)]" />
 
-      <div className="relative flex items-center gap-3 px-4 py-3">
+      <div className="relative flex items-center gap-3 px-4 py-3.5">
         <img
           src={icon}
           alt={`Level ${level}`}
-          className="size-10 shrink-0 object-contain drop-shadow-[0_0_6px_rgba(200,241,53,0.3)]"
+          className="size-10 shrink-0 object-contain drop-shadow-[0_8px_14px_color-mix(in_srgb,var(--primary)_18%,transparent)]"
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-1.5">
@@ -204,7 +204,7 @@ interface DashboardStatsBarProps {
 export function DashboardStatsBar({ stats, className }: DashboardStatsBarProps) {
   const { t } = useI18n();
   return (
-    <div className={cn("grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,10.5rem),1fr))] gap-3", className)}>
+    <div className={cn("grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,10.75rem),1fr))] gap-3.5", className)}>
       <LevelCard
         level={stats.userLevel}
         lessonsToNext={stats.lessonsToNextLevel}

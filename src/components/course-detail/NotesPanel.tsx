@@ -1,3 +1,4 @@
+import { memo } from "react";
 import {
   NotePencilIcon as NotePencil,
   PencilSimpleIcon as PencilSimple,
@@ -30,7 +31,7 @@ interface NotesPanelProps {
   onTimestampClick?: (seconds: number, lessonId: number) => void;
 }
 
-export function NotesPanel({
+function NotesPanelComponent({
   courseTitle,
   lessonTitle,
   subtitles,
@@ -100,6 +101,35 @@ export function NotesPanel({
     </div>
   );
 }
+
+export const NotesPanel = memo(
+  NotesPanelComponent,
+  (prev, next) => {
+    const videoTimeMatters =
+      prev.showEditor ||
+      next.showEditor ||
+      prev.editingNoteId != null ||
+      next.editingNoteId != null;
+
+    return (
+      prev.courseTitle === next.courseTitle &&
+      prev.lessonTitle === next.lessonTitle &&
+      prev.subtitles === next.subtitles &&
+      prev.notes === next.notes &&
+      prev.editingNoteId === next.editingNoteId &&
+      prev.showEditor === next.showEditor &&
+      prev.language === next.language &&
+      prev.onAdd === next.onAdd &&
+      prev.onSaveAiNote === next.onSaveAiNote &&
+      prev.onEdit === next.onEdit &&
+      prev.onDelete === next.onDelete &&
+      prev.onSetEditing === next.onSetEditing &&
+      prev.onSetShowEditor === next.onSetShowEditor &&
+      prev.onTimestampClick === next.onTimestampClick &&
+      (!videoTimeMatters || prev.videoTime === next.videoTime)
+    );
+  },
+);
 
 interface NoteCardProps {
   note: Note;

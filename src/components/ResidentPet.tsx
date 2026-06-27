@@ -221,6 +221,38 @@ function clampPosition(point: Point): Point {
   };
 }
 
+function getDefaultPosition(): Point {
+  if (typeof window === "undefined") return { x: PET_MARGIN, y: PET_MARGIN };
+
+  return clampPosition({
+    x: window.innerWidth - PET_SIZE.width - 24,
+    y: window.innerHeight - PET_SIZE.height - 24,
+  });
+}
+
+function isNotesRoute() {
+  if (typeof window === "undefined") return false;
+  return window.location.hash.startsWith("#/notes");
+}
+
+function overlapsProtectedContent(point: Point) {
+  if (typeof window === "undefined" || !isNotesRoute()) return false;
+
+  const centerX = point.x + PET_SIZE.width / 2;
+  const centerY = point.y + PET_SIZE.height / 2;
+  const protectedLeft = Math.min(220, window.innerWidth * 0.26);
+  const protectedRight = window.innerWidth * 0.78;
+  const protectedTop = 110;
+  const protectedBottom = Math.max(protectedTop, window.innerHeight - 170);
+
+  return (
+    centerX >= protectedLeft &&
+    centerX <= protectedRight &&
+    centerY >= protectedTop &&
+    centerY <= protectedBottom
+  );
+}
+
 function getInitialPosition(): Point {
   if (typeof window === "undefined") return { x: PET_MARGIN, y: PET_MARGIN };
 
@@ -229,17 +261,15 @@ function getInitialPosition(): Point {
     if (saved) {
       const parsed = JSON.parse(saved) as Partial<Point>;
       if (typeof parsed.x === "number" && typeof parsed.y === "number") {
-        return clampPosition({ x: parsed.x, y: parsed.y });
+        const restored = clampPosition({ x: parsed.x, y: parsed.y });
+        return overlapsProtectedContent(restored) ? getDefaultPosition() : restored;
       }
     }
   } catch {
     // Ignore invalid saved positions.
   }
 
-  return clampPosition({
-    x: window.innerWidth - PET_SIZE.width - 24,
-    y: window.innerHeight - PET_SIZE.height - 24,
-  });
+  return getDefaultPosition();
 }
 
 function formatRemainingSeconds(ms = 0) {
@@ -532,7 +562,8 @@ export function ResidentPet() {
   useEffect(() => {
     const handleResize = () => {
       setPosition((current) => {
-        const next = clampPosition(current);
+        const clamped = clampPosition(current);
+        const next = overlapsProtectedContent(clamped) ? getDefaultPosition() : clamped;
         positionRef.current = next;
         persistPosition(next);
         return next;
@@ -542,6 +573,26 @@ export function ResidentPet() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [persistPosition]);
+
+  useEffect(() => {
+    const moveAwayFromProtectedContent = () => {
+      if (!isNotesRoute()) return;
+      const current = clampPosition(positionRef.current);
+      if (!overlapsProtectedContent(current)) {
+        persistPosition(current);
+        return;
+      }
+      const next = getDefaultPosition();
+      flushPositionCommit(next);
+      persistPosition(next);
+    };
+
+    moveAwayFromProtectedContent();
+    window.addEventListener("hashchange", moveAwayFromProtectedContent);
+    return () => {
+      window.removeEventListener("hashchange", moveAwayFromProtectedContent);
+    };
+  }, [flushPositionCommit, persistPosition]);
 
   useEffect(() => {
     if (!wheelOpen) return;

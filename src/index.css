@@ -3,6 +3,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "./styles/design-tokens.css";
 
 ::view-transition-old(root),
 ::view-transition-new(root) {
@@ -13,8 +14,8 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    --font-sans: 'DM Sans', sans-serif;
-    --font-heading: 'Syne', sans-serif;
+    --font-sans: 'DM Sans', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans SC', sans-serif;
+    --font-heading: 'Syne', 'DM Sans', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
     --radius-sm: calc(var(--radius) - 4px);
     --radius-md: calc(var(--radius) - 2px);
@@ -61,51 +62,57 @@
 :root {
     --radius: 0.625rem;
     /* Backgrounds */
-    --background: #0D1A2A;
-    --foreground: #F4F8FC;
-    --card: #1E2B3E;
-    --card-foreground: #F4F8FC;
-    --popover: #223149;
-    --popover-foreground: #F4F8FC;
+    --background: #0B121C;
+    --foreground: #F5F8FC;
+    --card: #121C2A;
+    --card-foreground: #F5F8FC;
+    --popover: #172438;
+    --popover-foreground: #F5F8FC;
     /* Accent — Electric Lime */
-    --primary: #AFC7F1;
-    --primary-foreground: #071524;
+    --primary: #A9D6FF;
+    --primary-foreground: #07111C;
     /* Secondary */
-    --secondary: #233149;
-    --secondary-foreground: #F4F8FC;
+    --secondary: #1B2A3E;
+    --secondary-foreground: #F5F8FC;
     /* Muted */
-    --muted: #172438;
-    --muted-foreground: #9AA8BA;
+    --muted: #101A27;
+    --muted-foreground: #9CAABE;
     /* Accent */
-    --accent: #4F6791;
-    --accent-foreground: #F4F8FC;
+    --accent: #27486B;
+    --accent-foreground: #F5F8FC;
     /* Status */
-    --destructive: #FF7A7A;
-    --info: #75BEEA;
-    --success: #84D4C8;
+    --destructive: #FF8A8A;
+    --info: #78D5E8;
+    --success: #8BE1C5;
     /* Border / Input / Ring */
-    --border: #35445A;
-    --input: #26354D;
-    --ring: #AFC7F1;
+    --border: #26364C;
+    --input: #213149;
+    --ring: #A9D6FF;
     /* Charts */
-    --chart-1: #AFC7F1;
-    --chart-2: #75BEEA;
-    --chart-3: #84D4C8;
-    --chart-4: #5F78A6;
+    --chart-1: #A9D6FF;
+    --chart-2: #78D5E8;
+    --chart-3: #8BE1C5;
+    --chart-4: #F2C879;
     --chart-5: #D9E7F8;
     /* Sidebar */
-    --sidebar: #0B1726;
-    --sidebar-foreground: #F4F8FC;
-    --sidebar-primary: #AFC7F1;
-    --sidebar-primary-foreground: #071524;
-    --sidebar-accent: #203049;
-    --sidebar-accent-foreground: #F4F8FC;
-    --sidebar-border: #2E3D54;
-    --sidebar-ring: #AFC7F1;
-    --gradient-spot: rgba(117, 190, 234, 0.16);
-    --titlebar: #0B1726;
-    --titlebar-highlight: rgba(175, 199, 241, 0.075);
-    --titlebar-border: rgba(175, 199, 241, 0.12);
+    --sidebar: #08101A;
+    --sidebar-foreground: #F5F8FC;
+    --sidebar-primary: #A9D6FF;
+    --sidebar-primary-foreground: #07111C;
+    --sidebar-accent: #142236;
+    --sidebar-accent-foreground: #F5F8FC;
+    --sidebar-border: #203149;
+    --sidebar-ring: #A9D6FF;
+    --gradient-spot: rgba(120, 213, 232, 0.12);
+    --surface-raised: color-mix(in srgb, var(--card) 86%, white 4%);
+    --surface-soft: color-mix(in srgb, var(--secondary) 68%, transparent);
+    --border-soft: color-mix(in srgb, var(--border) 72%, transparent);
+    --shadow-soft: 0 14px 32px rgb(0 0 0 / 0.20);
+    --shadow-card: 0 10px 24px rgb(0 0 0 / 0.16);
+    --shadow-floating: 0 22px 50px rgb(0 0 0 / 0.28);
+    --titlebar: #080F18;
+    --titlebar-highlight: rgba(255, 255, 255, 0.045);
+    --titlebar-border: rgba(169, 214, 255, 0.12);
     --titlebar-control: #AFC0D3;
     --titlebar-control-hover: rgba(175, 199, 241, 0.10);
     --titlebar-control-danger-hover: rgba(255, 107, 107, 0.18);
@@ -113,41 +120,47 @@
 }
 
 .light {
-    --background: #F7F8F8;
-    --foreground: #0F1D2B;
+    --background: #F6F8FB;
+    --foreground: #0E1824;
     --card: #FFFFFF;
-    --card-foreground: #0F1D2B;
+    --card-foreground: #0E1824;
     --popover: #FFFFFF;
-    --popover-foreground: #0F1D2B;
-    --primary: #6DBEE6;
-    --primary-foreground: #071524;
-    --secondary: #EEF1F2;
-    --secondary-foreground: #0F1D2B;
-    --muted: #F1F3F4;
-    --muted-foreground: #667381;
-    --accent: #CFE9F7;
-    --accent-foreground: #0F1D2B;
+    --popover-foreground: #0E1824;
+    --primary: #2D8FD1;
+    --primary-foreground: #FFFFFF;
+    --secondary: #EEF3F8;
+    --secondary-foreground: #0E1824;
+    --muted: #F0F4F8;
+    --muted-foreground: #657487;
+    --accent: #D9EEF9;
+    --accent-foreground: #0E1824;
     --destructive: #E54D4D;
     --info: #3F8EC4;
     --success: #2F9B8E;
-    --border: #D6DCE2;
-    --input: #D6DCE2;
+    --border: #D4DCE7;
+    --input: #D4DCE7;
     --ring: #3F9DD4;
     --chart-1: #6DBEE6;
     --chart-2: #AFC7F1;
     --chart-3: #2F9B8E;
     --chart-4: #526B96;
     --chart-5: #AEB9C5;
-    --sidebar: #FBFCFC;
-    --sidebar-foreground: #0F1D2B;
-    --sidebar-primary: #6DBEE6;
-    --sidebar-primary-foreground: #071524;
-    --sidebar-accent: #E8F4FA;
-    --sidebar-accent-foreground: #0F1D2B;
+    --sidebar: #FFFFFF;
+    --sidebar-foreground: #0E1824;
+    --sidebar-primary: #2D8FD1;
+    --sidebar-primary-foreground: #FFFFFF;
+    --sidebar-accent: #EDF6FC;
+    --sidebar-accent-foreground: #0E1824;
     --sidebar-border: #D6DCE2;
     --sidebar-ring: #3F9DD4;
-    --gradient-spot: rgba(109, 190, 230, 0.16);
-    --titlebar: #FBFCFC;
+    --gradient-spot: rgba(45, 143, 209, 0.11);
+    --surface-raised: #FFFFFF;
+    --surface-soft: rgba(255, 255, 255, 0.72);
+    --border-soft: rgba(14, 24, 36, 0.10);
+    --shadow-soft: 0 16px 34px rgb(42 64 89 / 0.11);
+    --shadow-card: 0 10px 22px rgb(42 64 89 / 0.09);
+    --shadow-floating: 0 24px 54px rgb(42 64 89 / 0.16);
+    --titlebar: #FFFFFF;
     --titlebar-highlight: rgba(255, 255, 255, 0.75);
     --titlebar-border: rgba(15, 29, 43, 0.10);
     --titlebar-control: #586574;
@@ -182,10 +195,10 @@
     background: transparent;
     }
   html {
-    background-color: #0D1A2A;
+    background-color: #0B121C;
     }
   html.light {
-    background-color: #F7F8F8;
+    background-color: #F6F8FB;
     }
   html:has(.desktop-pet-window),
   html:has(.desktop-pet-window) body,
@@ -195,14 +208,44 @@
 body {
     @apply bg-background text-foreground font-sans antialiased;
     font-weight: 400;
+    text-rendering: optimizeLegibility;
     }
 }
 
 @layer components {
+  .app-shell-root {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--foreground) 2.5%, transparent), transparent 34%),
+      var(--sidebar);
+  }
+
+  .app-topbar {
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 58%, transparent);
+    background: color-mix(in srgb, var(--sidebar) 82%, transparent);
+    backdrop-filter: blur(18px);
+  }
+
+  .app-sidebar {
+    border-right: 1px solid color-mix(in srgb, var(--sidebar-border) 64%, transparent);
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--foreground) 3%, transparent), transparent 42%),
+      color-mix(in srgb, var(--sidebar) 96%, transparent);
+  }
+
   .app-main {
     min-width: 0;
     overscroll-behavior: contain;
     contain: layout;
+    border-top-left-radius: 1.25rem;
+    border-top: 1px solid color-mix(in srgb, var(--border) 46%, transparent);
+    border-left: 1px solid color-mix(in srgb, var(--border) 46%, transparent);
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--foreground) 2.6%, transparent), transparent 18rem),
+      linear-gradient(90deg, color-mix(in srgb, var(--border) 9%, transparent) 1px, transparent 1px),
+      linear-gradient(0deg, color-mix(in srgb, var(--border) 7%, transparent) 1px, transparent 1px),
+      var(--background);
+    background-size: auto, 4.5rem 4.5rem, 4.5rem 4.5rem, auto;
+    box-shadow: inset 1px 1px 0 color-mix(in srgb, var(--foreground) 2%, transparent);
   }
 
   .app-main > * {
@@ -210,7 +253,7 @@ body {
   }
 
   .july-page {
-    width: min(100%, 80rem);
+    width: min(100%, 82rem);
     min-width: 0;
     margin-inline: auto;
   }
@@ -238,6 +281,22 @@ body {
     min-width: 0;
   }
 
+  .video-player-shell:fullscreen,
+  .video-player-shell:-webkit-full-screen {
+    width: 100vw;
+    height: 100vh;
+    border: 0;
+    border-radius: 0;
+    background: #000;
+  }
+
+  .video-player-shell:fullscreen .video-player-media,
+  .video-player-shell:-webkit-full-screen .video-player-media {
+    width: 100vw;
+    height: 100vh;
+    object-fit: cover;
+  }
+
   .july-card-grid {
     display: grid;
     min-width: 0;
@@ -250,7 +309,71 @@ body {
     min-width: 0;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.875rem;
+  }
+
+  .july-page-header {
+    border: 1px solid var(--border-soft);
+    border-radius: 1rem;
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--primary) 10%, transparent), transparent 44%),
+      color-mix(in srgb, var(--card) 84%, transparent);
+    box-shadow: var(--shadow-card);
+    backdrop-filter: blur(12px);
+  }
+
+  .july-stat-card {
+    border: 1px solid var(--border-soft);
+    border-radius: 1rem;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--foreground) 3%, transparent), transparent 44%),
+      color-mix(in srgb, var(--card) 90%, transparent);
+    box-shadow: var(--shadow-card);
+    transition:
+      transform 170ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 170ms ease,
+      background-color 170ms ease;
+  }
+
+  .july-stat-card:hover {
+    border-color: color-mix(in srgb, var(--primary) 25%, var(--border));
+    transform: translateY(-1px);
+  }
+
+  .course-card {
+    border: 1px solid var(--border-soft);
+    border-radius: 1rem;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--foreground) 3%, transparent), transparent 42%),
+      color-mix(in srgb, var(--card) 92%, transparent);
+    box-shadow: var(--shadow-card);
+    transition:
+      transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 180ms ease,
+      background-color 180ms ease,
+      box-shadow 180ms ease;
+  }
+
+  .course-card:hover {
+    border-color: color-mix(in srgb, var(--primary) 34%, var(--border));
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--primary) 5%, transparent), transparent 48%),
+      color-mix(in srgb, var(--secondary) 72%, var(--card));
+    box-shadow: var(--shadow-soft);
+    transform: translateY(-2px);
+  }
+
+  .course-card-cover {
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 62%, transparent);
+  }
+
+  .course-detail-header,
+  .course-curriculum-panel {
+    border: 1px solid var(--border-soft);
+    border-radius: 1rem;
+    background: color-mix(in srgb, var(--card) 88%, transparent);
+    box-shadow: var(--shadow-card);
+    backdrop-filter: blur(12px);
   }
 }
 
@@ -897,9 +1020,9 @@ body {
 
 .july-heroui-field {
   min-height: 2.5rem;
-  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-  border-radius: 0.75rem;
-  background: color-mix(in srgb, var(--secondary) 70%, transparent);
+  border: 1px solid var(--border-soft);
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, var(--secondary) 58%, transparent);
   padding: 0.5rem 0.75rem;
   color: var(--foreground);
   font-family: var(--font-sans);
@@ -918,7 +1041,7 @@ body {
 
 .july-heroui-field:hover {
   border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
-  background: var(--secondary);
+  background: color-mix(in srgb, var(--secondary) 78%, transparent);
 }
 
 .july-heroui-field:focus,
@@ -950,9 +1073,9 @@ textarea.july-heroui-field {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border-radius: 0.75rem;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-  background: color-mix(in srgb, var(--secondary) 70%, transparent);
+  border-radius: 0.8rem;
+  border: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--secondary) 62%, transparent);
   color: var(--foreground);
   font-family: var(--font-sans);
   font-size: 0.875rem;
@@ -973,7 +1096,7 @@ textarea.july-heroui-field {
 
 .july-heroui-button:hover {
   border-color: color-mix(in srgb, var(--primary) 38%, var(--border));
-  background: var(--secondary);
+  background: color-mix(in srgb, var(--secondary) 84%, transparent);
   filter: brightness(1.035);
   transform: translateY(-1px);
 }
@@ -1008,8 +1131,11 @@ textarea.july-heroui-field {
 
 .july-heroui-button-primary {
   border-color: color-mix(in srgb, var(--primary) 86%, transparent);
-  background: var(--primary);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, white 16%, transparent), transparent),
+    var(--primary);
   color: var(--primary-foreground);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--primary) 20%, transparent);
 }
 
 .july-heroui-button-primary:hover {
@@ -1045,9 +1171,9 @@ textarea.july-heroui-field {
 
 .july-select {
   min-height: 2.25rem;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: 0.75rem;
-  background: color-mix(in srgb, var(--secondary) 72%, transparent);
+  border: 1px solid var(--border-soft);
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, var(--secondary) 58%, transparent);
   color: var(--foreground);
   transition:
     transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -1070,19 +1196,20 @@ textarea.july-heroui-field {
 .july-section-card,
 .july-dialog,
 .july-popover {
-  border-radius: 0.875rem;
+  border-radius: 1rem;
 }
 
 .july-section-card {
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border: 1px solid var(--border-soft);
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--foreground) 2.5%, transparent), transparent 38%),
-    var(--card);
-  box-shadow: 0 6px 12px rgb(0 0 0 / 0.14);
+    linear-gradient(180deg, color-mix(in srgb, var(--foreground) 3%, transparent), transparent 38%),
+    color-mix(in srgb, var(--card) 92%, transparent);
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(12px);
 }
 
 .july-dialog {
-  box-shadow: 0 12px 22px rgb(0 0 0 / 0.26);
+  box-shadow: var(--shadow-floating);
 }
 
 .july-popover {

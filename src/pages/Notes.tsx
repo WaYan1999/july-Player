@@ -140,9 +140,9 @@ export function Notes({ className }: NotesProps) {
 
   if (notes.length === 0) {
     return (
-      <div className={cn("july-page", className)}>
+      <div className={cn("july-page min-h-[calc(100vh-9rem)]", className)}>
         <div
-          className="flex flex-col items-center justify-center gap-3 py-32 text-center"
+          className="mx-auto flex min-h-[calc(100vh-14rem)] max-w-xl flex-col items-center justify-center gap-3 px-5 pb-44 pt-16 text-center sm:pb-36"
           style={{ animation: `card-in 350ms ${EASE_OUT} both` }}
         >
           <div className="flex size-12 items-center justify-center rounded-xl bg-secondary">

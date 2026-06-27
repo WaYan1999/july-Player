@@ -51,7 +51,11 @@ If your Tauri signing key has a password, also add:
    - `.sig` signature files
 4. The workflow uploads the signed installer artifacts to JulyRes. This step requires `JULYRES_PLAYER_RELEASE_TOKEN` and will fail if the secret is missing or any package/signature pair is incomplete.
 5. In the JulyRes WordPress admin, open **播放器发布**, review the uploaded 1.x.x artifacts, check **发布到 latest.json**, and save.
-6. Verify `https://julyres.top/july-player/latest.json` returns the new version. GitHub Release remains the fallback update endpoint.
+6. Verify `https://julyres.top/july-player/latest.json` returns the new version, includes `windows-x86_64-nsis`, and every package URL is directly downloadable:
+   ```bash
+   npm run verify:update-manifest
+   ```
+   GitHub Release remains the fallback update endpoint, but the app will not necessarily fall back if the first manifest is valid and only its package URL returns 404.
 
 ## How clients update
 
@@ -69,3 +73,4 @@ Users can hit the **Check for updates** button in Settings at any time.
 - **No update detected** after publishing: make sure the release is **published** (not draft) and that the `version` in `latest.json` is greater than the installed app's version (semver compared).
 - **`createUpdaterArtifacts: true` missing**: without it, `tauri-action` won't emit `latest.json`.
 - **JulyRes upload skipped or missing on website**: it should not skip anymore. Confirm `JULYRES_PLAYER_RELEASE_TOKEN` exists in GitHub Actions secrets, then rerun the release workflow or re-push the release tag.
+- **Update found but install fails with `404 Not Found`**: `latest.json` is reachable, but one of `platforms.*.url` is not a direct installer URL. Run `npm run verify:update-manifest`. The server must return `200` or `206` for every installer URL to non-browser requests, and Windows releases should include both `windows-x86_64-msi` and `windows-x86_64-nsis`.

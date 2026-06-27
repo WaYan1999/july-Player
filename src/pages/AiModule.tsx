@@ -337,10 +337,10 @@ export function AiModule({ className, previewMode = false }: AiModuleProps) {
   return (
     <div className={cn("july-page", className)}>
       <div
-        className="mb-8 flex items-center gap-3"
+        className="july-page-header mb-6 flex items-center gap-3 p-4 sm:p-5"
         style={{ animation: `card-in 350ms ${EASE_OUT} both` }}
       >
-        <div className="squircle flex size-10 items-center justify-center bg-primary/15">
+        <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-primary/18 bg-primary/12">
           <Sparkle className="size-5 text-primary" weight="bold" />
         </div>
         <div>
@@ -355,7 +355,7 @@ export function AiModule({ className, previewMode = false }: AiModuleProps) {
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(min(100%,280px),320px)]">
         <div className="flex min-w-0 flex-col gap-4">
-          <section className="relative overflow-visible rounded-xl border border-border/70 bg-card/95">
+          <section className="july-section-card relative overflow-visible">
             <div className="relative p-5 sm:p-6">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -568,7 +568,7 @@ export function AiModule({ className, previewMode = false }: AiModuleProps) {
             </div>
           </section>
 
-          <section className="relative overflow-visible rounded-xl border border-border/70 bg-card/95">
+          <section className="july-section-card relative overflow-visible">
             <div className="relative p-5 sm:p-6">
               <div className="mb-4 flex items-center gap-2">
                 <Translate className="size-4 text-info" weight="bold" />
@@ -636,10 +636,10 @@ export function AiModule({ className, previewMode = false }: AiModuleProps) {
         </div>
 
         <aside
-          className="relative min-w-0 overflow-hidden rounded-xl border border-primary/18 bg-card/95 p-4 lg:sticky lg:top-4 lg:self-start"
+          className="july-section-card relative min-w-0 overflow-hidden p-4 lg:sticky lg:top-4 lg:self-start"
           style={{ animation: `card-in 350ms ${EASE_OUT} 80ms both` }}
         >
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(200,241,53,0.11),transparent_46%)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--primary)_12%,transparent),transparent_46%)]" />
           <div className="relative flex h-full flex-col gap-3">
             {JULY_LINKS.map((link) => (
               <Button

@@ -1,11 +1,10 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import {
   PlayIcon as Play,
   CheckCircleIcon as CheckCircle,
   CaretDownIcon as CaretDown,
   HeartIcon as Heart,
 } from "@phosphor-icons/react";
-import { Button } from "@heroui/react";
 import { cn } from "@/lib/utils";
 import { EASE } from "@/lib/constants";
 import { formatDuration } from "@/lib/format";
@@ -28,27 +27,29 @@ function SectionAccordionComponent({
   onToggleFavorite,
 }: SectionAccordionProps) {
   const { t } = useI18n();
-  const completedCount = section.lessons.filter((l) => l.completed).length;
+  const completedCount = useMemo(
+    () => section.lessons.filter((l) => l.completed).length,
+    [section.lessons],
+  );
   const allComplete =
     completedCount === section.lessons.length && section.lessons.length > 0;
   const hasActiveLesson = section.lessons.some((l) => l.id === activeLessonId);
   const [open, setOpen] = useState(hasActiveLesson);
 
   useEffect(() => {
-    setOpen(hasActiveLesson);
+    if (hasActiveLesson) setOpen(true);
   }, [hasActiveLesson]);
-  const sectionDuration = section.lessons.reduce(
-    (sum, l) => sum + l.duration,
-    0,
+  const sectionDuration = useMemo(
+    () => section.lessons.reduce((sum, l) => sum + l.duration, 0),
+    [section.lessons],
   );
 
   return (
     <div className="border-b border-border last:border-b-0">
-      <Button
+      <button
         type="button"
-        variant="ghost"
         onClick={() => setOpen((v) => !v)}
-        className="flex min-h-0 w-full items-start justify-start gap-3 rounded-none border-0 bg-transparent px-4 py-2.5 text-left shadow-none hover:bg-secondary"
+        className="flex w-full items-start justify-start gap-3 bg-transparent px-4 py-2.5 text-left transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         aria-expanded={open}
       >
         <CaretDown
@@ -73,35 +74,25 @@ function SectionAccordionComponent({
             {sectionDuration > 0 && <> · {formatDuration(sectionDuration)}</>}
           </span>
         </div>
-      </Button>
+      </button>
 
-      <div
-        style={{
-          maxHeight: open ? section.lessons.length * 52 + 8 : 0,
-          opacity: open ? 1 : 0,
-          transition: `max-height 350ms ${EASE}, opacity 250ms ${EASE}`,
-        }}
-        className="overflow-hidden"
-      >
-        <div className="flex flex-col gap-px px-2 pt-1 pb-2">
-          {section.lessons.map((lesson, index) => {
+      {open && (
+        <div
+          className="flex flex-col gap-px px-2 pt-1 pb-2"
+          style={{ animation: `fade-in 140ms ${EASE} both` }}
+        >
+          {section.lessons.map((lesson) => {
             const isActive = lesson.id === activeLessonId;
 
             return (
-              <Button
+              <button
                 type="button"
-                variant="ghost"
                 key={lesson.id}
                 onClick={() => onSelectLesson(lesson)}
                 className={cn(
-                  "group flex min-h-0 w-full items-center justify-start gap-3 rounded-lg border-0 px-3 py-2.5 text-left shadow-none hover:bg-secondary",
+                  "group flex w-full items-center justify-start gap-3 rounded-lg border-0 px-3 py-2.5 text-left transition-colors duration-100 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
                   isActive && "bg-primary/5",
                 )}
-                style={{
-                  opacity: open ? 1 : 0,
-                  transform: open ? "translateX(0)" : "translateX(-6px)",
-                  transition: `opacity 300ms ${EASE} ${index * 30}ms, transform 300ms ${EASE} ${index * 30}ms`,
-                }}
               >
                 <div
                   className="shrink-0"
@@ -159,16 +150,37 @@ function SectionAccordionComponent({
                     </>
                   )}
                 </span>
-              </Button>
+              </button>
             );
           })}
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
-export const SectionAccordion = memo(SectionAccordionComponent);
+function sectionHasLesson(section: Section, lessonId: number | undefined) {
+  return lessonId != null && section.lessons.some((lesson) => lesson.id === lessonId);
+}
+
+export const SectionAccordion = memo(
+  SectionAccordionComponent,
+  (prev, next) => {
+    if (prev.section !== next.section) return false;
+    if (
+      prev.onSelectLesson !== next.onSelectLesson ||
+      prev.onToggleComplete !== next.onToggleComplete ||
+      prev.onToggleFavorite !== next.onToggleFavorite
+    ) {
+      return false;
+    }
+
+    const wasActiveSection = sectionHasLesson(prev.section, prev.activeLessonId);
+    const isActiveSection = sectionHasLesson(next.section, next.activeLessonId);
+    if (!wasActiveSection && !isActiveSection) return true;
+    return prev.activeLessonId === next.activeLessonId;
+  },
+);
 
 const CIRCLE_R = 6;
 const CIRCLE_C = 2 * Math.PI * CIRCLE_R;

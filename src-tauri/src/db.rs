@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use crate::parser::{find_bundled_bin, normalize_language, probe_embedded_subtitles, ParsedCourse};
+use crate::parser::{normalize_language, ParsedCourse};
 
 // --- Database state ---
 
@@ -956,23 +956,6 @@ fn add_discovered_subtitles(
                 language: extract_subtitle_language(file_name, video_stem),
             });
         }
-    }
-
-    let ffprobe_bin = find_bundled_bin("ffprobe")
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "ffprobe".to_string());
-    for embedded in probe_embedded_subtitles(&video_path, &ffprobe_bin) {
-        let compare_path = normalize_path_for_compare(&embedded.path);
-        if !existing_paths.insert(compare_path) {
-            continue;
-        }
-
-        subs.push(Subtitle {
-            id: -((subs.len() as i64) + 1),
-            lesson_id,
-            path: embedded.path,
-            language: embedded.language,
-        });
     }
 
     Ok(())

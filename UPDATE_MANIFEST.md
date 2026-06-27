@@ -240,8 +240,18 @@ app.get("/july-player/latest.json", (req, res) => {
 - `version` 已经高于当前客户端版本。
 - `latest.json` 可以通过浏览器直接访问。
 - `Content-Type` 是 `application/json`。
-- 所有 `url` 都可以直接下载。
+- 必须包含 `windows-x86_64`、`windows-x86_64-msi`、`windows-x86_64-nsis`、`darwin-aarch64`、`darwin-x86_64`。
+- 所有 `url` 都必须是安装包直链，不是后台页面地址，也不是只给浏览器使用的下载按钮地址。
+- 所有 `url` 对 `HEAD` 或 `Range: bytes=0-0` 请求返回 `200` / `206`，不能返回 `404`、登录页或 HTML。
 - 每个安装包旁边都有同一次构建生成的 `.sig`。
 - 所有 `signature` 都是对应 `.sig` 文件内容。
 - 没有把 `.sig` 路径或 URL 写进 `signature`。
 - 国内 CDN 已刷新缓存。
+
+可以用客户端仓库里的验证脚本检查：
+
+```powershell
+npm run verify:update-manifest
+```
+
+如果播放器报 `Download request failed with status: 404 Not Found`，优先检查 `latest.json.platforms.*.url`。只要 `latest.json` 能访问但里面的安装包 URL 是 404，Tauri updater 就会下载失败；即使网站页面里的下载按钮能用也不够。

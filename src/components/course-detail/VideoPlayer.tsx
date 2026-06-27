@@ -5,6 +5,7 @@ import {
   useEffect,
   useImperativeHandle,
   useMemo,
+  memo,
   forwardRef,
   type MouseEvent as ReactMouseEvent,
 } from "react";
@@ -30,10 +31,9 @@ import {
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { formatVideoTime } from "@/lib/format";
-import type { Lesson, Subtitle, VideoPlayerHandle, VideoQuality } from "@/types";
+import type { Lesson, Subtitle, VideoPlayerHandle } from "@/types";
 import {
   getSubtitleVtt,
-  prepareVideoQuality,
   transcribeAudioSegmentOnly,
   translateLiveSubtitleText,
 } from "@/lib/store";
@@ -79,15 +79,6 @@ interface VideoPlayerProps {
 
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 const AUTO_SKIP_SECONDS = 5;
-const QUALITY_OPTIONS: { label: string; value: VideoQuality }[] = [
-  { label: "1080P", value: "1080p" },
-  { label: "2K", value: "2k" },
-];
-const DEFAULT_QUALITY: VideoQuality = "1080p";
-interface QualityRequest {
-  lessonId: number;
-  quality: VideoQuality;
-}
 const LIVE_AI_SEGMENT_SECONDS = 1.8;
 const LIVE_AI_SEGMENT_OVERLAP_SECONDS = 0.25;
 const LIVE_AI_SEGMENT_STEP_SECONDS = 0.75;
@@ -178,7 +169,7 @@ function setLimitedCacheValue(cache: Map<string, string>, key: string, value: st
   cache.set(key, value);
 }
 
-export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function VideoPlayer({
+export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(function VideoPlayer({
   lesson,
   subtitles,
   hasNext,
@@ -206,8 +197,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const seekBarRef = useRef<HTMLDivElement>(null);
   const seekPreviewFrameRef = useRef<number | null>(null);
   const pendingSeekPreviewRef = useRef<{ time: number; x: number } | null>(null);
-  const pendingQualityRestoreRef = useRef<{ time: number; shouldPlay: boolean } | null>(null);
-  const activeVideoPathRef = useRef<string | undefined>(undefined);
   const aiTranslateRequestRef = useRef(0);
   const aiSegmentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aiSegmentInFlightRef = useRef(false);
@@ -218,9 +207,21 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const aiVisibleSubtitleRef = useRef("");
   const aiEmptySegmentCountRef = useRef(0);
   const isSeekingRef = useRef(false);
+  const suppressNextPauseEventRef = useRef(false);
   const aiSegmentCacheRef = useRef(new Map<string, string>());
   const aiTranslationCacheRef = useRef(new Map<string, string>());
   const aiTranslationPromiseRef = useRef(new Map<string, Promise<string>>());
+  const parsedTrackCacheRef = useRef(new Map<string, SubtitleCue[]>());
+
+  const stopAiAudioTranslation = useCallback(() => {
+    if (aiSegmentTimerRef.current) {
+      clearTimeout(aiSegmentTimerRef.current);
+      aiSegmentTimerRef.current = null;
+    }
+    aiSegmentInFlightRef.current = false;
+    aiTranslationInFlightRef.current = false;
+    aiLastSegmentStartRef.current = null;
+  }, []);
 
   useImperativeHandle(ref, () => ({
     seekTo(seconds: number) {
@@ -235,7 +236,16 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         videoRef.current.pause();
       }
     },
-  }), [onTimeUpdate]);
+    prepareForSourceSwitch() {
+      const video = videoRef.current;
+      if (!video) return;
+      stopAiAudioTranslation();
+      if (!video.paused) {
+        suppressNextPauseEventRef.current = true;
+        video.pause();
+      }
+    },
+  }), [onTimeUpdate, stopAiAudioTranslation]);
 
   const [videoTime, setVideoTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
@@ -246,14 +256,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
-  const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(defaultSpeed);
-  const [selectedQuality, setSelectedQuality] = useState<VideoQuality>(DEFAULT_QUALITY);
-  const [requestedQuality, setRequestedQuality] = useState<QualityRequest | null>(null);
-  const [preparedVideoPath, setPreparedVideoPath] = useState<string | null>(null);
-  const [isPreparingQuality, setIsPreparingQuality] = useState(false);
-  const [qualityError, setQualityError] = useState<string | null>(null);
   const [activeSubtitleIdx, setActiveSubtitleIdx] = useState(-1);
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekPreviewTime, setSeekPreviewTime] = useState<number | null>(null);
@@ -272,6 +276,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const [aiStatus, setAiStatus] = useState("");
   const [aiError, setAiError] = useState("");
   const [isAiTranslating, setIsAiTranslating] = useState(false);
+  const [isSwitching, setIsSwitching] = useState(false);
   const updateAiSubtitleText = useCallback((text: string, cacheKey = "") => {
     aiVisibleSubtitleRef.current = text;
     setAiTranslatedKey(cacheKey);
@@ -326,75 +331,46 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const preferredSubLangRef = useRef<string | null>(null);
   const playbackSpeedRef = useRef(playbackSpeed);
 
-  const activeVideoPath = preparedVideoPath ?? lesson?.videoPath;
-  const videoSrc = activeVideoPath ? convertFileSrc(activeVideoPath, "stream") : undefined;
+  const activeVideoPath = lesson?.videoPath;
+  const videoSrc = useMemo(
+    () => activeVideoPath ? convertFileSrc(activeVideoPath, "stream") : undefined,
+    [activeVideoPath],
+  );
   const bilingualSubtitleIndexes = useMemo(
     () => getBilingualSubtitleIndexes(subtitles),
     [subtitles],
   );
-  activeVideoPathRef.current = activeVideoPath;
 
+  // Reset state when lesson changes (includes AI reset — same deps, merged to reduce render cycles)
   useEffect(() => {
-    if (!lesson?.id || !lesson.videoPath || requestedQuality?.lessonId !== lesson.id) {
-      setPreparedVideoPath(null);
-      setIsPreparingQuality(false);
-      setQualityError(null);
-      return;
-    }
-
-    let cancelled = false;
-    setIsPreparingQuality(true);
-    setQualityError(null);
-
-    prepareVideoQuality(lesson.videoPath, requestedQuality.quality)
-      .then((result) => {
-        if (cancelled) return;
-        const currentVideo = videoRef.current;
-        const willSwitchSource = result.path !== activeVideoPathRef.current;
-        pendingQualityRestoreRef.current =
-          willSwitchSource && currentVideo
-            ? {
-                time: currentVideo.currentTime,
-                shouldPlay: !currentVideo.paused && !currentVideo.ended,
-              }
-            : null;
-        setPreparedVideoPath(result.path);
-        setSelectedQuality(requestedQuality.quality);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        console.error("[video-quality] prepare failed", err);
-        setPreparedVideoPath(null);
-        setQualityError(typeof err === "string" ? err : t.qualityFailed);
-      })
-      .finally(() => {
-        if (!cancelled) setIsPreparingQuality(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [lesson?.id, lesson?.videoPath, requestedQuality, t.qualityFailed]);
-
-  // Reset state when lesson changes
-  useEffect(() => {
+    stopAiAudioTranslation();
     setHasEnded(false);
     setVideoTime(0);
     setVideoDuration(0);
     setIsPlaying(false);
     setShowControls(true);
     setParsedTracks(new Map());
-    setPreparedVideoPath(null);
-    setRequestedQuality(null);
-    setSelectedQuality(DEFAULT_QUALITY);
-    setQualityError(null);
-    pendingQualityRestoreRef.current = null;
-  }, [lesson?.id]);
+    setActiveSubtitleIdx(-1);
+    setBuffered(0);
+    setSeekPreviewTime(null);
+    setAiError("");
+    setAiStatus("");
+    updateAiSubtitleText("");
+    aiTranslateRequestRef.current += 1;
+    setShowAiPanel(false);
+    setIsAiTranslating(false);
+    aiLastTranscriptRef.current = "";
+    aiPendingTranscriptRef.current = "";
+    aiVisibleSubtitleRef.current = "";
+    aiEmptySegmentCountRef.current = 0;
+    aiSegmentCacheRef.current.clear();
+    aiTranslationCacheRef.current.clear();
+    if (lesson?.id) setIsSwitching(true);
+  }, [lesson?.id, stopAiAudioTranslation, updateAiSubtitleText]);
 
   // Restore subtitle selection by language when lesson changes
   useEffect(() => {
     if (subtitles.length === 0) {
-      setActiveSubtitleIdx(-1);
       return;
     }
 
@@ -473,32 +449,57 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   useEffect(() => {
     if (requiredSubtitleIndexes.length === 0) return;
 
-    const missingIndexes = requiredSubtitleIndexes.filter(
-      (idx) => !parsedTracks.has(idx) && subtitles[idx],
-    );
+    const missingIndexes: number[] = [];
+    const cachedEntries: [number, SubtitleCue[]][] = [];
+    for (const idx of requiredSubtitleIndexes) {
+      const subtitle = subtitles[idx];
+      if (!subtitle || parsedTracks.has(idx)) continue;
+      const cached = parsedTrackCacheRef.current.get(subtitle.path);
+      if (cached) {
+        cachedEntries.push([idx, cached]);
+      } else {
+        missingIndexes.push(idx);
+      }
+    }
+
+    if (cachedEntries.length > 0) {
+      setParsedTracks((prev) => {
+        const next = new Map(prev);
+        for (const [idx, cues] of cachedEntries) {
+          next.set(idx, cues);
+        }
+        return next;
+      });
+    }
     if (missingIndexes.length === 0) return;
 
     let cancelled = false;
-    Promise.all(
-      missingIndexes.map(async (idx) => {
-        const vtt = await getSubtitleVtt(subtitles[idx].path);
-        return [idx, parseVttCues(vtt)] as [number, SubtitleCue[]];
-      }),
-    )
-      .then((entries) => {
-        if (cancelled) return;
-        setParsedTracks((prev) => {
-          const next = new Map(prev);
-          for (const [idx, cues] of entries) {
-            next.set(idx, cues);
-          }
-          return next;
-        });
-      })
-      .catch(() => {});
+    const timer = window.setTimeout(() => {
+      Promise.all(
+        missingIndexes.map(async (idx) => {
+          const subtitle = subtitles[idx];
+          const vtt = await getSubtitleVtt(subtitle.path);
+          const cues = parseVttCues(vtt);
+          parsedTrackCacheRef.current.set(subtitle.path, cues);
+          return [idx, cues] as [number, SubtitleCue[]];
+        }),
+      )
+        .then((entries) => {
+          if (cancelled) return;
+          setParsedTracks((prev) => {
+            const next = new Map(prev);
+            for (const [idx, cues] of entries) {
+              next.set(idx, cues);
+            }
+            return next;
+          });
+        })
+        .catch(() => {});
+    }, 30);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [parsedTracks, requiredSubtitleIndexes, subtitles]);
 
@@ -614,21 +615,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     [settings.ai_translation_target],
   );
 
-  const stopAiAudioTranslation = useCallback(() => {
-    if (aiSegmentTimerRef.current) {
-      clearTimeout(aiSegmentTimerRef.current);
-      aiSegmentTimerRef.current = null;
-    }
-    aiSegmentInFlightRef.current = false;
-    aiTranslationInFlightRef.current = false;
-    aiLastSegmentStartRef.current = null;
-  }, []);
-
   const handleAiTranslateClick = useCallback(
     (e: ReactMouseEvent<HTMLButtonElement>) => {
       e.stopPropagation();
       setShowSpeedMenu(false);
-      setShowQualityMenu(false);
       setShowSubtitleMenu(false);
       setShowControls(true);
 
@@ -782,22 +772,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     setShowAiPanel(false);
     stopAiAudioTranslation();
   }, [aiConfigured, showAiPanel, stopAiAudioTranslation]);
-
-  useEffect(() => {
-    aiTranslateRequestRef.current += 1;
-    setShowAiPanel(false);
-    updateAiSubtitleText("");
-    setAiStatus("");
-    setAiError("");
-    setIsAiTranslating(false);
-    aiLastTranscriptRef.current = "";
-    aiPendingTranscriptRef.current = "";
-    aiVisibleSubtitleRef.current = "";
-    aiEmptySegmentCountRef.current = 0;
-    aiSegmentCacheRef.current.clear();
-    aiTranslationCacheRef.current.clear();
-    stopAiAudioTranslation();
-  }, [lesson?.id, stopAiAudioTranslation, updateAiSubtitleText]);
 
   useEffect(() => {
     if (!showAiPanel || !aiConfigured || !activeVideoPath || hasSelectedSubtitleSource) {
@@ -1027,7 +1001,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         setShowControls(false);
         setShowSpeedMenu(false);
         setShowSubtitleMenu(false);
-        setShowQualityMenu(false);
         setShowVolumeSlider(false);
       }
     }, 3000);
@@ -1047,7 +1020,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         setShowControls(false);
         setShowSpeedMenu(false);
         setShowSubtitleMenu(false);
-        setShowQualityMenu(false);
         setShowVolumeSlider(false);
       }, 800);
     }
@@ -1217,14 +1189,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     setShowSpeedMenu(false);
   }, []);
 
-  const changeQuality = useCallback((quality: VideoQuality) => {
-    if (!lesson?.id) return;
-    setQualityError(null);
-    setSelectedQuality(quality);
-    setRequestedQuality({ lessonId: lesson.id, quality });
-    setShowQualityMenu(false);
-  }, [lesson?.id]);
-
   const cycleSubtitles = useCallback(() => {
     if (!hasSubtitles) return;
     setActiveSubtitleIdx((prev) => {
@@ -1331,7 +1295,11 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
 
   const handlePause = useCallback(() => {
     setIsPlaying(false);
-    onPlayStateChange?.(false);
+    if (suppressNextPauseEventRef.current) {
+      suppressNextPauseEventRef.current = false;
+    } else {
+      onPlayStateChange?.(false);
+    }
     setShowControls(true);
     if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
   }, [onPlayStateChange]);
@@ -1350,6 +1318,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     if (buf.length > 0) {
       setBuffered(buf.end(buf.length - 1) / videoRef.current.duration);
     }
+  }, []);
+
+  const handleCanPlay = useCallback(() => {
+    setIsSwitching(false);
   }, []);
 
   const { startSeekTime, scheduleSeekTime, flushSeekTime } = useRafSeek({
@@ -1452,10 +1424,9 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   }, []);
 
   useEffect(() => {
-    if (!showSpeedMenu && !showQualityMenu && !showSubtitleMenu) return;
+    if (!showSpeedMenu && !showSubtitleMenu) return;
     const handleClick = () => {
       setShowSpeedMenu(false);
-      setShowQualityMenu(false);
       setShowSubtitleMenu(false);
     };
     // Delay to avoid closing immediately
@@ -1467,7 +1438,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       clearTimeout(timer);
       window.removeEventListener("click", handleClick);
     };
-  }, [showSpeedMenu, showQualityMenu, showSubtitleMenu]);
+  }, [showSpeedMenu, showSubtitleMenu]);
 
   const VolumeIcon = isMuted || volume === 0 ? SpeakerSlash : volume < 0.5 ? SpeakerLow : SpeakerHigh;
   const progress = videoDuration > 0 ? (videoTime / videoDuration) * 100 : 0;
@@ -1488,7 +1459,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     <div
       ref={containerRef}
       className={cn(
-        "group/player relative overflow-hidden rounded-xl border border-border bg-black",
+        "group/player video-player-shell relative overflow-hidden rounded-xl border border-border bg-black",
         isFullscreen && "h-screen w-screen rounded-none border-0",
       )}
       onMouseMove={handleMouseMove}
@@ -1497,10 +1468,9 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     >
       <video
         ref={videoRef}
-        key={lesson?.id}
         className={cn(
-          "w-full bg-black",
-          isFullscreen ? "h-full object-contain" : "aspect-video",
+          "video-player-media w-full bg-black",
+          isFullscreen ? "h-full object-cover" : "aspect-video object-contain",
         )}
         src={videoSrc}
         muted={isMuted}
@@ -1510,22 +1480,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         onPause={handlePause}
         onEnded={handleEnded}
         onProgress={handleProgress}
+        onCanPlay={handleCanPlay}
         onClick={togglePlay}
         onDoubleClick={handleDoubleClick}
-        onLoadedMetadata={(e) => {
-          const v = e.currentTarget;
-          const restore = pendingQualityRestoreRef.current;
-          if (restore) {
-            pendingQualityRestoreRef.current = null;
-            if (restore.time > 0 && Number.isFinite(v.duration)) {
-              v.currentTime = Math.min(restore.time, v.duration);
-            }
-            v.playbackRate = playbackSpeedRef.current;
-            if (restore.shouldPlay) {
-              v.play().catch(() => {});
-            }
-          }
-        }}
+        preload="metadata"
         onStalled={() => console.warn("[video] stalled", videoSrc)}
         onAbort={() => console.warn("[video] abort", videoSrc)}
         onError={(e) => {
@@ -1544,6 +1502,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
           });
         }}
       />
+
+      {isSwitching && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black">
+          <div className="size-7 animate-spin rounded-full border-2 border-white/20 border-t-white/60" />
+        </div>
+      )}
 
       {displaySubtitleCueTexts.length > 0 && (
         <div
@@ -1809,7 +1773,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowSpeedMenu((s) => !s);
-                  setShowQualityMenu(false);
                   setShowSubtitleMenu(false);
                 }}
                 tooltip={t.playbackSpeed}
@@ -1854,64 +1817,11 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
               <ControlButton
                 onClick={(e) => {
                   e.stopPropagation();
-                  setShowQualityMenu((s) => !s);
-                  setShowSpeedMenu(false);
-                  setShowSubtitleMenu(false);
-                }}
-                tooltip={t.quality}
-                active={selectedQuality !== "1080p" || isPreparingQuality}
-              >
-                <span className="flex min-w-10 items-center justify-center gap-1 font-mono text-[11px] font-bold">
-                  {QUALITY_OPTIONS.find((opt) => opt.value === selectedQuality)?.label ?? "1080P"}
-                  {isPreparingQuality && (
-                    <span className="size-1.5 animate-pulse rounded-full bg-primary" />
-                  )}
-                </span>
-              </ControlButton>
-              {showQualityMenu && (
-                <PopupMenu>
-                  <p className="mb-1 px-2 font-sans text-[10px] font-semibold uppercase tracking-wider text-white/40">
-                    {t.quality}
-                  </p>
-                  {QUALITY_OPTIONS.map((option) => (
-                    <button
-                      key={option.value}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        changeQuality(option.value);
-                      }}
-                      className={cn(
-                        "flex w-full items-center justify-between rounded px-2 py-1 font-mono text-xs transition-colors hover:bg-white/10",
-                        option.value === selectedQuality
-                          ? "text-primary font-semibold"
-                          : "text-white/80",
-                      )}
-                    >
-                      {option.label}
-                      {option.value === "1080p" && (
-                        <span className="font-sans text-[10px] text-white/30">
-                          {t.default}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                  <p className="mt-1 max-w-36 px-2 pb-1 font-sans text-[10px] leading-snug text-white/35">
-                    {qualityError ?? (isPreparingQuality ? t.preparingQuality : t.qualityHint)}
-                  </p>
-                </PopupMenu>
-              )}
-            </div>
-
-            <div className="relative">
-              <ControlButton
-                onClick={(e) => {
-                  e.stopPropagation();
                   setShowSubtitleMenu((s) => {
                     if (!s) setSubMenuView("tracks");
                     return !s;
                   });
                   setShowSpeedMenu(false);
-                  setShowQualityMenu(false);
                 }}
                 tooltip={`${t.subtitles} (C)`}
                 active={activeSubtitleIdx !== -1}
@@ -2110,7 +2020,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       `}</style>
     </div>
   );
-});
+}));
 
 function ControlButton({
   onClick,

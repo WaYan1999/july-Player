@@ -228,13 +228,21 @@ function CourseDetailInner({
     () => courseData.sections.flatMap((s) => s.lessons),
     [courseData.sections],
   );
+  const lessonById = useMemo(
+    () => new Map(allLessons.map((lesson) => [lesson.id, lesson] as const)),
+    [allLessons],
+  );
+  const lessonIndexById = useMemo(
+    () => new Map(allLessons.map((lesson, index) => [lesson.id, index] as const)),
+    [allLessons],
+  );
 
   useEffect(() => {
     setBreadcrumbTitle(course.id, course.title);
   }, [course.id, course.title, setBreadcrumbTitle]);
 
   const requestedLesson = initialLessonId
-    ? allLessons.find((l) => l.id === initialLessonId)
+    ? lessonById.get(initialLessonId)
     : undefined;
   const lastWatchedLesson = allLessons.find((l) => l.isLastWatched);
   const nextLesson = allLessons.find((l) => !l.completed);
@@ -243,16 +251,27 @@ function CourseDetailInner({
   const [activeLessonId, setActiveLessonId] = useState<number | undefined>(
     initialLesson?.id,
   );
+  const [playerLessonId, setPlayerLessonId] = useState<number | undefined>(
+    initialLesson?.id,
+  );
 
   // Sync active lesson when navigating to a specific lesson (e.g. from favorites)
   useEffect(() => {
-    if (initialLessonId && allLessons.some((l) => l.id === initialLessonId)) {
+    if (initialLessonId && lessonById.has(initialLessonId)) {
       setActiveLessonId(initialLessonId);
+      setPlayerLessonId(initialLessonId);
     }
-  }, [initialLessonId]);
+  }, [initialLessonId, lessonById]);
 
-  const activeLesson = allLessons.find((l) => l.id === activeLessonId) ?? allLessons[0];
-  const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
+  const activeLesson =
+    (activeLessonId != null ? lessonById.get(activeLessonId) : undefined) ?? allLessons[0];
+  const playerLesson =
+    (playerLessonId != null ? lessonById.get(playerLessonId) : undefined) ?? activeLesson;
+  const [subtitleState, setSubtitleState] = useState<{
+    lessonId: number | null;
+    items: Subtitle[];
+  }>({ lessonId: null, items: [] });
+  const subtitles = subtitleState.lessonId === playerLesson?.id ? subtitleState.items : [];
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<"resources" | "notes">("notes");
   const [notes, setNotes] = useState<Note[]>([]);
@@ -275,6 +294,31 @@ function CourseDetailInner({
   } | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
   const prevCompletedRef = useRef(course.completedLessons);
+  const activeLessonIdRef = useRef(activeLesson?.id);
+  const playerLessonIdRef = useRef(playerLesson?.id);
+  const courseIdRef = useRef(course.id);
+  const onDataChangeRef = useRef(onDataChange);
+  const grantPetLessonRewardRef = useRef<
+    (lessonId: number, lessonTitle: string) => Promise<void>
+  >(async () => {});
+  const switchSeqRef = useRef(0);
+  const subtitleCacheRef = useRef(new Map<number, Subtitle[]>());
+
+  useEffect(() => {
+    activeLessonIdRef.current = activeLesson?.id;
+  }, [activeLesson?.id]);
+
+  useEffect(() => {
+    playerLessonIdRef.current = playerLesson?.id;
+  }, [playerLesson?.id]);
+
+  useEffect(() => {
+    courseIdRef.current = course.id;
+  }, [course.id]);
+
+  useEffect(() => {
+    onDataChangeRef.current = onDataChange;
+  }, [onDataChange]);
 
   const handleTimeUpdate = useCallback((time: number) => {
     videoTimeRef.current = time;
@@ -288,21 +332,23 @@ function CourseDetailInner({
   // Save position when leaving the page
   useEffect(() => {
     return () => {
-      if (activeLesson && videoTimeRef.current > 0) {
-        void saveLessonPosition(activeLesson.id, videoTimeRef.current).catch(() => {});
+      const lessonId = playerLessonIdRef.current;
+      if (lessonId && videoTimeRef.current > 0) {
+        void saveLessonPosition(lessonId, videoTimeRef.current).catch(() => {});
       }
     };
-  }, [activeLesson?.id]);
+  }, []);
 
   // Pause video when navigating away (keep-alive hides the page but keeps it mounted)
   useEffect(() => {
     if (!isVisible) {
       videoPlayerRef.current?.pause();
-      if (activeLesson && videoTimeRef.current > 0) {
-        void saveLessonPosition(activeLesson.id, videoTimeRef.current).catch(() => {});
+      const lessonId = playerLessonIdRef.current;
+      if (lessonId && videoTimeRef.current > 0) {
+        void saveLessonPosition(lessonId, videoTimeRef.current).catch(() => {});
       }
     }
-  }, [isVisible, activeLesson?.id]);
+  }, [isVisible]);
 
   const percentage =
     course.totalLessons > 0
@@ -330,42 +376,120 @@ function CourseDetailInner({
   // Re-fetch notes on mount and when course prop changes (e.g. after returning from Notes page)
   useEffect(() => {
     getCourseNotes(course.id).then(setNotes).catch(() => {});
-  }, [course]);
+  }, [course.id]);
 
   useEffect(() => {
     let cancelled = false;
-    setSubtitles([]);
-    if (!activeLesson) {
-      setSubtitles([]);
+    if (!playerLesson) {
+      setSubtitleState({ lessonId: null, items: [] });
       return;
     }
-    getLessonSubtitles(activeLesson.id)
-      .then((items) => {
-        if (!cancelled) setSubtitles(items);
-      })
-      .catch(() => {
-        if (!cancelled) setSubtitles([]);
-      });
+
+    const lessonId = playerLesson.id;
+    const cachedSubtitles = subtitleCacheRef.current.get(lessonId);
+    if (cachedSubtitles) {
+      setSubtitleState({ lessonId, items: cachedSubtitles });
+      return;
+    }
+
+    setSubtitleState((current) =>
+      current.lessonId === lessonId ? current : { lessonId, items: [] },
+    );
+
+    const loadSubtitles = () => {
+      getLessonSubtitles(lessonId)
+        .then((items) => {
+          subtitleCacheRef.current.set(lessonId, items);
+          if (!cancelled) setSubtitleState({ lessonId, items });
+        })
+        .catch(() => {
+          if (!cancelled) setSubtitleState({ lessonId, items: [] });
+        });
+    };
+
+    const timer = setTimeout(loadSubtitles, 90);
+
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-  }, [activeLesson?.id]);
+  }, [playerLesson?.id]);
 
-  const handleSelectLesson = useCallback(
-    async (lesson: Lesson) => {
-      // Save position of current lesson before switching
-      if (activeLesson && videoTimeRef.current > 0) {
-        void saveLessonPosition(activeLesson.id, videoTimeRef.current).catch(() => {});
+  useEffect(() => {
+    if (!playerLesson) return;
+    const idx = lessonIndexById.get(playerLesson.id) ?? -1;
+    const nextLesson = idx >= 0 ? allLessons[idx + 1] : undefined;
+    if (!nextLesson || subtitleCacheRef.current.has(nextLesson.id)) return;
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      getLessonSubtitles(nextLesson.id)
+        .then((items) => {
+          if (!cancelled) subtitleCacheRef.current.set(nextLesson.id, items);
+        })
+        .catch(() => {});
+    }, 700);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [allLessons, lessonIndexById, playerLesson?.id]);
+
+  const switchToLesson = useCallback(
+    (
+      lesson: Lesson,
+      options: {
+        autoPlayNext?: boolean;
+        seekTo?: number;
+      } = {},
+    ) => {
+      const previousPlayerLessonId = playerLessonIdRef.current;
+      if (lesson.id === activeLessonIdRef.current && lesson.id === previousPlayerLessonId) {
+        if (options.seekTo != null) {
+          videoPlayerRef.current?.seekTo(options.seekTo);
+        }
+        return;
       }
+
+      const previousTime = videoTimeRef.current;
+      const switchSeq = ++switchSeqRef.current;
 
       setActiveLessonId(lesson.id);
       setVideoTime(0);
+      if (options.autoPlayNext != null) {
+        setAutoPlay(options.autoPlayNext);
+      }
       lastVideoTimeDisplayRef.current = -1;
       videoTimeRef.current = 0;
 
-      void setLastWatched(course.id, lesson.id).catch(() => {});
+      videoPlayerRef.current?.prepareForSourceSwitch();
+      setPlayerLessonId(lesson.id);
+      if (options.seekTo != null) {
+        window.setTimeout(() => {
+          if (switchSeq === switchSeqRef.current) {
+            videoPlayerRef.current?.seekTo(options.seekTo ?? 0);
+          }
+        }, 260);
+      }
+
+      window.setTimeout(() => {
+        if (previousPlayerLessonId && previousTime > 0) {
+          void saveLessonPosition(previousPlayerLessonId, previousTime).catch(() => {});
+        }
+        if (switchSeq === switchSeqRef.current) {
+          void setLastWatched(courseIdRef.current, lesson.id).catch(() => {});
+        }
+      }, 180);
     },
-    [course.id, activeLesson?.id],
+    [],
+  );
+
+  const handleSelectLesson = useCallback(
+    (lesson: Lesson) => {
+      switchToLesson(lesson, { autoPlayNext: false });
+    },
+    [switchToLesson],
   );
 
   const handlePlayStateChange = useCallback(
@@ -373,30 +497,22 @@ function CourseDetailInner({
       if (playing) {
         setAutoPlay(false);
       }
-      if (!playing && activeLesson && videoTimeRef.current > 0) {
-        void saveLessonPosition(activeLesson.id, videoTimeRef.current).catch(() => {});
+      const lessonId = playerLessonIdRef.current;
+      if (!playing && lessonId && videoTimeRef.current > 0) {
+        void saveLessonPosition(lessonId, videoTimeRef.current).catch(() => {});
       }
     },
-    [activeLesson?.id],
+    [],
   );
 
   const handleNextLesson = useCallback(async () => {
-    if (!activeLesson) return;
-    const idx = allLessons.findIndex((l) => l.id === activeLesson.id);
+    if (!playerLesson) return;
+    const idx = lessonIndexById.get(playerLesson.id) ?? -1;
     if (idx >= 0 && idx < allLessons.length - 1) {
       const next = allLessons[idx + 1];
-      // Save position of current lesson before switching
-      if (videoTimeRef.current > 0) {
-        void saveLessonPosition(activeLesson.id, videoTimeRef.current).catch(() => {});
-      }
-      setActiveLessonId(next.id);
-      setVideoTime(0);
-      lastVideoTimeDisplayRef.current = -1;
-      videoTimeRef.current = 0;
-      setAutoPlay(true);
-      void setLastWatched(course.id, next.id).catch(() => {});
+      switchToLesson(next, { autoPlayNext: true });
     }
-  }, [activeLesson, allLessons, course.id]);
+  }, [allLessons, lessonIndexById, playerLesson?.id, switchToLesson]);
 
   const showPetReward = useCallback(
     (result: Awaited<ReturnType<typeof awardPetCare>>, lessonTitle: string) => {
@@ -475,14 +591,21 @@ function CourseDetailInner({
     [reportPetRewardError, settings.pet_variant, showPetReward],
   );
 
+  useEffect(() => {
+    grantPetLessonRewardRef.current = grantPetLessonReward;
+  }, [grantPetLessonReward]);
+
   const handleToggleComplete = useCallback(
     async (lessonId: number) => {
       try {
         const completed = await toggleLessonCompleted(lessonId);
-        await onDataChange();
+        await onDataChangeRef.current();
         if (completed) {
-          const lesson = allLessons.find((item) => item.id === lessonId);
-          await grantPetLessonReward(lessonId, lesson?.title ?? t.courseDetail.completed);
+          const lesson = lessonById.get(lessonId);
+          await grantPetLessonRewardRef.current(
+            lessonId,
+            lesson?.title ?? t.courseDetail.completed,
+          );
         }
       } catch (err) {
         console.error("toggleLessonCompleted failed", err);
@@ -491,14 +614,19 @@ function CourseDetailInner({
         });
       }
     },
-    [allLessons, grantPetLessonReward, onDataChange, t.courseDetail.completed],
+    [
+      lessonById,
+      t.courseDetail.completed,
+      t.courseDetail.tryAgainMoment,
+      t.courseDetail.updateLessonFailed,
+    ],
   );
 
   const handleToggleFavorite = useCallback(
     async (lessonId: number) => {
       try {
         await toggleFavorite(lessonId);
-        await onDataChange();
+        await onDataChangeRef.current();
       } catch (err) {
         console.error("toggleFavorite failed", err);
         toast.error(t.courseDetail.updateFavoriteFailed, {
@@ -506,35 +634,58 @@ function CourseDetailInner({
         });
       }
     },
-    [onDataChange],
+    [t.courseDetail.tryAgainMoment, t.courseDetail.updateFavoriteFailed],
   );
 
   const handleVideoEnded = useCallback(async () => {
-    if (!activeLesson) return;
-    if (!activeLesson.completed) {
+    if (!playerLesson) return;
+    if (!playerLesson.completed) {
       try {
-        await toggleLessonCompleted(activeLesson.id);
+        await toggleLessonCompleted(playerLesson.id);
         await onDataChange();
-        await grantPetLessonReward(activeLesson.id, activeLesson.title);
+        await grantPetLessonReward(playerLesson.id, playerLesson.title);
       } catch (err) {
         // Background auto-complete; no toast since it wasn't user-initiated.
         console.error("auto-complete on video end failed", err);
       }
     }
-  }, [activeLesson, grantPetLessonReward, onDataChange]);
+  }, [
+    grantPetLessonReward,
+    onDataChange,
+    playerLesson?.completed,
+    playerLesson?.id,
+    playerLesson?.title,
+  ]);
 
   const handleDurationChange = useCallback(
     (duration: number) => {
-      if (!activeLesson) return;
+      if (!playerLesson) return;
       const mins = Math.round(duration / 60);
-      if (mins > 0 && mins !== activeLesson.duration) {
-        void updateLessonDuration(activeLesson.id, mins).catch(() => {});
+      if (mins > 0 && mins !== playerLesson.duration) {
+        void updateLessonDuration(playerLesson.id, mins).catch(() => {});
       }
     },
-    [activeLesson],
+    [playerLesson?.duration, playerLesson?.id],
   );
 
-  async function handleAddNote(content: string) {
+  const saveCurrentLessonNote = useCallback(
+    async (content: string) => {
+      if (!activeLesson) {
+        throw new Error(t.courseDetail.courseNotFound);
+      }
+
+      const note = await storeAddNote(
+        course.id,
+        activeLesson.id,
+        activeLesson.title,
+        content,
+      );
+      setNotes((prev) => [note, ...prev]);
+    },
+    [activeLesson?.id, activeLesson?.title, course.id, t.courseDetail.courseNotFound],
+  );
+
+  const handleAddNote = useCallback(async (content: string) => {
     if (!activeLesson) return;
     try {
       await saveCurrentLessonNote(content);
@@ -546,23 +697,14 @@ function CourseDetailInner({
         description: t.courseDetail.contentStillEditor,
       });
     }
-  }
+  }, [
+    activeLesson,
+    saveCurrentLessonNote,
+    t.courseDetail.contentStillEditor,
+    t.courseDetail.saveNoteFailed,
+  ]);
 
-  async function saveCurrentLessonNote(content: string) {
-    if (!activeLesson) {
-      throw new Error(t.courseDetail.courseNotFound);
-    }
-
-    const note = await storeAddNote(
-      course.id,
-      activeLesson.id,
-      activeLesson.title,
-      content,
-    );
-    setNotes((prev) => [note, ...prev]);
-  }
-
-  async function handleEditNote(noteId: number, content: string) {
+  const handleEditNote = useCallback(async (noteId: number, content: string) => {
     try {
       await storeUpdateNote(noteId, content);
       setNotes((prev) =>
@@ -580,9 +722,9 @@ function CourseDetailInner({
         description: t.courseDetail.changesNotSaved,
       });
     }
-  }
+  }, [t.courseDetail.changesNotSaved, t.courseDetail.updateNoteFailed]);
 
-  async function handleDeleteNote(noteId: number) {
+  const handleDeleteNote = useCallback(async (noteId: number) => {
     try {
       await storeDeleteNote(noteId);
       setNotes((prev) => prev.filter((n) => n.id !== noteId));
@@ -592,16 +734,16 @@ function CourseDetailInner({
         description: t.courseDetail.tryAgainMoment,
       });
     }
-  }
+  }, [t.courseDetail.deleteNoteFailed, t.courseDetail.tryAgainMoment]);
 
   const handleTimestampClick = useCallback(
     (seconds: number, lessonId: number) => {
-      if (activeLesson && activeLesson.id === lessonId) {
+      if (playerLesson && playerLesson.id === lessonId) {
         // Same lesson — just seek
         videoPlayerRef.current?.seekTo(seconds);
       } else {
         // Different lesson — ask for confirmation
-        const targetLesson = allLessons.find((l) => l.id === lessonId);
+        const targetLesson = lessonById.get(lessonId);
         setPendingTimestampNav({
           seconds,
           lessonId,
@@ -609,35 +751,18 @@ function CourseDetailInner({
         });
       }
     },
-    [activeLesson, allLessons],
+    [lessonById, playerLesson?.id, t.courseDetail.anotherLesson],
   );
 
   const confirmTimestampNav = useCallback(async () => {
     if (!pendingTimestampNav) return;
     const { seconds, lessonId } = pendingTimestampNav;
-    const targetLesson = allLessons.find((l) => l.id === lessonId);
+    const targetLesson = lessonById.get(lessonId);
     if (!targetLesson) return;
 
-    // Save current position
-    if (activeLesson && videoTimeRef.current > 0) {
-      void saveLessonPosition(activeLesson.id, videoTimeRef.current).catch(() => {});
-    }
-
-    setActiveLessonId(lessonId);
-    setVideoTime(0);
-    lastVideoTimeDisplayRef.current = -1;
-    videoTimeRef.current = 0;
     setPendingTimestampNav(null);
-
-    void setLastWatched(course.id, lessonId).catch(() => {});
-
-    // Seek after the new video loads
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        videoPlayerRef.current?.seekTo(seconds);
-      }, 200);
-    });
-  }, [pendingTimestampNav, activeLesson, allLessons, course.id]);
+    switchToLesson(targetLesson, { autoPlayNext: false, seekTo: seconds });
+  }, [pendingTimestampNav, lessonById, switchToLesson]);
 
   const handleOpenResource = async (path: string) => {
     try {
@@ -652,14 +777,13 @@ function CourseDetailInner({
   };
 
   const hasNext =
-    activeLesson &&
-    allLessons.findIndex((l) => l.id === activeLesson.id) <
-      allLessons.length - 1;
+    playerLesson &&
+    (lessonIndexById.get(playerLesson.id) ?? -1) < allLessons.length - 1;
 
   return (
     <div className={cn("july-page", className)}>
       <div
-        className="mb-4 flex flex-wrap items-center justify-between gap-3"
+        className="course-detail-header mb-5 flex flex-wrap items-center justify-between gap-3 px-3.5 py-3"
         style={{
           opacity: mounted ? 1 : 0,
           transform: mounted ? "translateY(0)" : "translateY(8px)",
@@ -724,7 +848,7 @@ function CourseDetailInner({
         className="flex min-w-0 flex-col lg:flex-row"
         style={{
           gap: curriculumOpen ? 20 : 0,
-          transition: `gap 400ms ${SNAPPY}`,
+          transition: `gap 180ms ${SNAPPY}`,
         }}
       >
         <div
@@ -737,13 +861,13 @@ function CourseDetailInner({
         >
           <VideoPlayer
             ref={videoPlayerRef}
-            lesson={activeLesson}
+            lesson={playerLesson}
             subtitles={subtitles}
             hasNext={!!hasNext}
             accentColor={course.accentColor}
             autoPlay={autoPlay}
             autoSkipEnabled={settings.autoplay_next}
-            initialTime={settingsLoaded ? (settings.resume_position ? activeLesson?.lastPosition : 0) : null}
+            initialTime={settingsLoaded ? (settings.resume_position ? playerLesson?.lastPosition : 0) : null}
             defaultSpeed={settings.default_speed}
             defaultVolume={settings.default_volume}
             skipSeconds={settings.skip_forward_secs}
@@ -755,8 +879,8 @@ function CourseDetailInner({
           />
 
           {activeLesson && (
-            <div className="flex items-center gap-2">
-              <h2 className="font-sans text-base font-semibold text-foreground">
+            <div className="july-section-card flex items-center gap-2 px-3.5 py-3">
+              <h2 className="min-w-0 flex-1 truncate font-sans text-base font-semibold text-foreground">
                 {activeLesson.title}
               </h2>
               <Button
@@ -782,7 +906,7 @@ function CourseDetailInner({
                 variant="secondary"
                 onClick={() => handleToggleComplete(activeLesson.id)}
                 className={cn(
-                  "july-heroui-button ml-auto min-h-8 gap-1 rounded-md px-2 py-1 text-xs",
+                  "july-heroui-button min-h-8 gap-1 rounded-md px-2 py-1 text-xs",
                   activeLesson.completed
                     ? "text-primary hover:bg-primary/10"
                     : "text-muted-foreground hover:bg-secondary hover:text-foreground",
@@ -797,7 +921,7 @@ function CourseDetailInner({
             </div>
           )}
 
-          <div>
+          <div className="july-section-card px-4 py-4">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <p className="font-sans text-sm text-muted-foreground">
                 {t.common.by} {course.author}
@@ -828,7 +952,7 @@ function CourseDetailInner({
             </div>
           </div>
 
-          <div>
+          <div className="july-section-card px-4 py-4">
             <div className="mb-3 flex items-center gap-1">
               {courseData.resources.length > 0 && (
                 <Button
@@ -928,9 +1052,9 @@ function CourseDetailInner({
           }}
         >
           <div
-            className="flex h-[min(85vh,720px)] w-full flex-col overflow-hidden rounded-xl border border-border bg-card lg:w-80"
+            className="course-curriculum-panel flex h-[min(85vh,720px)] w-full flex-col overflow-hidden lg:w-80"
           >
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
               <h2 className="font-heading text-sm font-bold text-foreground">
                 {t.courseDetail.curriculum}
               </h2>

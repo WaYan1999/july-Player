@@ -46,22 +46,27 @@ export function SidebarButton({
       type="button"
       onClick={handleClick}
       variant="ghost"
+      aria-current={isActive ? "page" : undefined}
       className={cn(
-        "group relative flex min-h-10 w-full items-center overflow-visible rounded-lg py-2.5 font-sans text-sm shadow-none",
+        "group relative flex min-h-10 w-full items-center overflow-visible rounded-xl border border-transparent py-2.5 font-sans text-sm shadow-none transition-[border-color,background-color,color,transform]",
         collapsed ? "justify-center px-0" : "gap-3 px-3",
         isActive
-          ? "font-semibold text-primary"
-          : "text-muted-foreground hover:text-sidebar-accent-foreground"
+          ? "border-primary/18 bg-primary/10 font-semibold text-primary"
+          : "text-muted-foreground hover:border-sidebar-border/80 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
       )}
     >
       <div
         className={cn(
-          "absolute inset-0 rounded-lg transition-[background] duration-200",
+          "absolute inset-0 rounded-xl transition-[background,box-shadow] duration-200",
           isActive
-            ? "bg-primary/10"
+            ? "bg-[linear-gradient(135deg,color-mix(in_srgb,var(--primary)_12%,transparent),transparent_55%)] shadow-[inset_0_1px_0_color-mix(in_srgb,var(--foreground)_7%,transparent)]"
             : "bg-transparent group-hover:bg-sidebar-accent"
         )}
       />
+
+      {isActive && !collapsed && (
+        <span className="absolute left-1.5 top-1/2 z-10 h-5 w-1 -translate-y-1/2 rounded-full bg-primary shadow-[0_0_12px_color-mix(in_srgb,var(--primary)_36%,transparent)]" />
+      )}
 
       <div className="relative z-10 shrink-0">
         <Icon className="size-4" />

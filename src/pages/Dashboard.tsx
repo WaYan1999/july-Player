@@ -221,36 +221,58 @@ export function Dashboard({ className }: DashboardProps) {
 
   return (
     <div className={cn("july-page", className)}>
-      {stats && <DashboardStatsBar stats={stats} className="mb-6" />}
+      {stats && <DashboardStatsBar stats={stats} className="mb-5" />}
 
-      <div className="july-toolbar mb-6">
-        <SquircleSearch
-          value={search}
-          onChange={setSearch}
-          placeholder={t.dashboard.searchCourses}
-          className="min-w-[min(100%,18rem)] flex-1"
-        />
+      <section className="july-page-header mb-6 overflow-hidden p-4 sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 font-mono text-[11px] font-semibold text-primary">
+              {formatMessage(t.dashboard.countCourses, {
+                count: filteredCourses.length,
+                label: filteredCourses.length === 1 ? t.common.course : t.common.courses,
+              })}
+            </div>
+            <h2 className="font-heading text-2xl font-bold text-foreground sm:text-3xl">
+              {t.dashboard.yourLibrary}
+            </h2>
+            <p className="mt-1 max-w-2xl font-sans text-sm leading-6 text-muted-foreground">
+              {t.dashboard.emptyDescription}
+            </p>
+          </div>
 
-        <SquircleButton
-          variant="secondary"
-          active={showFilters}
-          onClick={() => setShowFilters((v) => !v)}
-        >
-          <Funnel
-            className="size-4"
-            style={{
-              transform: showFilters ? "rotate(180deg)" : "rotate(0deg)",
-              transition: `transform 500ms ${EASE}`,
-            }}
+          <div className="july-toolbar lg:justify-end">
+            <SquircleButton
+              variant="secondary"
+              active={showFilters}
+              onClick={() => setShowFilters((v) => !v)}
+              className="min-w-28"
+            >
+              <Funnel
+                className="size-4"
+                style={{
+                  transform: showFilters ? "rotate(180deg)" : "rotate(0deg)",
+                  transition: `transform 500ms ${EASE}`,
+                }}
+              />
+              {t.dashboard.filters}
+            </SquircleButton>
+
+            <SquircleButton variant="primary" onClick={() => navigate("/import")}>
+              <Plus className="size-4" weight="bold" />
+              {t.dashboard.importCourse}
+            </SquircleButton>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <SquircleSearch
+            value={search}
+            onChange={setSearch}
+            placeholder={t.dashboard.searchCourses}
+            className="w-full"
           />
-          {t.dashboard.filters}
-        </SquircleButton>
-
-        <SquircleButton variant="primary" onClick={() => navigate("/import")}>
-          <Plus className="size-4" weight="bold" />
-          {t.dashboard.importCourse}
-        </SquircleButton>
-      </div>
+        </div>
+      </section>
 
       <div
         ref={filterRef}
@@ -263,7 +285,7 @@ export function Dashboard({ className }: DashboardProps) {
         }}
         className="overflow-hidden"
       >
-        <div className="mb-6 flex flex-wrap items-center gap-3">
+        <div className="july-section-card mb-6 flex flex-wrap items-center gap-3 p-3">
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             {availableCategories.map((cat) => (
               <Button
@@ -354,10 +376,10 @@ export function Dashboard({ className }: DashboardProps) {
         </div>
       </div>
 
-      <div className="mb-6 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-heading text-2xl font-bold text-foreground">
-          {t.dashboard.yourLibrary}
-        </h2>
+      <div className="mb-5 flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="font-heading text-lg font-bold text-foreground">
+          {t.nav.courses}
+        </h3>
         <span className="font-mono text-sm font-medium text-muted-foreground">
           {formatMessage(t.dashboard.countCourses, {
             count: filteredCourses.length,
@@ -367,7 +389,7 @@ export function Dashboard({ className }: DashboardProps) {
       </div>
 
       {filteredCourses.length > 0 ? (
-        <div className="july-card-grid gap-4">
+        <div className="july-card-grid gap-5">
           {filteredCourses.map((course, index) => (
             <div
               key={course.id}
