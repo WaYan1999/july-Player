@@ -73,8 +73,29 @@ fn serve(request: &Request<Vec<u8>>) -> Response<Vec<u8>> {
             .unwrap_or_else(|_| status_only(StatusCode::INTERNAL_SERVER_ERROR));
     }
 
+    if file_size <= DEFAULT_CHUNK_SIZE {
+        return serve_full(&mut file, file_size, mime);
+    }
+
     let end = bounded_range_end(0, None, file_size);
     serve_range(&mut file, 0, end, file_size, mime)
+}
+
+fn serve_full(file: &mut fs::File, file_size: u64, mime: &'static str) -> Response<Vec<u8>> {
+    let mut buf = vec![0u8; file_size as usize];
+    if file.seek(SeekFrom::Start(0)).is_err() {
+        return status_only(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+    if file.read_exact(&mut buf).is_err() {
+        return status_only(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, mime)
+        .header(header::CONTENT_LENGTH, file_size.to_string())
+        .header(header::ACCEPT_RANGES, "bytes")
+        .body(buf)
+        .unwrap_or_else(|_| status_only(StatusCode::INTERNAL_SERVER_ERROR))
 }
 
 fn serve_range(
@@ -127,8 +148,11 @@ fn parse_range(header_value: &HeaderValue, file_size: u64) -> Option<(u64, u64)>
 
     if a.is_empty() {
         let suffix: u64 = b.parse().ok()?;
-        if suffix == 0 || suffix > file_size {
+        if suffix == 0 || file_size == 0 {
             return None;
+        }
+        if suffix >= file_size {
+            return Some((0, file_size - 1));
         }
         return Some((file_size - suffix, file_size - 1));
     }
@@ -149,7 +173,10 @@ fn parse_range(header_value: &HeaderValue, file_size: u64) -> Option<(u64, u64)>
 fn bounded_range_end(start: u64, requested_end: Option<u64>, file_size: u64) -> u64 {
     let chunk_end = start.saturating_add(DEFAULT_CHUNK_SIZE.saturating_sub(1));
     let max_end = file_size.saturating_sub(1);
-    requested_end.unwrap_or(chunk_end).min(chunk_end).min(max_end)
+    requested_end
+        .unwrap_or(chunk_end)
+        .min(chunk_end)
+        .min(max_end)
 }
 
 fn guess_mime(path: &Path) -> &'static str {

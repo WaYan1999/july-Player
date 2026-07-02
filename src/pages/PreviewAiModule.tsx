@@ -13,7 +13,7 @@ const previewSettings: AppSettings = {
   skip_forward_secs: 10,
   skip_backward_secs: 10,
   ai_deepseek_api_key: "",
-  ai_deepseek_proxy_url: "https://julyapi.top/v1",
+  ai_deepseek_proxy_url: "https://julyapi.com/v1",
   ai_deepseek_proxy_token: "sk-preview",
   ai_deepseek_model: "deepseek-v4-flash",
   ai_asr_api_key: "",

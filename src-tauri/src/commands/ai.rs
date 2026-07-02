@@ -17,6 +17,15 @@ use crate::parser::find_bundled_bin;
 const DEEPSEEK_CHAT_COMPLETIONS_URL: &str = "https://api.deepseek.com/chat/completions";
 const DEEPSEEK_MODELS_URL: &str = "https://api.deepseek.com/models";
 const DEFAULT_DEEPSEEK_MODEL: &str = "deepseek-v4-flash";
+const GEMINI_OPENAI_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta/openai";
+const GEMINI_DEFAULT_MODEL: &str = "gemini-2.5-flash";
+const GEMINI_FALLBACK_MODELS: &[&str] = &[
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+];
 const MAX_TRANSLATION_INPUT_CHARS: usize = 4_000;
 const MAX_LIVE_TRANSLATION_INPUT_CHARS: usize = 700;
 const MAX_PET_PROMPT_CHARS: usize = 1_200;
@@ -61,6 +70,19 @@ struct ErrorPayload {
 #[derive(Debug, Deserialize)]
 struct ApiError {
     message: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AiProvider {
+    OpenAiCompatible,
+    Gemini,
+}
+
+struct AiEndpointConfig {
+    provider: AiProvider,
+    chat_url: String,
+    models_url: String,
+    label: &'static str,
 }
 
 #[derive(Clone, Copy)]
@@ -141,11 +163,10 @@ impl AiNoteContext {
 }
 
 #[tauri::command]
-pub async fn get_ai_models(
-    state: tauri::State<'_, DbState>,
-) -> Result<Vec<AiModelOption>, String> {
+pub async fn get_ai_models(state: tauri::State<'_, DbState>) -> Result<Vec<AiModelOption>, String> {
     let settings = load_settings(&state)?;
-    let bearer_token = deepseek_bearer_token(&settings)?;
+    let bearer_token = ai_bearer_token(&settings)?;
+    let endpoint = ai_endpoint_config(&settings)?;
 
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(20))
@@ -153,7 +174,7 @@ pub async fn get_ai_models(
         .map_err(|e| format!("Could not create model list client: {e}"))?;
 
     let response = client
-        .get(deepseek_models_endpoint(&settings)?)
+        .get(&endpoint.models_url)
         .bearer_auth(bearer_token)
         .send()
         .await
@@ -166,9 +187,12 @@ pub async fn get_ai_models(
         .map_err(|e| format!("Could not read model list response: {e}"))?;
 
     if !status.is_success() {
+        if endpoint.provider == AiProvider::Gemini {
+            return Ok(gemini_fallback_model_options());
+        }
         return Err(format!(
             "Model list returned {status}: {}",
-            summarize_deepseek_error(&response_text)
+            summarize_api_error(&response_text)
         ));
     }
 
@@ -178,11 +202,15 @@ pub async fn get_ai_models(
     let mut models = parsed
         .data
         .into_iter()
-        .map(|model| model.id)
+        .map(|model| normalize_model_id_for_provider(&model.id, endpoint.provider))
         .filter(|id| !id.trim().is_empty())
         .collect::<Vec<_>>();
     models.sort();
     models.dedup();
+
+    if models.is_empty() && endpoint.provider == AiProvider::Gemini {
+        return Ok(gemini_fallback_model_options());
+    }
 
     Ok(models
         .into_iter()
@@ -216,18 +244,11 @@ pub async fn translate_with_deepseek(
             .collect::<HashMap<_, _>>()
     };
 
-    let bearer_token = deepseek_bearer_token(&settings)?;
-
-    let model = settings
-        .get("ai_deepseek_model")
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .unwrap_or(DEFAULT_DEEPSEEK_MODEL);
-
     let target = language_name(&target_language);
-    let body = serde_json::json!({
-        "model": model,
-        "messages": [
+    call_ai_chat(
+        &settings,
+        "AI translation",
+        vec![
             RequestMessage {
                 role: "system",
                 content: "You are a subtitle translation engine. Translate only the user's text. Preserve line breaks. Do not add explanations, notes, quotes, or markdown.".to_string(),
@@ -237,48 +258,11 @@ pub async fn translate_with_deepseek(
                 content: format!("Translate the following subtitle text into {target}:\n\n{text}"),
             }
         ],
-        "thinking": { "type": "disabled" },
-        "temperature": 0.2,
-        "max_tokens": 600,
-        "stream": false
-    });
-
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("Could not create DeepSeek client: {e}"))?;
-
-    let response = client
-        .post(deepseek_endpoint(&settings)?)
-        .bearer_auth(bearer_token)
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| format!("DeepSeek request failed: {e}"))?;
-
-    let status = response.status();
-    let response_text = response
-        .text()
-        .await
-        .map_err(|e| format!("Could not read DeepSeek response: {e}"))?;
-
-    if !status.is_success() {
-        return Err(format!(
-            "DeepSeek returned {status}: {}",
-            summarize_deepseek_error(&response_text)
-        ));
-    }
-
-    let parsed: ChatCompletionResponse = serde_json::from_str(&response_text)
-        .map_err(|e| format!("Could not parse DeepSeek response: {e}"))?;
-
-    parsed
-        .choices
-        .first()
-        .and_then(|choice| choice.message.content.as_deref())
-        .map(|content| content.trim().to_string())
-        .filter(|content| !content.is_empty())
-        .ok_or_else(|| "DeepSeek returned an empty translation".to_string())
+        0.2,
+        600,
+        30,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -294,8 +278,8 @@ pub async fn translate_audio_segment(
     let duration_seconds = duration_seconds.clamp(1.0, MAX_AUDIO_SECONDS);
     let settings = load_settings(&state)?;
 
-    let transcript = transcribe_audio_segment(&app, &video_path, start_seconds, duration_seconds)
-        .await?;
+    let transcript =
+        transcribe_audio_segment(&app, &video_path, start_seconds, duration_seconds).await?;
     if transcript.trim().is_empty() {
         return Ok(AiAudioTranslation {
             transcript,
@@ -330,8 +314,8 @@ pub async fn transcribe_audio_segment_only(
 ) -> Result<AiAudioTranscript, String> {
     let start_seconds = start_seconds.max(0.0);
     let duration_seconds = duration_seconds.clamp(0.8, MAX_LIVE_AUDIO_SECONDS);
-    let transcript = transcribe_audio_segment(&app, &video_path, start_seconds, duration_seconds)
-        .await?;
+    let transcript =
+        transcribe_audio_segment(&app, &video_path, start_seconds, duration_seconds).await?;
 
     Ok(AiAudioTranscript {
         transcript,
@@ -372,17 +356,12 @@ pub async fn ask_pet_ai(
     }
 
     let settings = load_settings(&state)?;
-    let bearer_token = deepseek_bearer_token(&settings)?;
-    let model = settings
-        .get("ai_deepseek_model")
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .unwrap_or(DEFAULT_DEEPSEEK_MODEL);
     let reply_language = language_name(&language);
 
-    let body = serde_json::json!({
-        "model": model,
-        "messages": [
+    call_ai_chat(
+        &settings,
+        "Pet AI",
+        vec![
             RequestMessage {
                 role: "system",
                 content: format!(
@@ -394,48 +373,11 @@ pub async fn ask_pet_ai(
                 content: prompt,
             }
         ],
-        "thinking": { "type": "disabled" },
-        "temperature": 0.75,
-        "max_tokens": 180,
-        "stream": false
-    });
-
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("Could not create pet AI client: {e}"))?;
-
-    let response = client
-        .post(deepseek_endpoint(&settings)?)
-        .bearer_auth(bearer_token)
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| format!("Pet AI request failed: {e}"))?;
-
-    let status = response.status();
-    let response_text = response
-        .text()
-        .await
-        .map_err(|e| format!("Could not read pet AI response: {e}"))?;
-
-    if !status.is_success() {
-        return Err(format!(
-            "Pet AI returned {status}: {}",
-            summarize_deepseek_error(&response_text)
-        ));
-    }
-
-    let parsed: ChatCompletionResponse = serde_json::from_str(&response_text)
-        .map_err(|e| format!("Could not parse pet AI response: {e}"))?;
-
-    parsed
-        .choices
-        .first()
-        .and_then(|choice| choice.message.content.as_deref())
-        .map(|content| content.trim().to_string())
-        .filter(|content| !content.is_empty())
-        .ok_or_else(|| "Pet AI returned an empty reply".to_string())
+        0.75,
+        180,
+        30,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -595,9 +537,7 @@ fn stage_asr_runtime(app: &tauri::AppHandle) -> Result<AsrRuntime, String> {
 
         let destination = runtime_dir.join(file_name);
         let needs_copy = fs::metadata(&destination)
-            .and_then(|dest| {
-                fs::metadata(&source).map(|src| dest.len() != src.len())
-            })
+            .and_then(|dest| fs::metadata(&source).map(|src| dest.len() != src.len()))
             .unwrap_or(true);
 
         if needs_copy {
@@ -844,14 +784,6 @@ async fn translate_text_with_settings(
         return Ok(String::new());
     }
 
-    let bearer_token = deepseek_bearer_token(settings)?;
-
-    let model = settings
-        .get("ai_deepseek_model")
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .unwrap_or(DEFAULT_DEEPSEEK_MODEL);
-
     let target = language_name(target_language);
     let (system_prompt, user_prompt, temperature, max_tokens, timeout_seconds) = match mode {
         TranslationMode::Standard => (
@@ -870,9 +802,10 @@ async fn translate_text_with_settings(
         ),
     };
 
-    let body = serde_json::json!({
-        "model": model,
-        "messages": [
+    call_ai_chat(
+        settings,
+        "AI translation",
+        vec![
             RequestMessage {
                 role: "system",
                 content: system_prompt.to_string(),
@@ -880,50 +813,13 @@ async fn translate_text_with_settings(
             RequestMessage {
                 role: "user",
                 content: user_prompt,
-            }
+            },
         ],
-        "thinking": { "type": "disabled" },
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-        "stream": false
-    });
-
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(timeout_seconds))
-        .build()
-        .map_err(|e| format!("Could not create DeepSeek client: {e}"))?;
-
-    let response = client
-        .post(deepseek_endpoint(settings)?)
-        .bearer_auth(bearer_token)
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| format!("DeepSeek request failed: {e}"))?;
-
-    let status = response.status();
-    let response_text = response
-        .text()
-        .await
-        .map_err(|e| format!("Could not read DeepSeek response: {e}"))?;
-
-    if !status.is_success() {
-        return Err(format!(
-            "DeepSeek returned {status}: {}",
-            summarize_deepseek_error(&response_text)
-        ));
-    }
-
-    let parsed: ChatCompletionResponse = serde_json::from_str(&response_text)
-        .map_err(|e| format!("Could not parse DeepSeek response: {e}"))?;
-
-    parsed
-        .choices
-        .first()
-        .and_then(|choice| choice.message.content.as_deref())
-        .map(|content| content.trim().to_string())
-        .filter(|content| !content.is_empty())
-        .ok_or_else(|| "DeepSeek returned an empty translation".to_string())
+        temperature,
+        max_tokens,
+        timeout_seconds,
+    )
+    .await
 }
 
 async fn call_ai_chat(
@@ -934,21 +830,20 @@ async fn call_ai_chat(
     max_tokens: u32,
     timeout_seconds: u64,
 ) -> Result<String, String> {
-    let bearer_token = deepseek_bearer_token(settings)?;
-    let model = settings
-        .get("ai_deepseek_model")
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .unwrap_or(DEFAULT_DEEPSEEK_MODEL);
+    let bearer_token = ai_bearer_token(settings)?;
+    let endpoint = ai_endpoint_config(settings)?;
+    let model = selected_ai_model(settings, endpoint.provider);
 
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "model": model,
         "messages": messages,
-        "thinking": { "type": "disabled" },
         "temperature": temperature,
         "max_tokens": max_tokens,
         "stream": false
     });
+    if endpoint.provider == AiProvider::OpenAiCompatible {
+        body["thinking"] = serde_json::json!({ "type": "disabled" });
+    }
 
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(timeout_seconds))
@@ -956,12 +851,12 @@ async fn call_ai_chat(
         .map_err(|e| format!("Could not create {label} client: {e}"))?;
 
     let response = client
-        .post(deepseek_endpoint(settings)?)
+        .post(&endpoint.chat_url)
         .bearer_auth(bearer_token)
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("{label} request failed: {e}"))?;
+        .map_err(|e| format!("{label} request to {} failed: {e}", endpoint.label))?;
 
     let status = response.status();
     let response_text = response
@@ -971,13 +866,18 @@ async fn call_ai_chat(
 
     if !status.is_success() {
         return Err(format!(
-            "{label} returned {status}: {}",
-            summarize_deepseek_error(&response_text)
+            "{label} via {} returned {status}: {}",
+            endpoint.label,
+            summarize_api_error(&response_text)
         ));
     }
 
-    let parsed: ChatCompletionResponse = serde_json::from_str(&response_text)
-        .map_err(|e| format!("Could not parse {label} response: {e}"))?;
+    let parsed: ChatCompletionResponse = serde_json::from_str(&response_text).map_err(|e| {
+        format!(
+            "Could not parse {label} response from {}: {e}",
+            endpoint.label
+        )
+    })?;
 
     parsed
         .choices
@@ -989,11 +889,7 @@ async fn call_ai_chat(
 }
 
 fn trim_chars(value: &str, max_chars: usize) -> String {
-    value
-        .trim()
-        .chars()
-        .take(max_chars)
-        .collect::<String>()
+    value.trim().chars().take(max_chars).collect::<String>()
 }
 
 fn sanitize_prompt_text(value: &str, max_chars: usize) -> String {
@@ -1014,7 +910,7 @@ fn empty_to_placeholder<'a>(value: &'a str, placeholder: &'a str) -> &'a str {
     }
 }
 
-fn summarize_deepseek_error(response_text: &str) -> String {
+fn summarize_api_error(response_text: &str) -> String {
     serde_json::from_str::<ErrorPayload>(response_text)
         .ok()
         .and_then(|payload| payload.error)
@@ -1023,7 +919,7 @@ fn summarize_deepseek_error(response_text: &str) -> String {
         .unwrap_or_else(|| response_text.chars().take(240).collect())
 }
 
-fn deepseek_bearer_token(settings: &HashMap<String, String>) -> Result<&str, String> {
+fn ai_bearer_token(settings: &HashMap<String, String>) -> Result<&str, String> {
     settings
         .get("ai_deepseek_proxy_token")
         .map(|value| value.trim())
@@ -1034,49 +930,131 @@ fn deepseek_bearer_token(settings: &HashMap<String, String>) -> Result<&str, Str
                 .map(|value| value.trim())
                 .filter(|value| !value.is_empty())
         })
-        .ok_or_else(|| "DeepSeek API key or proxy token is not configured".to_string())
+        .ok_or_else(|| "AI API Key is not configured".to_string())
 }
 
-fn deepseek_endpoint(settings: &HashMap<String, String>) -> Result<String, String> {
-    let Some(proxy_url) = settings
-        .get("ai_deepseek_proxy_url")
-        .map(|value| value.trim().trim_end_matches('/'))
+fn selected_ai_model(settings: &HashMap<String, String>, provider: AiProvider) -> String {
+    let configured = settings
+        .get("ai_deepseek_model")
+        .map(|value| value.trim())
         .filter(|value| !value.is_empty())
-    else {
-        return Ok(DEEPSEEK_CHAT_COMPLETIONS_URL.to_string());
-    };
-    validate_api_url(proxy_url)?;
+        .map(|model| normalize_model_id_for_provider(model, provider));
 
-    if proxy_url.ends_with("/chat/completions") {
-        return Ok(proxy_url.to_string());
+    match (provider, configured.as_deref()) {
+        (AiProvider::Gemini, Some(model)) if model.starts_with("gemini-") => model.to_string(),
+        (AiProvider::Gemini, _) => GEMINI_DEFAULT_MODEL.to_string(),
+        (_, Some(model)) => model.to_string(),
+        _ => DEFAULT_DEEPSEEK_MODEL.to_string(),
     }
-    if proxy_url.ends_with("/v1") {
-        return Ok(format!("{proxy_url}/chat/completions"));
-    }
-    Ok(format!("{proxy_url}/v1/chat/completions"))
 }
 
-fn deepseek_models_endpoint(settings: &HashMap<String, String>) -> Result<String, String> {
+fn normalize_model_id_for_provider(id: &str, provider: AiProvider) -> String {
+    let trimmed = id.trim().trim_matches('/');
+    if provider != AiProvider::Gemini {
+        return trimmed.to_string();
+    }
+
+    let model = trimmed
+        .rsplit_once('/')
+        .map(|(_, model)| model)
+        .unwrap_or(trimmed)
+        .trim_end_matches(":generateContent");
+
+    model.to_string()
+}
+
+fn ai_endpoint_config(settings: &HashMap<String, String>) -> Result<AiEndpointConfig, String> {
     let Some(api_url) = api_base_url(settings) else {
-        return Ok(DEEPSEEK_MODELS_URL.to_string());
+        return Ok(AiEndpointConfig {
+            provider: AiProvider::OpenAiCompatible,
+            chat_url: DEEPSEEK_CHAT_COMPLETIONS_URL.to_string(),
+            models_url: DEEPSEEK_MODELS_URL.to_string(),
+            label: "OpenAI-compatible API",
+        });
     };
     validate_api_url(api_url)?;
 
-    if api_url.ends_with("/models") {
-        return Ok(api_url.to_string());
+    let provider = detect_ai_provider(api_url);
+    match provider {
+        AiProvider::Gemini => gemini_endpoint_config(api_url),
+        AiProvider::OpenAiCompatible => openai_compatible_endpoint_config(api_url),
     }
-    if api_url.ends_with("/chat/completions") {
-        return Ok(format!(
+}
+
+fn detect_ai_provider(api_url: &str) -> AiProvider {
+    let lower = api_url.to_lowercase();
+    if lower.contains("generativelanguage.googleapis.com")
+        || lower.contains("/generatecontent")
+        || lower.contains("/v1beta/openai")
+        || lower.contains("/v1/openai")
+    {
+        AiProvider::Gemini
+    } else {
+        AiProvider::OpenAiCompatible
+    }
+}
+
+fn openai_compatible_endpoint_config(api_url: &str) -> Result<AiEndpointConfig, String> {
+    let chat_url = if api_url.ends_with("/chat/completions") {
+        api_url.to_string()
+    } else if api_url.ends_with("/v1") {
+        format!("{api_url}/chat/completions")
+    } else {
+        format!("{api_url}/v1/chat/completions")
+    };
+
+    let models_url = if api_url.ends_with("/models") {
+        api_url.to_string()
+    } else if api_url.ends_with("/chat/completions") {
+        format!(
             "{}/models",
             api_url
                 .trim_end_matches("/chat/completions")
                 .trim_end_matches('/')
-        ));
-    }
-    if api_url.ends_with("/v1") {
-        return Ok(format!("{api_url}/models"));
-    }
-    Ok(format!("{api_url}/v1/models"))
+        )
+    } else if api_url.ends_with("/v1") {
+        format!("{api_url}/models")
+    } else {
+        format!("{api_url}/v1/models")
+    };
+
+    Ok(AiEndpointConfig {
+        provider: AiProvider::OpenAiCompatible,
+        chat_url,
+        models_url,
+        label: "OpenAI-compatible API",
+    })
+}
+
+fn gemini_endpoint_config(api_url: &str) -> Result<AiEndpointConfig, String> {
+    let parsed =
+        Url::parse(api_url).map_err(|_| "Gemini API address must be a valid URL".to_string())?;
+    let origin = format!(
+        "{}://{}",
+        parsed.scheme(),
+        parsed
+            .host_str()
+            .ok_or_else(|| "Gemini API address must include a host".to_string())?
+    );
+    let path = parsed.path().trim_end_matches('/');
+
+    let base = if path.contains("/openai") {
+        let openai_pos = path.find("/openai").unwrap_or(path.len());
+        format!("{}{}", origin, &path[..openai_pos + "/openai".len()])
+    } else if path.starts_with("/v1beta") {
+        format!("{origin}/v1beta/openai")
+    } else if path.starts_with("/v1") {
+        format!("{origin}/v1/openai")
+    } else {
+        GEMINI_OPENAI_BASE_URL.to_string()
+    };
+
+    Ok(AiEndpointConfig {
+        provider: AiProvider::Gemini,
+        chat_url: format!("{base}/chat/completions"),
+        models_url: format!("{base}/models"),
+        label: "Gemini API",
+    })
 }
 
 fn api_base_url(settings: &HashMap<String, String>) -> Option<&str> {
@@ -1093,6 +1071,16 @@ fn validate_api_url(value: &str) -> Result<(), String> {
         return Err("API address must start with http:// or https://".to_string());
     }
     Ok(())
+}
+
+fn gemini_fallback_model_options() -> Vec<AiModelOption> {
+    GEMINI_FALLBACK_MODELS
+        .iter()
+        .map(|id| AiModelOption {
+            id: (*id).to_string(),
+            label: format_model_label(id),
+        })
+        .collect()
 }
 
 fn format_model_label(id: &str) -> String {
@@ -1148,3 +1136,98 @@ fn hide_console_window(cmd: &mut Command) {
 
 #[cfg(not(target_os = "windows"))]
 fn hide_console_window(_cmd: &mut Command) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn settings_with_url(url: &str) -> HashMap<String, String> {
+        HashMap::from([
+            ("ai_deepseek_proxy_url".to_string(), url.to_string()),
+            (
+                "ai_deepseek_proxy_token".to_string(),
+                "test-key".to_string(),
+            ),
+        ])
+    }
+
+    #[test]
+    fn openai_compatible_endpoint_from_root() {
+        let config = ai_endpoint_config(&settings_with_url("https://api.example.com")).unwrap();
+        assert_eq!(config.provider, AiProvider::OpenAiCompatible);
+        assert_eq!(
+            config.chat_url,
+            "https://api.example.com/v1/chat/completions"
+        );
+        assert_eq!(config.models_url, "https://api.example.com/v1/models");
+    }
+
+    #[test]
+    fn openai_compatible_endpoint_from_v1() {
+        let config = ai_endpoint_config(&settings_with_url("https://api.example.com/v1")).unwrap();
+        assert_eq!(
+            config.chat_url,
+            "https://api.example.com/v1/chat/completions"
+        );
+        assert_eq!(config.models_url, "https://api.example.com/v1/models");
+    }
+
+    #[test]
+    fn gemini_endpoint_from_google_root() {
+        let config = ai_endpoint_config(&settings_with_url(
+            "https://generativelanguage.googleapis.com",
+        ))
+        .unwrap();
+        assert_eq!(config.provider, AiProvider::Gemini);
+        assert_eq!(
+            config.chat_url,
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        );
+        assert_eq!(
+            config.models_url,
+            "https://generativelanguage.googleapis.com/v1beta/openai/models"
+        );
+    }
+
+    #[test]
+    fn gemini_endpoint_from_native_generate_content_url() {
+        let config = ai_endpoint_config(&settings_with_url(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        ))
+        .unwrap();
+        assert_eq!(
+            config.chat_url,
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        );
+    }
+
+    #[test]
+    fn gemini_uses_gemini_default_when_saved_model_is_deepseek() {
+        let settings = HashMap::from([
+            (
+                "ai_deepseek_proxy_url".to_string(),
+                "https://generativelanguage.googleapis.com".to_string(),
+            ),
+            ("ai_deepseek_model".to_string(), "deepseek-chat".to_string()),
+        ]);
+        assert_eq!(
+            selected_ai_model(&settings, AiProvider::Gemini),
+            GEMINI_DEFAULT_MODEL
+        );
+    }
+
+    #[test]
+    fn gemini_model_ids_are_normalized() {
+        assert_eq!(
+            normalize_model_id_for_provider("models/gemini-2.5-flash", AiProvider::Gemini),
+            "gemini-2.5-flash"
+        );
+        assert_eq!(
+            normalize_model_id_for_provider(
+                "models/gemini-2.5-flash:generateContent",
+                AiProvider::Gemini,
+            ),
+            "gemini-2.5-flash"
+        );
+    }
+}

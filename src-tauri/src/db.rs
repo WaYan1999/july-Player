@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use crate::parser::{normalize_language, ParsedCourse};
+use crate::parser::{natural_order_number, normalize_language, ParsedCourse};
 
 // --- Database state ---
 
@@ -416,6 +416,18 @@ pub fn get_all_courses(conn: &Connection) -> SqlResult<Vec<Course>> {
     Ok(courses)
 }
 
+fn compare_course_item_order(
+    a_order: i64,
+    a_title: &str,
+    b_order: i64,
+    b_title: &str,
+) -> std::cmp::Ordering {
+    match (natural_order_number(a_title), natural_order_number(b_title)) {
+        (Some(a_num), Some(b_num)) if a_num != b_num => a_num.cmp(&b_num),
+        _ => a_order.cmp(&b_order).then_with(|| a_title.cmp(b_title)),
+    }
+}
+
 pub fn get_course_detail(conn: &Connection, course_id: i64) -> SqlResult<Option<CourseDetail>> {
     // Check course exists
     let exists: bool = conn.query_row(
@@ -429,45 +441,63 @@ pub fn get_course_detail(conn: &Connection, course_id: i64) -> SqlResult<Option<
     }
 
     // Get sections
-    let mut section_stmt =
-        conn.prepare("SELECT id, title FROM sections WHERE course_id = ?1 ORDER BY sort_order")?;
+    let mut section_stmt = conn.prepare(
+        "SELECT id, title, sort_order FROM sections WHERE course_id = ?1 ORDER BY sort_order",
+    )?;
 
     let mut lesson_stmt = conn.prepare(
-        "SELECT l.id, l.title, l.video_path, l.duration, l.completed, l.is_last_watched, l.last_position,
+        "SELECT l.id, l.title, l.video_path, l.duration, l.completed, l.is_last_watched, l.last_position, l.sort_order,
                 (SELECT COUNT(*) > 0 FROM favorites f WHERE f.lesson_id = l.id) as favorited
          FROM lessons l WHERE l.section_id = ?1 ORDER BY l.sort_order",
     )?;
 
-    let sections: Vec<Section> = section_stmt
+    let mut sections: Vec<(i64, Section)> = section_stmt
         .query_map(params![course_id], |row| {
-            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
         })?
         .collect::<SqlResult<Vec<_>>>()?
         .into_iter()
-        .map(|(sid, stitle)| {
-            let lessons: Vec<Lesson> = match lesson_stmt.query_map(params![sid], |row| {
-                Ok(Lesson {
-                    id: row.get(0)?,
-                    title: row.get(1)?,
-                    video_path: row.get(2)?,
-                    duration: row.get(3)?,
-                    completed: row.get::<_, i32>(4)? != 0,
-                    is_last_watched: row.get::<_, i32>(5)? != 0,
-                    last_position: row.get(6)?,
-                    favorited: row.get::<_, i32>(7)? != 0,
-                })
+        .map(|(sid, stitle, sort_order)| {
+            let mut lessons: Vec<(i64, Lesson)> = match lesson_stmt.query_map(params![sid], |row| {
+                Ok((
+                    row.get::<_, i64>(7)?,
+                    Lesson {
+                        id: row.get(0)?,
+                        title: row.get(1)?,
+                        video_path: row.get(2)?,
+                        duration: row.get(3)?,
+                        completed: row.get::<_, i32>(4)? != 0,
+                        is_last_watched: row.get::<_, i32>(5)? != 0,
+                        last_position: row.get(6)?,
+                        favorited: row.get::<_, i32>(8)? != 0,
+                    },
+                ))
             }) {
                 Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
                 Err(_) => Vec::new(),
             };
+            lessons.sort_by(|(a_order, a), (b_order, b)| {
+                compare_course_item_order(*a_order, &a.title, *b_order, &b.title)
+            });
 
-            Section {
-                id: sid,
-                title: stitle,
-                lessons,
-            }
+            (
+                sort_order,
+                Section {
+                    id: sid,
+                    title: stitle,
+                    lessons: lessons.into_iter().map(|(_, lesson)| lesson).collect(),
+                },
+            )
         })
         .collect();
+    sections.sort_by(|(a_order, a), (b_order, b)| {
+        compare_course_item_order(*a_order, &a.title, *b_order, &b.title)
+    });
+    let sections: Vec<Section> = sections.into_iter().map(|(_, section)| section).collect();
 
     // Get resources
     let mut res_stmt = conn.prepare(
@@ -1026,10 +1056,7 @@ fn extract_subtitle_language(subtitle_name: &str, video_base: &str) -> Option<St
     if name.len() > video_base.len() && name.to_lowercase().starts_with(&video_base.to_lowercase())
     {
         let remainder = name.get(video_base.len()..).unwrap_or("");
-        let lang = remainder
-            .trim()
-            .trim_start_matches(['.', '_', '-'])
-            .trim();
+        let lang = remainder.trim().trim_start_matches(['.', '_', '-']).trim();
         if !lang.is_empty() {
             return Some(normalize_language(lang));
         }

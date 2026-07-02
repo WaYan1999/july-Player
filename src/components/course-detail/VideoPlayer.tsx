@@ -7,6 +7,7 @@ import {
   useMemo,
   memo,
   forwardRef,
+  type SyntheticEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { useNavigate } from "react-router-dom";
@@ -130,6 +131,15 @@ const BILINGUAL_SUBTITLE_KEY = "bilingual";
 const BILINGUAL_SUBTITLE_IDX = -2;
 const BILINGUAL_SUBTITLE_LABEL = "双语字幕";
 
+const WEBVIEW_NATIVE_VIDEO_EXTENSIONS = new Set([
+  "mp4",
+  "m4v",
+  "mov",
+  "webm",
+  "ogg",
+  "ogv",
+]);
+
 const DEFAULT_SUB_STYLE: SubtitleStyle = {
   fontSize: 18,
   color: "#FFFFFF",
@@ -169,6 +179,40 @@ function setLimitedCacheValue(cache: Map<string, string>, key: string, value: st
   cache.set(key, value);
 }
 
+function getVideoExtension(path: string | undefined): string {
+  if (!path) return "";
+  const cleanPath = path.split(/[?#]/)[0] ?? path;
+  const fileName = cleanPath.split(/[\\/]/).pop() ?? cleanPath;
+  const ext = fileName.includes(".") ? fileName.split(".").pop() : "";
+  return (ext ?? "").toLowerCase();
+}
+
+function getVideoFormatWarning(extension: string, language: string): string {
+  if (!extension || WEBVIEW_NATIVE_VIDEO_EXTENSIONS.has(extension)) return "";
+  if (language === "zh") {
+    return `当前视频是 .${extension} 格式，系统 WebView 可能无法直接解码。建议转成 MP4/H.264 后播放。`;
+  }
+  if (language === "fr") {
+    return `La video est au format .${extension}. Le WebView systeme peut ne pas le decoder directement. Convertissez-la en MP4/H.264.`;
+  }
+  return `This video is .${extension}. The system WebView may not decode it directly. Convert it to MP4/H.264 for playback.`;
+}
+
+function getVideoPlaybackErrorMessage(
+  codeName: string,
+  extension: string,
+  language: string,
+): string {
+  const formatHint = getVideoFormatWarning(extension, language);
+  if (language === "zh") {
+    return formatHint || `视频加载失败：${codeName}。请确认文件没有被移动，或尝试重新导入课程。`;
+  }
+  if (language === "fr") {
+    return formatHint || `La video n'a pas pu etre chargee : ${codeName}. Verifiez que le fichier existe encore.`;
+  }
+  return formatHint || `Video failed to load: ${codeName}. Check that the file still exists or re-import the course.`;
+}
+
 export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(function VideoPlayer({
   lesson,
   subtitles,
@@ -187,7 +231,7 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
   onNext,
 }, ref) {
   const navigate = useNavigate();
-  const { t: ui } = useI18n();
+  const { t: ui, language } = useI18n();
   const { settings } = useSettings();
   const t = ui.player;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -277,6 +321,7 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
   const [aiError, setAiError] = useState("");
   const [isAiTranslating, setIsAiTranslating] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
+  const [videoError, setVideoError] = useState("");
   const updateAiSubtitleText = useCallback((text: string, cacheKey = "") => {
     aiVisibleSubtitleRef.current = text;
     setAiTranslatedKey(cacheKey);
@@ -336,6 +381,14 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     () => activeVideoPath ? convertFileSrc(activeVideoPath, "stream") : undefined,
     [activeVideoPath],
   );
+  const videoExtension = useMemo(
+    () => getVideoExtension(activeVideoPath),
+    [activeVideoPath],
+  );
+  const videoFormatWarning = useMemo(
+    () => getVideoFormatWarning(videoExtension, language),
+    [language, videoExtension],
+  );
   const bilingualSubtitleIndexes = useMemo(
     () => getBilingualSubtitleIndexes(subtitles),
     [subtitles],
@@ -354,6 +407,7 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     setBuffered(0);
     setSeekPreviewTime(null);
     setAiError("");
+    setVideoError("");
     setAiStatus("");
     updateAiSubtitleText("");
     aiTranslateRequestRef.current += 1;
@@ -1320,9 +1374,31 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     }
   }, []);
 
-  const handleCanPlay = useCallback(() => {
+  const handleMediaReady = useCallback(() => {
     setIsSwitching(false);
+    setVideoError("");
   }, []);
+
+  const handleVideoError = useCallback(
+    (e: SyntheticEvent<HTMLVideoElement>) => {
+      const v = e.currentTarget;
+      const err = v.error;
+      const codeName = err
+        ? ["", "MEDIA_ERR_ABORTED", "MEDIA_ERR_NETWORK", "MEDIA_ERR_DECODE", "MEDIA_ERR_SRC_NOT_SUPPORTED"][err.code] ?? `code=${err.code}`
+        : "unknown";
+      console.error("[video] error", {
+        src: v.currentSrc,
+        code: err?.code,
+        codeName,
+        message: err?.message,
+        networkState: v.networkState,
+        readyState: v.readyState,
+      });
+      setIsSwitching(false);
+      setVideoError(getVideoPlaybackErrorMessage(codeName, videoExtension, language));
+    },
+    [language, videoExtension],
+  );
 
   const { startSeekTime, scheduleSeekTime, flushSeekTime } = useRafSeek({
     videoRef,
@@ -1480,32 +1556,37 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
         onPause={handlePause}
         onEnded={handleEnded}
         onProgress={handleProgress}
-        onCanPlay={handleCanPlay}
+        onLoadedMetadata={handleMediaReady}
+        onLoadedData={handleMediaReady}
+        onCanPlay={handleMediaReady}
         onClick={togglePlay}
         onDoubleClick={handleDoubleClick}
         preload="metadata"
         onStalled={() => console.warn("[video] stalled", videoSrc)}
         onAbort={() => console.warn("[video] abort", videoSrc)}
-        onError={(e) => {
-          const v = e.currentTarget;
-          const err = v.error;
-          const codeName = err
-            ? ["", "MEDIA_ERR_ABORTED", "MEDIA_ERR_NETWORK", "MEDIA_ERR_DECODE", "MEDIA_ERR_SRC_NOT_SUPPORTED"][err.code] ?? `code=${err.code}`
-            : "unknown";
-          console.error("[video] error", {
-            src: v.currentSrc,
-            code: err?.code,
-            codeName,
-            message: err?.message,
-            networkState: v.networkState,
-            readyState: v.readyState,
-          });
-        }}
+        onError={handleVideoError}
       />
 
       {isSwitching && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black">
           <div className="size-7 animate-spin rounded-full border-2 border-white/20 border-t-white/60" />
+        </div>
+      )}
+
+      {(videoError || videoFormatWarning) && !isSwitching && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/80 px-6 text-center">
+          <div className="max-w-md rounded-xl border border-white/10 bg-black/50 px-5 py-4 shadow-2xl backdrop-blur">
+            <p className="font-sans text-sm font-semibold text-white">
+              {language === "zh"
+                ? "视频暂时无法显示"
+                : language === "fr"
+                  ? "La video ne peut pas s'afficher"
+                  : "Video cannot be displayed"}
+            </p>
+            <p className="mt-2 font-sans text-xs leading-relaxed text-white/70">
+              {videoError || videoFormatWarning}
+            </p>
+          </div>
         </div>
       )}
 

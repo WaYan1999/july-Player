@@ -82,12 +82,13 @@ jobs:
           releaseName: '七月播放器 v__VERSION__'
           releaseBody: |
             七月播放器 v__VERSION__ 新增修改：
+            - AI 模块默认 July API 中转地址切换为 https://julyapi.com/，预览配置同步使用 https://julyapi.com/v1。
+            - AI 翻译接口兼容 Gemini 与 OpenAI-compatible /v1 地址，模型列表新增 Gemini 2.5/2.0 系列。
             - 修复课程目录点击切换时的明显延迟，减少隐藏章节按钮造成的点击拦截。
             - 优化播放器换源流程，切课时保留进度保存但不阻塞新视频加载。
             - 优化本地视频 stream Range 读取边界，提升大文件首次读取稳定性。
             - 继续修复笔记、宠物常驻和课程详情布局在不同窗口尺寸下的重叠问题。
-            - 补齐 Remotion 动效资源和设计 token，为启动动画与后续视觉升级做准备。
-            - 统一 1.1.10 版本号、更新说明和远程发布构建配置。
+            - 统一 1.1.11 版本号、更新说明和远程发布构建配置。
           includeUpdaterJson: true
           releaseDraft: true
           prerelease: false
@@ -170,11 +171,12 @@ jobs:
             version,
             notes: [
               `七月播放器 ${version} 新增修改：`,
+              "- AI 模块默认 July API 中转地址切换为 https://julyapi.com/，预览配置同步使用 https://julyapi.com/v1。",
+              "- AI 翻译接口兼容 Gemini 与 OpenAI-compatible /v1 地址，模型列表新增 Gemini 2.5/2.0 系列。",
               "- 修复课程目录点击切换时的明显延迟，减少隐藏章节按钮造成的点击拦截。",
               "- 优化播放器换源流程，切课时保留进度保存但不阻塞新视频加载。",
               "- 优化本地视频 stream Range 读取边界，提升大文件首次读取稳定性。",
               "- 继续修复笔记、宠物常驻和课程详情布局在不同窗口尺寸下的重叠问题。",
-              "- 补齐 Remotion 动效资源和设计 token，为启动动画与后续视觉升级做准备。",
               "- 统一版本号、更新说明和远程发布构建配置。",
             ].join("\n"),
             pub_date: release.publishedAt,
@@ -218,7 +220,7 @@ jobs:
           npm run upload:release-artifacts -- \
             --release-dir release-artifacts \
             --version "${VERSION}" \
-            --notes "修复课程目录切换卡顿、播放器换源阻塞和隐藏按钮点击拦截，优化本地视频 stream Range 读取、笔记/宠物/课程详情布局，并统一 1.1.10 发布版本信息。" \
+            --notes "AI 模块默认 July API 中转地址切换为 https://julyapi.com/，兼容 Gemini 与 OpenAI-compatible /v1；同时修复课程目录切换卡顿、播放器换源阻塞和隐藏按钮点击拦截，优化本地视频 stream Range 读取、笔记/宠物/课程详情布局，并统一 1.1.11 发布版本信息。" \
             --panel-title "七月播放器 ${VERSION}" \
-            --panel-description "本次版本重点优化 <b>课程目录切换性能</b>、<b>播放器换源响应</b>、<b>本地视频读取稳定性</b>、<b>布局自适应</b> 与 <b>远程发布版本一致性</b>。" \
+            --panel-description "本次版本重点更新 <b>July API 新域名</b>、<b>Gemini / OpenAI-compatible AI 接口</b>、<b>课程目录切换性能</b>、<b>播放器换源响应</b>、<b>本地视频读取稳定性</b> 与 <b>远程发布版本一致性</b>。" \
             --require-complete

@@ -478,10 +478,9 @@ pub fn parse_folder(folder_path: &Path) -> Result<ParsedCourse, String> {
         .count();
 
     let has_numbers = sections.iter().any(|s| {
-        s.lessons.iter().any(|l| {
-            extract_leading_number(&l.title).is_some()
-                || extract_embedded_number(&l.title).is_some()
-        })
+        s.lessons
+            .iter()
+            .any(|l| natural_order_number(&l.title).is_some())
     });
 
     if !has_numbers {
@@ -581,7 +580,7 @@ fn build_lessons_from_files(
     // Determine if we have numbers (leading or embedded like "Lecture 3")
     let has_leading = sorted_videos
         .iter()
-        .any(|v| extract_leading_number(&v.name).is_some());
+        .any(|v| natural_order_number(&v.name).is_some());
     let has_embedded = sorted_videos
         .iter()
         .any(|v| extract_embedded_number(&v.name).is_some());
@@ -591,8 +590,8 @@ fn build_lessons_from_files(
         // Two-tier sort: unnumbered files first (intro/overview content),
         // then numbered files in numeric order
         sorted_videos.sort_by(|a, b| {
-            let na = extract_leading_number(&a.name).or_else(|| extract_embedded_number(&a.name));
-            let nb = extract_leading_number(&b.name).or_else(|| extract_embedded_number(&b.name));
+            let na = natural_order_number(&a.name);
+            let nb = natural_order_number(&b.name);
             match (na, nb) {
                 (Some(a_num), Some(b_num)) => a_num.cmp(&b_num).then_with(|| a.name.cmp(&b.name)),
                 (None, Some(_)) => std::cmp::Ordering::Less, // unnumbered before numbered
@@ -615,8 +614,8 @@ fn build_lessons_from_files(
     let mut sorted_subtitles: Vec<&&FileEntry> = subtitles.iter().collect();
     if has_numbers {
         sorted_subtitles.sort_by(|a, b| {
-            let na = extract_leading_number(&a.name).or_else(|| extract_embedded_number(&a.name));
-            let nb = extract_leading_number(&b.name).or_else(|| extract_embedded_number(&b.name));
+            let na = natural_order_number(&a.name);
+            let nb = natural_order_number(&b.name);
             match (na, nb) {
                 (Some(a_num), Some(b_num)) => a_num.cmp(&b_num).then_with(|| a.name.cmp(&b.name)),
                 (None, Some(_)) => std::cmp::Ordering::Less,
@@ -868,13 +867,17 @@ fn classify_resource_known(ext: &str, _name: &str) -> bool {
 // --- Name parsing ---
 
 fn extract_sort_key(name: &str) -> SortKey {
-    if let Some(num) = extract_leading_number(name) {
-        SortKey::Numeric(num)
-    } else if let Some(num) = extract_embedded_number(name) {
+    if let Some(num) = natural_order_number(name) {
         SortKey::Numeric(num)
     } else {
         SortKey::Alphabetic(name.to_lowercase())
     }
+}
+
+pub fn natural_order_number(name: &str) -> Option<u32> {
+    extract_leading_number(name)
+        .or_else(|| extract_chinese_ordinal_number(name))
+        .or_else(|| extract_embedded_number(name))
 }
 
 fn extract_leading_number(name: &str) -> Option<u32> {
@@ -961,6 +964,133 @@ fn extract_embedded_number(name: &str) -> Option<u32> {
     }
 
     None
+}
+
+fn extract_chinese_ordinal_number(name: &str) -> Option<u32> {
+    let s = name.trim();
+    if s.is_empty() {
+        return None;
+    }
+
+    if let Some(num) = extract_prefixed_chinese_ordinal(s) {
+        return Some(num);
+    }
+    extract_leading_chinese_ordinal(s)
+}
+
+fn extract_prefixed_chinese_ordinal(s: &str) -> Option<u32> {
+    let chars: Vec<char> = s.chars().collect();
+    let start = chars.iter().position(|c| *c == '第')?;
+    let mut token = String::new();
+    let mut marker_seen = false;
+
+    for c in chars.iter().skip(start + 1) {
+        if is_order_number_char(*c) {
+            token.push(*c);
+            continue;
+        }
+        if !token.is_empty() && is_chinese_lesson_marker(*c) {
+            marker_seen = true;
+        }
+        break;
+    }
+
+    if !marker_seen || token.is_empty() {
+        return None;
+    }
+    parse_order_number_token(&token)
+}
+
+fn extract_leading_chinese_ordinal(s: &str) -> Option<u32> {
+    let mut token = String::new();
+    let mut chars = s.chars().peekable();
+
+    while let Some(c) = chars.peek().copied() {
+        if is_order_number_char(c) {
+            token.push(c);
+            chars.next();
+        } else {
+            break;
+        }
+    }
+
+    if token.is_empty() {
+        return None;
+    }
+
+    let marker = chars.next()?;
+    if !is_chinese_lesson_marker(marker) {
+        return None;
+    }
+    parse_order_number_token(&token)
+}
+
+fn parse_order_number_token(token: &str) -> Option<u32> {
+    if token.chars().all(|c| c.is_ascii_digit()) {
+        return token.parse().ok();
+    }
+    parse_chinese_number(token)
+}
+
+fn is_order_number_char(c: char) -> bool {
+    c.is_ascii_digit()
+        || chinese_digit_value(c).is_some()
+        || matches!(c, '十' | '拾' | '百' | '佰' | '千' | '仟')
+}
+
+fn is_chinese_lesson_marker(c: char) -> bool {
+    matches!(
+        c,
+        '课' | '課' | '讲' | '講' | '章' | '节' | '節' | '集' | '回' | '篇' | '部'
+    )
+}
+
+fn chinese_digit_value(c: char) -> Option<u32> {
+    match c {
+        '零' | '〇' => Some(0),
+        '一' | '壹' => Some(1),
+        '二' | '贰' | '貳' | '两' | '兩' => Some(2),
+        '三' | '叁' | '參' => Some(3),
+        '四' | '肆' => Some(4),
+        '五' | '伍' => Some(5),
+        '六' | '陆' | '陸' => Some(6),
+        '七' | '柒' => Some(7),
+        '八' | '捌' => Some(8),
+        '九' | '玖' => Some(9),
+        _ => None,
+    }
+}
+
+fn parse_chinese_number(token: &str) -> Option<u32> {
+    let mut total = 0u32;
+    let mut current = 0u32;
+    let mut has_value = false;
+
+    for c in token.chars() {
+        if let Some(value) = chinese_digit_value(c) {
+            current = current.saturating_mul(10).saturating_add(value);
+            has_value = true;
+            continue;
+        }
+
+        let unit = match c {
+            '十' | '拾' => 10,
+            '百' | '佰' => 100,
+            '千' | '仟' => 1000,
+            _ => return None,
+        };
+
+        has_value = true;
+        let multiplier = if current == 0 { 1 } else { current };
+        total = total.saturating_add(multiplier.saturating_mul(unit));
+        current = 0;
+    }
+
+    if has_value {
+        Some(total.saturating_add(current))
+    } else {
+        None
+    }
 }
 
 fn video_base_name(filename: &str) -> String {
@@ -1072,10 +1202,7 @@ fn extract_subtitle_language(subtitle_name: &str, video_base: &str) -> Option<St
     if name.len() > video_base.len() && name.to_lowercase().starts_with(&video_base.to_lowercase())
     {
         let remainder = name.get(video_base.len()..).unwrap_or("");
-        let lang = remainder
-            .trim()
-            .trim_start_matches(['.', '_', '-'])
-            .trim();
+        let lang = remainder.trim().trim_start_matches(['.', '_', '-']).trim();
         if !lang.is_empty() {
             return Some(normalize_language(lang));
         }
@@ -1802,6 +1929,44 @@ mod tests {
         assert!(matches!(key, SortKey::Numeric(2)));
     }
 
+    #[test]
+    fn chinese_ordinal_numbers() {
+        assert_eq!(natural_order_number("第一课：虚拟机介绍"), Some(1));
+        assert_eq!(
+            natural_order_number("第九课：综合应用之HTTPS账号密码获取"),
+            Some(9)
+        );
+        assert_eq!(
+            natural_order_number("第二十课：METASPLOIT之渗透安卓实战"),
+            Some(20)
+        );
+        assert_eq!(
+            natural_order_number("第二十一课：Metasploit之服务器蓝屏攻击"),
+            Some(21)
+        );
+        assert_eq!(natural_order_number("第23课：自己的学习方法"), Some(23));
+    }
+
+    #[test]
+    fn chinese_ordinal_sort_order() {
+        let mut names = [
+            "第九课：综合应用之HTTPS账号密码获取",
+            "第二十一课：Metasploit之服务器蓝屏攻击",
+            "第五课：局域网断网攻击",
+            "第一课：虚拟机介绍及KALI系统的安装",
+            "第二十课：METASPLOIT之渗透安卓实战",
+            "第十一课：会话劫持",
+        ];
+        names.sort_by(|a, b| extract_sort_key(a).cmp(&extract_sort_key(b)));
+
+        assert_eq!(names[0], "第一课：虚拟机介绍及KALI系统的安装");
+        assert_eq!(names[1], "第五课：局域网断网攻击");
+        assert_eq!(names[2], "第九课：综合应用之HTTPS账号密码获取");
+        assert_eq!(names[3], "第十一课：会话劫持");
+        assert_eq!(names[4], "第二十课：METASPLOIT之渗透安卓实战");
+        assert_eq!(names[5], "第二十一课：Metasploit之服务器蓝屏攻击");
+    }
+
     // --- strip_leading_number with lecture ---
 
     #[test]
@@ -1844,10 +2009,22 @@ mod tests {
 
     #[test]
     fn subtitle_language_suffix_supports_underscore() {
-        assert_eq!(subtitle_base_name("001 Introduction_zh.srt"), "001 Introduction");
-        assert_eq!(subtitle_base_name("001 Introduction_en.srt"), "001 Introduction");
-        assert_eq!(subtitle_base_name("001 Introduction_es.srt"), "001 Introduction");
-        assert_eq!(subtitle_base_name("001 Introduction_zh-CN.srt"), "001 Introduction");
+        assert_eq!(
+            subtitle_base_name("001 Introduction_zh.srt"),
+            "001 Introduction"
+        );
+        assert_eq!(
+            subtitle_base_name("001 Introduction_en.srt"),
+            "001 Introduction"
+        );
+        assert_eq!(
+            subtitle_base_name("001 Introduction_es.srt"),
+            "001 Introduction"
+        );
+        assert_eq!(
+            subtitle_base_name("001 Introduction_zh-CN.srt"),
+            "001 Introduction"
+        );
 
         assert_eq!(
             extract_subtitle_language("001 Introduction_zh.srt", "001 Introduction"),

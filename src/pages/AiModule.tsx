@@ -24,6 +24,9 @@ import { getAiModels, translateWithDeepSeek } from "@/lib/store";
 import type { AiModelOption } from "@/types";
 
 const FALLBACK_MODEL_OPTIONS: AiModelOption[] = [
+  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+  { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+  { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
   { id: "deepseek-v4-flash", label: "DeepSeek V4 Flash" },
   { id: "deepseek-chat", label: "DeepSeek Chat" },
   { id: "deepseek-reasoner", label: "DeepSeek Reasoner" },
@@ -32,8 +35,8 @@ const FALLBACK_MODEL_OPTIONS: AiModelOption[] = [
 const JULY_LINKS = [
   {
     title: "July API \u4e2d\u8f6c",
-    host: "julyapi.top",
-    url: "https://julyapi.top/",
+    host: "julyapi.com",
+    url: "https://julyapi.com/",
     descriptionKey: "julyApiDescription",
   },
   {
@@ -249,6 +252,8 @@ export function AiModule({ className, previewMode = false }: AiModuleProps) {
       if (!saved) return;
       if (previewMode) {
         const previewModels = [
+          { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+          { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
           { id: "deepseek-v4-flash", label: "DeepSeek V4 Flash" },
           { id: "deepseek-chat", label: "DeepSeek Chat" },
           { id: "qwen-plus", label: "Qwen Plus" },
@@ -395,7 +400,7 @@ export function AiModule({ className, previewMode = false }: AiModuleProps) {
                       onChange={(event) =>
                         setForm((current) => ({ ...current, apiUrl: event.target.value }))
                       }
-                      placeholder="https://api.example.com/v1"
+                      placeholder="https://api.example.com/v1 或 https://generativelanguage.googleapis.com"
                       fullWidth
                       className="july-heroui-field w-full"
                     />
