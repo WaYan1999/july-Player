@@ -10,7 +10,7 @@ import { EASE_OUT } from "@/lib/constants";
 import { useSettings } from "@/hooks/useSettings";
 import type { AppLanguage } from "@/lib/i18n";
 
-const RELEASE_NOTES_VERSION = "1.1.11";
+const RELEASE_NOTES_VERSION = "1.1.12";
 const RELEASE_NOTES_STORAGE_KEY = `july-player:release-notes-seen:${RELEASE_NOTES_VERSION}`;
 
 type ReleaseNotesCopy = {
@@ -24,52 +24,49 @@ type ReleaseNotesCopy = {
 
 const RELEASE_NOTES: Record<AppLanguage, ReleaseNotesCopy> = {
   zh: {
-    eyebrow: "\u7248\u672c\u66f4\u65b0",
-    title: "\u4e03\u6708\u64ad\u653e\u5668 1.1.11",
+    eyebrow: "版本更新",
+    title: "七月播放器 1.1.12",
     description:
-      "\u672c\u6b21\u91cd\u70b9\u589e\u52a0 Gemini API \u652f\u6301\uff0c\u5207\u6362 July API \u65b0\u57df\u540d\uff0c\u5e76\u4fee\u590d\u4e2d\u6587\u8bfe\u7a0b\u6392\u5e8f\u548c\u89c6\u9891\u52a0\u8f7d\u9ed1\u5c4f\u53cd\u9988\u3002",
+      "本次重点增强远程更新体验，播放器会自动检测新版本，并在左下角展示更新入口、下载进度和失败重试反馈。",
     highlights: [
-      "July API \u4e2d\u8f6c\u9ed8\u8ba4\u5730\u5740\u5207\u6362\u5230 https://julyapi.com/ \uff0cAI \u914d\u7f6e\u9884\u89c8\u9ed8\u8ba4\u4f7f\u7528 https://julyapi.com/v1\u3002",
-      "\u003cAI \u6a21\u5757\u003e API \u5730\u5740\u65b0\u589e Gemini \u517c\u5bb9\uff0c\u53ef\u586b\u5199 Google Gemini \u5730\u5740\u6216 OpenAI \u517c\u5bb9 /v1 \u5730\u5740\u3002",
-      "\u7ffb\u8bd1\u3001AI \u7b14\u8bb0\u548c\u5ba0\u7269 AI \u7edf\u4e00\u8d70\u901a\u7528 AI \u8bf7\u6c42\u5c42\uff0c\u81ea\u52a8\u8bc6\u522b Gemini/OpenAI \u517c\u5bb9\u63a5\u53e3\u3002",
-      "\u4fee\u590d\u201c\u7b2c\u4e00\u8bfe\u3001\u7b2c\u4e8c\u5341\u4e00\u8bfe\u201d\u7b49\u4e2d\u6587\u5e8f\u53f7\u8bfe\u7a0b\u76ee\u5f55\u6392\u5e8f\u9519\u4e71\u95ee\u9898\u3002",
-      "\u64ad\u653e\u5668\u9047\u5230\u4e0d\u652f\u6301\u7684\u89c6\u9891\u683c\u5f0f\u6216\u672c\u5730\u6587\u4ef6\u52a0\u8f7d\u5931\u8d25\u65f6\uff0c\u4f1a\u5728\u753b\u9762\u4e2d\u76f4\u63a5\u663e\u793a\u539f\u56e0\u3002",
-      "\u4f18\u5316\u672c\u5730\u89c6\u9891 stream Range \u8bfb\u53d6\u8fb9\u754c\uff0c\u63d0\u5347\u9996\u6b21\u8bfb\u53d6\u7a33\u5b9a\u6027\u3002",
-      "\u7edf\u4e00 1.1.11 \u7248\u672c\u53f7\u548c\u672c\u5730\u6784\u5efa\u4fe1\u606f\u3002",
+      "启动后自动静默检查远程 latest.json，有新版本时会在左下角主动提示。",
+      "应用重新聚焦时会按冷却时间自动补查，长期运行时每 6 小时后台检查一次。",
+      "左下角更新卡片支持发现更新、下载进度、安装完成重启和失败重试四种状态。",
+      "下载过程新增百分比和文件大小进度，避免只看到 0% 无反馈。",
+      "更新提示会自动避开侧边栏，折叠侧边栏或窄屏时仍保持清晰可用。",
+      "设置页的检查更新按钮保留，并与左下角全局提示状态同步。",
     ],
-    close: "\u5f00\u59cb\u4f7f\u7528",
-    dismiss: "\u5173\u95ed\u66f4\u65b0\u8bf4\u660e",
+    close: "开始使用",
+    dismiss: "关闭更新说明",
   },
   en: {
     eyebrow: "Release notes",
-    title: "July Player 1.1.11",
+    title: "July Player 1.1.12",
     description:
-      "This update adds Gemini API support, switches July API to the new domain, and improves Chinese lesson ordering plus video loading feedback.",
+      "This update improves remote updates with automatic checks and a bottom-left update card for availability, progress, completion, and retry feedback.",
     highlights: [
-      "July API relay now points to https://julyapi.com/ and the AI preview default uses https://julyapi.com/v1.",
-      "AI Module now supports Gemini API addresses in addition to OpenAI-compatible /v1 endpoints.",
-      "Translation, AI notes, and pet AI now share one provider layer that auto-detects Gemini or OpenAI-compatible APIs.",
-      "Fixed Chinese ordinal lesson ordering such as 第一课, 第九课, and 第二十一课.",
-      "The player now shows an in-video message when a local video format is unsupported or fails to load.",
-      "Improved local stream range handling for more stable first reads.",
-      "Aligned version metadata and local build information for 1.1.11.",
+      "The app now checks the remote latest.json automatically after startup and shows the update card when a new version is found.",
+      "Update checks also run when the app regains focus, with cooldown protection, and every 6 hours during long sessions.",
+      "The bottom-left update card now covers available, downloading, ready to restart, and retry states.",
+      "Download progress now shows both percentage and file size progress to avoid unclear 0% feedback.",
+      "The update card avoids the sidebar and stays readable when the sidebar is collapsed or the window is narrow.",
+      "The Settings update button remains available and stays in sync with the global update card.",
     ],
     close: "Start watching",
     dismiss: "Dismiss release notes",
   },
   fr: {
     eyebrow: "Notes de version",
-    title: "July Player 1.1.11",
+    title: "July Player 1.1.12",
     description:
-      "Cette version ajoute Gemini API, bascule July API vers le nouveau domaine et am\u00e9liore l'ordre des le\u00e7ons chinoises ainsi que les retours de chargement vid\u00e9o.",
+      "Cette version améliore les mises à jour distantes avec une vérification automatique et une carte en bas à gauche pour la progression et les erreurs.",
     highlights: [
-      "Le relais July API pointe maintenant vers https://julyapi.com/ et l'aper\u00e7u IA utilise https://julyapi.com/v1.",
-      "Le module IA accepte maintenant Gemini API en plus des endpoints compatibles OpenAI /v1.",
-      "La traduction, les notes IA et le compagnon IA utilisent une couche fournisseur commune.",
-      "Correction du tri des le\u00e7ons avec num\u00e9rotation chinoise.",
-      "Le lecteur affiche un message quand le format vid\u00e9o local n'est pas pris en charge ou ne charge pas.",
-      "Am\u00e9lioration de la lecture locale stream Range.",
-      "Alignement des m\u00e9tadonn\u00e9es de version pour 1.1.11.",
+      "L'application vérifie automatiquement le latest.json distant après le démarrage et affiche une carte si une mise à jour existe.",
+      "La vérification se relance au retour au premier plan, avec un délai de protection, puis toutes les 6 heures.",
+      "La carte en bas à gauche couvre les états disponible, téléchargement, prêt à redémarrer et réessayer.",
+      "La progression affiche maintenant le pourcentage et la taille téléchargée.",
+      "La carte évite la barre latérale et reste lisible en mode réduit ou sur une fenêtre étroite.",
+      "Le bouton de mise à jour des Paramètres reste disponible et synchronisé avec la carte globale.",
     ],
     close: "Commencer",
     dismiss: "Fermer les notes",

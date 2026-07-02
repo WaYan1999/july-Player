@@ -438,6 +438,9 @@ const en = {
     versionReady: "Version {version} is ready to install",
     restart: "Restart",
     install: "Install",
+    retry: "Check again",
+    updateFailed: "Update check failed",
+    retryDescription: "Check your network or try again later",
     dismiss: "Dismiss",
   },
   player: {
@@ -866,6 +869,9 @@ export const UI_TRANSLATIONS: Record<AppLanguage, AppTranslations> = {
       versionReady: "版本 {version} 已可安装",
       restart: "重启",
       install: "安装",
+      retry: "重新检查",
+      updateFailed: "更新检查失败",
+      retryDescription: "请检查网络或稍后再试",
       dismiss: "关闭",
     },
     player: {
@@ -1286,6 +1292,9 @@ export const UI_TRANSLATIONS: Record<AppLanguage, AppTranslations> = {
       versionReady: "La version {version} est prête à installer",
       restart: "Redémarrer",
       install: "Installer",
+      retry: "Réessayer",
+      updateFailed: "Échec de la mise à jour",
+      retryDescription: "Vérifiez le réseau ou réessayez plus tard",
       dismiss: "Fermer",
     },
     player: {

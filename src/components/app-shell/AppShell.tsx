@@ -132,6 +132,14 @@ function AppShellInner({ children }: AppShellProps) {
   }, [update]);
 
   const effectiveCollapsed = isSmallScreen || collapsed;
+  const sidebarWidth = effectiveCollapsed ? 68 : 240;
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--app-sidebar-current-width", `${sidebarWidth}px`);
+    return () => {
+      document.documentElement.style.removeProperty("--app-sidebar-current-width");
+    };
+  }, [sidebarWidth]);
 
   return (
     <div className="app-shell-root flex h-screen flex-col text-foreground">
@@ -143,7 +151,7 @@ function AppShellInner({ children }: AppShellProps) {
         <div
           className="flex shrink-0 items-center px-3"
           style={{
-            width: effectiveCollapsed ? 68 : 240,
+            width: sidebarWidth,
             transition: `width ${spring()}`,
           }}
         >
@@ -227,7 +235,7 @@ function AppShellInner({ children }: AppShellProps) {
         <aside
           className="app-sidebar flex shrink-0 flex-col will-change-[width]"
           style={{
-            width: effectiveCollapsed ? 68 : 240,
+            width: sidebarWidth,
             transition: `width ${spring()}`,
           }}
         >
