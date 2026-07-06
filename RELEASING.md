@@ -50,7 +50,9 @@ If your Tauri signing key has a password, also add:
    - `latest.json` (the update manifest the app polls)
    - `.sig` signature files
 4. The workflow uploads the signed installer artifacts to JulyRes. This step requires `JULYRES_PLAYER_RELEASE_TOKEN` and will fail if the secret is missing or any package/signature pair is incomplete.
-5. In the JulyRes WordPress admin, open **播放器发布**, review the uploaded 1.x.x artifacts, check **发布到 latest.json**, and save.
+5. In the JulyRes WordPress admin, open the player release page, review the uploaded 1.x.x artifacts, check publish to `latest.json`, and save.
+   - JulyRes upload returns `uploaded_pending_review` by design. Upload success does **not** automatically update `/july-player/latest.json`.
+   - If `https://julyres.top/july-player/latest.json` returns `204 No Content`, Tauri treats it as "no update" and may stop before checking later endpoints.
 6. Verify `https://julyres.top/july-player/latest.json` returns the new version, includes `windows-x86_64-nsis`, and every package URL is directly downloadable:
    ```bash
    npm run verify:update-manifest
