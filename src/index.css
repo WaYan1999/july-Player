@@ -1253,6 +1253,901 @@ textarea.july-heroui-field {
   line-height: 1.25rem;
 }
 
+/* Open-design inspired player skin: modular glass panels, clean hierarchy,
+   soft motion, and responsive controls without changing playback logic. */
+.july-player-shell {
+  --july-player-accent: var(--primary);
+  --july-player-surface: rgb(8 13 22 / 0.76);
+  --july-player-surface-strong: rgb(8 13 22 / 0.9);
+  --july-player-stroke: rgb(255 255 255 / 0.14);
+  --july-player-stroke-strong: rgb(255 255 255 / 0.22);
+  --july-player-text-soft: rgb(246 248 252 / 0.72);
+  --july-player-text-faint: rgb(246 248 252 / 0.45);
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--july-player-accent) 18%, transparent), transparent 34%),
+    radial-gradient(circle at 86% 100%, rgb(120 213 232 / 0.14), transparent 28%),
+    #050914;
+  box-shadow:
+    0 18px 44px rgb(2 6 23 / 0.3),
+    inset 0 0 0 1px rgb(255 255 255 / 0.04);
+  transform: translateZ(0);
+  contain: layout paint;
+}
+
+.july-player-shell::before,
+.july-player-shell::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.july-player-shell::before {
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 18%, transparent 72%, rgb(0 0 0 / 0.34)),
+    repeating-linear-gradient(
+      90deg,
+      rgb(255 255 255 / 0.018) 0,
+      rgb(255 255 255 / 0.018) 1px,
+      transparent 1px,
+      transparent 24px
+    );
+  opacity: 0.42;
+}
+
+.july-player-shell::after {
+  inset: 1px;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    inset 0 -1px 0 rgb(255 255 255 / 0.05);
+}
+
+.july-player-empty {
+  position: relative;
+  z-index: 2;
+  background:
+    radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 34%),
+    color-mix(in srgb, var(--card) 86%, #050914);
+}
+
+.july-player-media {
+  position: relative;
+  z-index: 0;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.july-player-loading,
+.july-player-message-layer,
+.july-player-ended {
+  z-index: 7;
+  background:
+    radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--july-player-accent) 18%, transparent), transparent 24%),
+    rgb(3 7 18 / 0.78);
+  backdrop-filter: blur(10px);
+}
+
+.july-player-loading-orbit {
+  position: relative;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background:
+    radial-gradient(circle at center, color-mix(in srgb, var(--july-player-accent) 70%, white) 0 10%, transparent 12%),
+    color-mix(in srgb, var(--july-player-accent) 8%, transparent);
+  box-shadow:
+    0 0 0 0.5rem rgb(255 255 255 / 0.03),
+    0 18px 35px color-mix(in srgb, var(--july-player-accent) 22%, transparent);
+}
+
+.july-player-loading-orbit::before,
+.july-player-loading-orbit::after {
+  content: "";
+  position: absolute;
+  inset: 0.45rem;
+  border-radius: inherit;
+  border: 2px solid transparent;
+  border-top-color: color-mix(in srgb, var(--july-player-accent) 84%, white);
+  animation: july-player-spin 860ms linear infinite;
+}
+
+.july-player-loading-orbit::after {
+  inset: 1rem;
+  border-top-color: rgb(255 255 255 / 0.72);
+  border-right-color: rgb(255 255 255 / 0.28);
+  animation-duration: 1.25s;
+  animation-direction: reverse;
+}
+
+.july-player-message-card,
+.july-player-ended-card {
+  border: 1px solid var(--july-player-stroke);
+  border-radius: 1.25rem;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.09), rgb(255 255 255 / 0.035)),
+    var(--july-player-surface-strong);
+  box-shadow:
+    0 24px 70px rgb(0 0 0 / 0.46),
+    inset 0 1px 0 rgb(255 255 255 / 0.11);
+  padding: 1.25rem;
+  backdrop-filter: blur(18px) saturate(1.18);
+}
+
+.july-player-subtitle-layer {
+  z-index: 5;
+  text-wrap: balance;
+}
+
+.july-player-subtitle-line {
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 0.7rem;
+  box-shadow:
+    0 12px 30px rgb(0 0 0 / 0.32),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
+  backdrop-filter: blur(6px);
+}
+
+.july-player-center-trigger {
+  z-index: 4;
+}
+
+.july-player-center-play {
+  width: 4.75rem;
+  height: 4.75rem;
+  border: 1px solid rgb(255 255 255 / 0.2);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--july-player-accent) 36%, white 8%), rgb(255 255 255 / 0.08));
+  box-shadow:
+    0 0 0 0.65rem rgb(255 255 255 / 0.055),
+    0 22px 56px color-mix(in srgb, var(--july-player-accent) 28%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 0.18);
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 180ms ease,
+    filter 180ms ease;
+}
+
+.july-player-center-trigger:hover .july-player-center-play {
+  transform: scale(1.06);
+  filter: brightness(1.08);
+}
+
+.july-player-center-trigger:active .july-player-center-play {
+  transform: scale(0.98);
+}
+
+.july-player-controls {
+  z-index: 6;
+  gap: 0.75rem;
+  padding-top: 5rem;
+  background:
+    linear-gradient(180deg, transparent 0%, rgb(3 7 18 / 0.2) 26%, rgb(3 7 18 / 0.72) 72%, rgb(3 7 18 / 0.92) 100%);
+  transform: translateZ(0);
+  will-change: opacity;
+}
+
+.july-player-controls::before {
+  content: "";
+  position: absolute;
+  right: clamp(0.75rem, 2vw, 1.5rem);
+  bottom: max(0.55rem, env(safe-area-inset-bottom));
+  left: clamp(0.75rem, 2vw, 1.5rem);
+  z-index: 0;
+  min-height: 3.65rem;
+  border: 1px solid var(--july-player-stroke);
+  border-radius: 1.25rem;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.04)),
+    var(--july-player-surface);
+  box-shadow:
+    0 20px 54px rgb(0 0 0 / 0.36),
+    inset 0 1px 0 rgb(255 255 255 / 0.1);
+  backdrop-filter: blur(20px) saturate(1.18);
+}
+
+.july-player-controls > * {
+  position: relative;
+  z-index: 1;
+}
+
+.july-player-seek {
+  height: 0.45rem;
+  margin: 0 clamp(0.1rem, 0.6vw, 0.65rem) 0.15rem;
+  background: rgb(255 255 255 / 0.12);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.38);
+  transition:
+    height 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.july-player-seek:hover {
+  height: 0.6rem;
+  background: rgb(255 255 255 / 0.18);
+}
+
+.july-player-seek-buffer {
+  background: rgb(255 255 255 / 0.2);
+}
+
+.july-player-seek-progress {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--july-player-accent) 78%, white), var(--july-player-accent));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--july-player-accent) 34%, transparent);
+}
+
+.july-player-seek-thumb {
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 2px solid rgb(255 255 255 / 0.88);
+  background: var(--july-player-accent);
+  box-shadow:
+    0 0 0 0.32rem color-mix(in srgb, var(--july-player-accent) 18%, transparent),
+    0 7px 18px rgb(0 0 0 / 0.35);
+}
+
+.july-player-seek-preview {
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 0.55rem;
+  background: rgb(8 13 22 / 0.94);
+  box-shadow: 0 10px 22px rgb(0 0 0 / 0.35);
+  backdrop-filter: blur(12px);
+}
+
+.july-player-control-row {
+  position: relative;
+  align-items: center;
+  min-height: 2.6rem;
+  padding: 0 0.15rem;
+}
+
+.july-player-control-cluster {
+  align-items: center;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 0.95rem;
+  background: rgb(255 255 255 / 0.055);
+  padding: 0.18rem;
+}
+
+.july-player-control-cluster-right {
+  background: rgb(255 255 255 / 0.045);
+}
+
+.july-player-button {
+  display: inline-flex;
+  min-width: 2rem;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  outline: none;
+  transition:
+    transform 145ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease,
+    filter 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.july-player-button:hover {
+  border-color: rgb(255 255 255 / 0.12);
+  background: rgb(255 255 255 / 0.12);
+  transform: translateY(-1px);
+}
+
+.july-player-button:active {
+  transform: translateY(1px) scale(0.97);
+}
+
+.july-player-button:focus-visible {
+  border-color: color-mix(in srgb, var(--july-player-accent) 72%, white);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--july-player-accent) 22%, transparent);
+}
+
+.july-player-button-active {
+  border-color: color-mix(in srgb, var(--july-player-accent) 32%, transparent);
+  background: color-mix(in srgb, var(--july-player-accent) 16%, transparent);
+  color: color-mix(in srgb, var(--july-player-accent) 78%, white);
+}
+
+.july-player-button-muted {
+  opacity: 0.66;
+}
+
+.july-player-time {
+  border-radius: 0.75rem;
+  background: rgb(255 255 255 / 0.045);
+  padding: 0.4rem 0.55rem;
+  color: var(--july-player-text-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.july-player-volume {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--july-player-accent) 72%, white),
+    rgb(255 255 255 / 0.18)
+  );
+}
+
+.july-player-volume::-webkit-slider-thumb {
+  border: 1px solid rgb(255 255 255 / 0.76);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.32);
+}
+
+.july-player-popover {
+  z-index: 12;
+  border: 1px solid var(--july-player-stroke);
+  border-radius: 1rem;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.045)),
+    rgb(8 13 22 / 0.94);
+  box-shadow:
+    0 18px 42px rgb(0 0 0 / 0.4),
+    inset 0 1px 0 rgb(255 255 255 / 0.1);
+  backdrop-filter: blur(18px) saturate(1.18);
+  animation: july-player-popover-in 140ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.july-player-popover button {
+  min-height: 1.75rem;
+  border-radius: 0.65rem;
+  transition:
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.july-player-popover button:hover {
+  background: rgb(255 255 255 / 0.1);
+}
+
+.july-player-popover button:active {
+  transform: scale(0.98);
+}
+
+.july-player-sub-chip {
+  min-height: 1.65rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 0.65rem;
+}
+
+.july-player-sub-chip-active {
+  border-color: color-mix(in srgb, var(--july-player-accent) 34%, transparent);
+  background: color-mix(in srgb, var(--july-player-accent) 14%, transparent);
+}
+
+.july-player-primary-action,
+.july-player-secondary-action {
+  min-height: 2.55rem;
+  border-radius: 0.9rem;
+  transition:
+    transform 150ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.july-player-primary-action:hover,
+.july-player-secondary-action:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+.july-player-primary-action:active,
+.july-player-secondary-action:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.july-player-primary-action {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.18), transparent),
+    var(--july-player-accent);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--july-player-accent) 28%, transparent);
+}
+
+.july-player-secondary-action {
+  border-color: rgb(255 255 255 / 0.16);
+  background: rgb(255 255 255 / 0.075);
+}
+
+@keyframes july-player-popover-in {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes july-player-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 48rem) {
+  .july-player-shell {
+    border-radius: 1rem;
+  }
+
+  .july-player-controls {
+    padding-right: 0.75rem;
+    padding-bottom: 0.75rem;
+    padding-left: 0.75rem;
+  }
+
+  .july-player-controls::before {
+    right: 0.5rem;
+    bottom: 0.5rem;
+    left: 0.5rem;
+    min-height: 6.35rem;
+  }
+
+  .july-player-control-row {
+    flex-wrap: wrap;
+    row-gap: 0.45rem;
+  }
+
+  .july-player-time {
+    order: 3;
+    flex: 1 1 auto;
+    text-align: center;
+  }
+
+  .july-player-control-cluster-right {
+    margin-left: 0;
+  }
+
+  .july-player-button {
+    min-width: 1.9rem;
+    min-height: 1.9rem;
+  }
+
+  .july-player-subtitle-layer {
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
+
+  .july-player-subtitle-line {
+    max-width: 94%;
+  }
+}
+
+/* Global premium UI refinement layer
+   Focus: clearer hierarchy, softer commercial surfaces, consistent feedback. */
+.app-shell-root {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 28rem),
+    radial-gradient(circle at 100% 16%, color-mix(in srgb, var(--info) 10%, transparent), transparent 24rem),
+    linear-gradient(180deg, color-mix(in srgb, var(--foreground) 2.5%, transparent), transparent 18rem),
+    var(--sidebar);
+}
+
+.app-shell-root::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.42;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--border) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(0deg, color-mix(in srgb, var(--border) 5%, transparent) 1px, transparent 1px);
+  background-size: 4.5rem 4.5rem;
+  mask-image: linear-gradient(180deg, black, transparent 78%);
+}
+
+.app-shell-root > * {
+  position: relative;
+  z-index: 1;
+}
+
+.app-titlebar {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--foreground) 4%, transparent), transparent 46%),
+    color-mix(in srgb, var(--titlebar) 94%, transparent);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.app-topbar {
+  min-height: 3.75rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--foreground) 4%, transparent), transparent),
+    color-mix(in srgb, var(--sidebar) 78%, transparent);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--foreground) 3%, transparent);
+  backdrop-filter: blur(22px) saturate(1.12);
+}
+
+.app-topbar nav {
+  min-height: 2.25rem;
+  border: 1px solid color-mix(in srgb, var(--border) 44%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--card) 42%, transparent);
+  padding: 0.25rem 0.65rem;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 5%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.app-topbar h1,
+.app-topbar nav a {
+  letter-spacing: -0.02em;
+  text-wrap: pretty;
+}
+
+.app-sidebar {
+  background:
+    radial-gradient(circle at 12% 8%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 12rem),
+    linear-gradient(180deg, color-mix(in srgb, var(--foreground) 3.5%, transparent), transparent 44%),
+    color-mix(in srgb, var(--sidebar) 96%, transparent);
+  box-shadow:
+    inset -1px 0 0 color-mix(in srgb, var(--foreground) 2.5%, transparent),
+    10px 0 28px rgb(0 0 0 / 0.08);
+}
+
+.app-sidebar nav {
+  scrollbar-gutter: stable;
+}
+
+.app-sidebar .july-heroui-button {
+  box-shadow: none;
+}
+
+.app-sidebar .july-heroui-button:hover {
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
+.app-sidebar .group[aria-current="page"] {
+  box-shadow:
+    0 8px 18px color-mix(in srgb, var(--primary) 9%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.app-main {
+  scroll-behavior: smooth;
+  border-top-left-radius: 1.5rem;
+  background:
+    radial-gradient(circle at 14% 4%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 24rem),
+    radial-gradient(circle at 92% 2%, color-mix(in srgb, var(--info) 9%, transparent), transparent 22rem),
+    linear-gradient(180deg, color-mix(in srgb, var(--foreground) 3.4%, transparent), transparent 18rem),
+    linear-gradient(90deg, color-mix(in srgb, var(--border) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(0deg, color-mix(in srgb, var(--border) 6%, transparent) 1px, transparent 1px),
+    var(--background);
+  background-size: auto, auto, auto, 4.75rem 4.75rem, 4.75rem 4.75rem, auto;
+}
+
+.july-page,
+.july-page-narrow,
+.july-page-pets {
+  animation: july-page-soft-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.july-page-header {
+  position: relative;
+  isolation: isolate;
+  border-color: color-mix(in srgb, var(--border) 64%, transparent);
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--primary) 14%, transparent), transparent 18rem),
+    linear-gradient(135deg, color-mix(in srgb, var(--primary) 8%, transparent), transparent 50%),
+    color-mix(in srgb, var(--card) 88%, transparent);
+  box-shadow:
+    0 18px 38px rgb(0 0 0 / 0.12),
+    inset 0 1px 0 color-mix(in srgb, var(--foreground) 7%, transparent);
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+
+.july-page-header::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--foreground) 5%, transparent), transparent 45%);
+  opacity: 0.65;
+}
+
+.july-section-card,
+.course-detail-header,
+.course-curriculum-panel,
+.july-dialog,
+.july-popover {
+  border-color: color-mix(in srgb, var(--border) 68%, transparent);
+  box-shadow:
+    0 14px 30px rgb(0 0 0 / 0.12),
+    inset 0 1px 0 color-mix(in srgb, var(--foreground) 5.5%, transparent);
+}
+
+.july-section-card,
+.course-detail-header,
+.course-curriculum-panel {
+  position: relative;
+  isolation: isolate;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--foreground) 4%, transparent), transparent 42%),
+    color-mix(in srgb, var(--card) 90%, transparent);
+  transition:
+    transform 170ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 170ms ease,
+    background-color 170ms ease,
+    box-shadow 170ms ease;
+}
+
+.july-section-card::before,
+.course-detail-header::before,
+.course-curriculum-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 15rem),
+    linear-gradient(180deg, color-mix(in srgb, var(--foreground) 3.5%, transparent), transparent 38%);
+  opacity: 0.76;
+}
+
+.july-section-card:hover,
+.course-detail-header:hover,
+.course-curriculum-panel:hover {
+  border-color: color-mix(in srgb, var(--primary) 22%, var(--border));
+  box-shadow:
+    0 18px 40px rgb(0 0 0 / 0.15),
+    inset 0 1px 0 color-mix(in srgb, var(--foreground) 7%, transparent);
+}
+
+.july-stat-card,
+.course-card {
+  border-radius: 1.25rem;
+  box-shadow:
+    0 14px 30px rgb(0 0 0 / 0.12),
+    inset 0 1px 0 color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
+.july-stat-card::after,
+.course-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(120deg, transparent 10%, color-mix(in srgb, var(--foreground) 4%, transparent), transparent 36%);
+  opacity: 0;
+  transform: translateX(-18%);
+  transition:
+    opacity 180ms ease,
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.july-stat-card:hover::after,
+.course-card:hover::after {
+  opacity: 1;
+  transform: translateX(18%);
+}
+
+.course-card-cover {
+  background:
+    radial-gradient(circle at 20% 0%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 60%),
+    color-mix(in srgb, var(--secondary) 56%, transparent);
+}
+
+.july-toolbar {
+  gap: 0.75rem;
+}
+
+.july-heroui-field,
+.july-select,
+.july-heroui-button {
+  font-variant-numeric: tabular-nums;
+}
+
+.july-heroui-field,
+.july-select {
+  border-color: color-mix(in srgb, var(--border) 66%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--foreground) 2.8%, transparent), transparent),
+    color-mix(in srgb, var(--secondary) 54%, transparent);
+}
+
+.july-heroui-field:focus,
+.july-heroui-field[data-focused="true"],
+.july-heroui-field[data-focus-visible="true"],
+.july-select:focus {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--primary) 15%, transparent),
+    0 10px 22px color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.july-heroui-button {
+  border-color: color-mix(in srgb, var(--border) 62%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--foreground) 4.8%, transparent), transparent),
+    color-mix(in srgb, var(--secondary) 58%, transparent);
+  box-shadow:
+    0 8px 18px rgb(0 0 0 / 0.08),
+    inset 0 1px 0 color-mix(in srgb, var(--foreground) 5.5%, transparent);
+}
+
+.july-heroui-button:hover {
+  border-color: color-mix(in srgb, var(--primary) 34%, var(--border));
+  box-shadow:
+    0 10px 22px rgb(0 0 0 / 0.11),
+    0 0 0 3px color-mix(in srgb, var(--primary) 7%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--foreground) 7%, transparent);
+}
+
+.july-heroui-button-primary {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, white 22%, transparent), transparent 62%),
+    linear-gradient(135deg, color-mix(in srgb, var(--primary) 94%, white), var(--primary));
+  box-shadow:
+    0 12px 24px color-mix(in srgb, var(--primary) 20%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 30%, transparent);
+}
+
+.july-heroui-icon-button {
+  border-radius: 0.75rem;
+}
+
+.july-popover,
+.july-dialog {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--foreground) 5%, transparent), transparent 44%),
+    color-mix(in srgb, var(--popover) 94%, transparent);
+  backdrop-filter: blur(18px) saturate(1.1);
+}
+
+.course-lesson-row {
+  position: relative;
+  overflow: hidden;
+  transform: translateZ(0);
+  transition:
+    transform 135ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 135ms ease,
+    color 135ms ease,
+    box-shadow 135ms ease;
+}
+
+.course-lesson-row::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 12% 50%, color-mix(in srgb, var(--primary) 14%, transparent), transparent 38%),
+    linear-gradient(90deg, color-mix(in srgb, var(--primary) 7%, transparent), transparent 52%);
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.course-lesson-row:hover {
+  transform: translateX(2px);
+}
+
+.course-lesson-row.is-active,
+.course-lesson-row.is-switching {
+  color: var(--primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 13%, transparent);
+}
+
+.course-lesson-row.is-active::before,
+.course-lesson-row.is-switching::before {
+  opacity: 1;
+}
+
+.course-lesson-row.is-switching {
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+}
+
+.course-lesson-row > * {
+  position: relative;
+  z-index: 1;
+}
+
+.app-window-control,
+.july-heroui-button,
+.july-player-button,
+.course-lesson-row,
+.resident-pet-wheel-item,
+.pet-action-button {
+  will-change: transform;
+}
+
+.app-window-control:active,
+.july-heroui-button:active,
+.course-lesson-row:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.july-section-card:has(.july-heroui-field:focus),
+.july-section-card:has(.july-heroui-field[data-focused="true"]) {
+  border-color: color-mix(in srgb, var(--primary) 26%, var(--border));
+  box-shadow:
+    0 18px 42px rgb(0 0 0 / 0.14),
+    0 0 0 3px color-mix(in srgb, var(--primary) 7%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--foreground) 7%, transparent);
+}
+
+.july-stat-card,
+.course-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 240px;
+}
+
+.route-page-layer,
+.route-cache-layer {
+  animation-duration: 210ms;
+}
+
+@keyframes july-page-soft-in {
+  from {
+    opacity: 0;
+    filter: blur(2px);
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 64rem) {
+  .app-main {
+    border-top-left-radius: 1rem;
+  }
+
+  .july-page-header,
+  .july-section-card,
+  .course-detail-header,
+  .course-curriculum-panel {
+    border-radius: 1rem;
+  }
+
+  .july-toolbar {
+    width: 100%;
+  }
+
+  .july-toolbar > * {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 48rem) {
+  .app-topbar nav {
+    max-width: 100%;
+    padding-inline: 0.5rem;
+  }
+
+  .app-main {
+    padding-inline: 0.875rem;
+    padding-top: 1rem;
+  }
+
+  .july-page-header {
+    padding: 1rem;
+  }
+
+  .july-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 [data-slot="select-popover"] {
   animation: july-popover-in 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
   transform-origin: var(--trigger-anchor-point, top);
@@ -1525,8 +2420,22 @@ textarea.july-heroui-field {
   .toast,
   .july-dialog,
   .july-popover,
+  .july-player-popover,
+  .july-player-loading-orbit::before,
+  .july-player-loading-orbit::after,
   .ai-soft-select-option {
     animation: none;
     transition: none;
+  }
+
+  .app-window-control,
+  .july-heroui-button,
+  .july-player-button,
+  .course-lesson-row,
+  .course-card,
+  .july-stat-card,
+  .july-section-card {
+    transform: none !important;
+    will-change: auto;
   }
 }

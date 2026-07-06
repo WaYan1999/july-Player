@@ -4,6 +4,7 @@ import {
   CheckCircleIcon as CheckCircle,
   CaretDownIcon as CaretDown,
   HeartIcon as Heart,
+  SpinnerGapIcon as SpinnerGap,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { EASE } from "@/lib/constants";
@@ -14,6 +15,7 @@ import { useI18n } from "@/hooks/useI18n";
 interface SectionAccordionProps {
   section: Section;
   activeLessonId: number | undefined;
+  switchingLessonId?: number | null;
   onSelectLesson: (lesson: Lesson) => void;
   onToggleComplete: (lessonId: number) => void;
   onToggleFavorite: (lessonId: number) => void;
@@ -22,6 +24,7 @@ interface SectionAccordionProps {
 function SectionAccordionComponent({
   section,
   activeLessonId,
+  switchingLessonId,
   onSelectLesson,
   onToggleComplete,
   onToggleFavorite,
@@ -83,6 +86,7 @@ function SectionAccordionComponent({
         >
           {section.lessons.map((lesson) => {
             const isActive = lesson.id === activeLessonId;
+            const isSwitching = lesson.id === switchingLessonId;
 
             return (
               <button
@@ -90,8 +94,9 @@ function SectionAccordionComponent({
                 key={lesson.id}
                 onClick={() => onSelectLesson(lesson)}
                 className={cn(
-                  "group flex w-full items-center justify-start gap-3 rounded-lg border-0 px-3 py-2.5 text-left transition-colors duration-100 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-                  isActive && "bg-primary/5",
+                  "course-lesson-row group flex w-full items-center justify-start gap-3 rounded-lg border-0 px-3 py-2.5 text-left transition-colors duration-100 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                  isActive && "is-active bg-primary/5",
+                  isSwitching && "is-switching",
                 )}
               >
                 <div
@@ -106,6 +111,10 @@ function SectionAccordionComponent({
                       className="size-4 text-primary"
                       weight="fill"
                     />
+                  ) : isSwitching ? (
+                    <div className="flex size-4 items-center justify-center">
+                      <SpinnerGap className="size-3.5 animate-spin text-primary" weight="bold" />
+                    </div>
                   ) : isActive ? (
                     <div className="flex size-4 items-center justify-center">
                       <Play className="size-3.5 text-primary" weight="fill" />
@@ -159,7 +168,7 @@ function SectionAccordionComponent({
   );
 }
 
-function sectionHasLesson(section: Section, lessonId: number | undefined) {
+function sectionHasLesson(section: Section, lessonId: number | undefined | null) {
   return lessonId != null && section.lessons.some((lesson) => lesson.id === lessonId);
 }
 
@@ -177,8 +186,15 @@ export const SectionAccordion = memo(
 
     const wasActiveSection = sectionHasLesson(prev.section, prev.activeLessonId);
     const isActiveSection = sectionHasLesson(next.section, next.activeLessonId);
-    if (!wasActiveSection && !isActiveSection) return true;
-    return prev.activeLessonId === next.activeLessonId;
+    const wasSwitchingSection = sectionHasLesson(prev.section, prev.switchingLessonId);
+    const isSwitchingSection = sectionHasLesson(next.section, next.switchingLessonId);
+    if (!wasActiveSection && !isActiveSection && !wasSwitchingSection && !isSwitchingSection) {
+      return true;
+    }
+    return (
+      prev.activeLessonId === next.activeLessonId &&
+      prev.switchingLessonId === next.switchingLessonId
+    );
   },
 );
 

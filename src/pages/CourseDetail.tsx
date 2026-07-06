@@ -283,6 +283,7 @@ function CourseDetailInner({
   const [showEditor, setShowEditor] = useState(false);
   const [autoPlay, setAutoPlay] = useState(false);
   const [curriculumOpen, setCurriculumOpen] = useState(true);
+  const [switchingLessonId, setSwitchingLessonId] = useState<number | null>(null);
   const [videoTime, setVideoTime] = useState(0);
   const videoTimeRef = useRef(0);
   const lastVideoTimeDisplayRef = useRef(-1);
@@ -455,6 +456,7 @@ function CourseDetailInner({
       const previousTime = videoTimeRef.current;
       const switchSeq = ++switchSeqRef.current;
 
+      setSwitchingLessonId(lesson.id);
       setActiveLessonId(lesson.id);
       setVideoTime(0);
       if (options.autoPlayNext != null) {
@@ -466,11 +468,7 @@ function CourseDetailInner({
       videoPlayerRef.current?.prepareForSourceSwitch();
       setPlayerLessonId(lesson.id);
       if (options.seekTo != null) {
-        window.setTimeout(() => {
-          if (switchSeq === switchSeqRef.current) {
-            videoPlayerRef.current?.seekTo(options.seekTo ?? 0);
-          }
-        }, 260);
+        videoPlayerRef.current?.seekWhenReady(options.seekTo);
       }
 
       window.setTimeout(() => {
@@ -479,6 +477,11 @@ function CourseDetailInner({
         }
         if (switchSeq === switchSeqRef.current) {
           void setLastWatched(courseIdRef.current, lesson.id).catch(() => {});
+          window.setTimeout(() => {
+            if (switchSeq === switchSeqRef.current) {
+              setSwitchingLessonId(null);
+            }
+          }, 160);
         }
       }, 180);
     },
@@ -1068,6 +1071,7 @@ function CourseDetailInner({
                   key={section.id}
                   section={section}
                   activeLessonId={activeLesson?.id}
+                  switchingLessonId={switchingLessonId}
                   onSelectLesson={handleSelectLesson}
                   onToggleComplete={handleToggleComplete}
                   onToggleFavorite={handleToggleFavorite}

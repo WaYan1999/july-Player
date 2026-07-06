@@ -7,6 +7,7 @@ import {
   useMemo,
   memo,
   forwardRef,
+  type CSSProperties,
   type SyntheticEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
@@ -256,6 +257,7 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
   const aiTranslationCacheRef = useRef(new Map<string, string>());
   const aiTranslationPromiseRef = useRef(new Map<string, Promise<string>>());
   const parsedTrackCacheRef = useRef(new Map<string, SubtitleCue[]>());
+  const pendingReadySeekRef = useRef<number | null>(null);
 
   const stopAiAudioTranslation = useCallback(() => {
     if (aiSegmentTimerRef.current) {
@@ -269,11 +271,31 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
 
   useImperativeHandle(ref, () => ({
     seekTo(seconds: number) {
-      if (videoRef.current) {
-        videoRef.current.currentTime = seconds;
-        setVideoTime(seconds);
-        onTimeUpdate?.(seconds);
+      const video = videoRef.current;
+      if (!video) {
+        pendingReadySeekRef.current = seconds;
+        return;
       }
+      if (video.readyState < 1) {
+        pendingReadySeekRef.current = seconds;
+        return;
+      }
+      video.currentTime = seconds;
+      setVideoTime(seconds);
+      onTimeUpdate?.(seconds);
+    },
+    seekWhenReady(seconds: number) {
+      pendingReadySeekRef.current = seconds;
+      window.requestAnimationFrame(() => {
+        const video = videoRef.current;
+        const pendingSeek = pendingReadySeekRef.current;
+        if (video && pendingSeek != null && video.readyState >= 1) {
+          pendingReadySeekRef.current = null;
+          video.currentTime = pendingSeek;
+          setVideoTime(pendingSeek);
+          onTimeUpdate?.(pendingSeek);
+        }
+      });
     },
     pause() {
       if (videoRef.current && !videoRef.current.paused) {
@@ -1377,7 +1399,12 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
   const handleMediaReady = useCallback(() => {
     setIsSwitching(false);
     setVideoError("");
-  }, []);
+    const pendingSeek = pendingReadySeekRef.current;
+    if (pendingSeek != null && videoRef.current) {
+      pendingReadySeekRef.current = null;
+      seekToTime(pendingSeek);
+    }
+  }, [seekToTime]);
 
   const handleVideoError = useCallback(
     (e: SyntheticEvent<HTMLVideoElement>) => {
@@ -1518,11 +1545,15 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
 
   const VolumeIcon = isMuted || volume === 0 ? SpeakerSlash : volume < 0.5 ? SpeakerLow : SpeakerHigh;
   const progress = videoDuration > 0 ? (videoTime / videoDuration) * 100 : 0;
+  const playerShellStyle = {
+    "--july-player-accent": accentColor || "var(--primary)",
+    cursor: showControls ? "default" : "none",
+  } as CSSProperties;
 
   if (!videoSrc) {
     return (
-      <div className="relative overflow-hidden rounded-xl border border-border bg-black">
-        <div className="flex aspect-video items-center justify-center bg-card">
+      <div className="july-player-shell relative overflow-hidden rounded-xl border border-border bg-black">
+        <div className="july-player-empty flex aspect-video items-center justify-center bg-card">
           <p className="font-sans text-sm text-muted-foreground">
             No lesson selected
           </p>
@@ -1535,17 +1566,17 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     <div
       ref={containerRef}
       className={cn(
-        "group/player video-player-shell relative overflow-hidden rounded-xl border border-border bg-black",
+        "group/player video-player-shell july-player-shell relative overflow-hidden rounded-xl border border-border bg-black",
         isFullscreen && "h-screen w-screen rounded-none border-0",
       )}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      style={{ cursor: showControls ? "default" : "none" }}
+      style={playerShellStyle}
     >
       <video
         ref={videoRef}
         className={cn(
-          "video-player-media w-full bg-black",
+          "video-player-media july-player-media w-full bg-black",
           isFullscreen ? "h-full object-cover" : "aspect-video object-contain",
         )}
         src={videoSrc}
@@ -1568,14 +1599,23 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       />
 
       {isSwitching && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black">
-          <div className="size-7 animate-spin rounded-full border-2 border-white/20 border-t-white/60" />
+        <div className="july-player-loading pointer-events-none absolute inset-0 flex items-center justify-center bg-black">
+          <div className="flex flex-col items-center gap-3">
+            <div className="july-player-loading-orbit" aria-hidden="true" />
+            <p className="font-sans text-xs font-medium text-white/68">
+              {language === "zh"
+                ? "正在准备视频"
+                : language === "fr"
+                  ? "Preparation de la video"
+                  : "Preparing video"}
+            </p>
+          </div>
         </div>
       )}
 
       {(videoError || videoFormatWarning) && !isSwitching && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/80 px-6 text-center">
-          <div className="max-w-md rounded-xl border border-white/10 bg-black/50 px-5 py-4 shadow-2xl backdrop-blur">
+        <div className="july-player-message-layer pointer-events-none absolute inset-0 flex items-center justify-center bg-black/80 px-6 text-center">
+          <div className="july-player-message-card max-w-md rounded-xl border border-white/10 bg-black/50 px-5 py-4 shadow-2xl backdrop-blur">
             <p className="font-sans text-sm font-semibold text-white">
               {language === "zh"
                 ? "视频暂时无法显示"
@@ -1592,13 +1632,13 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
 
       {displaySubtitleCueTexts.length > 0 && (
         <div
-          className="pointer-events-none absolute inset-x-0 flex flex-col items-center gap-1.5 px-8"
+          className="july-player-subtitle-layer pointer-events-none absolute inset-x-0 flex flex-col items-center gap-1.5 px-8"
           style={{ bottom: `${subStyle.bottomPct}%` }}
         >
           {displaySubtitleCueTexts.map((cueText, idx) => (
             <span
               key={`${idx}-${cueText}`}
-              className="inline-block max-w-[80%] rounded px-3 py-1.5 text-center font-sans leading-relaxed"
+              className="july-player-subtitle-line inline-block max-w-[80%] rounded px-3 py-1.5 text-center font-sans leading-relaxed"
               style={{
                 fontSize: isFullscreen
                   ? subStyle.fontSize * 1.5
@@ -1623,9 +1663,9 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       )}
 
       {hasEnded && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/70">
+        <div className="july-player-ended absolute inset-0 flex items-center justify-center bg-black/70">
           <div
-            className="flex flex-col items-center gap-5"
+            className="july-player-ended-card flex flex-col items-center gap-5"
             style={{
               animation: `fadeInUp 400ms ${EASE_OUT} both`,
             }}
@@ -1636,7 +1676,7 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             <div className="flex items-center gap-3">
               <button
                 onClick={handleReplay}
-                className="flex items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 py-2.5 font-sans text-sm font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/20"
+                className="july-player-secondary-action flex items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 py-2.5 font-sans text-sm font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/20"
               >
                 <CounterClockwise className="size-4" />
                 {t.replay}
@@ -1678,7 +1718,7 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
                   )}
                   <button
                     onClick={onNext}
-                    className="relative flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-sans text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+                    className="july-player-primary-action relative flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-sans text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
                   >
                     {t.nextLesson}
                     {autoSkipEnabled && !autoSkipCancelled && (
@@ -1710,10 +1750,10 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       {!isPlaying && !hasEnded && videoDuration > 0 && (
         <button
           onClick={togglePlay}
-          className="absolute inset-0 flex items-center justify-center"
+          className="july-player-center-trigger absolute inset-0 flex items-center justify-center"
         >
           <div
-            className="flex size-16 items-center justify-center rounded-full text-white backdrop-blur-sm transition-transform hover:scale-110"
+            className="july-player-center-play flex size-16 items-center justify-center rounded-full text-white backdrop-blur-sm transition-transform hover:scale-110"
             style={{
               transitionTimingFunction: EASE_OUT,
               background: accentColor
@@ -1731,34 +1771,34 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
 
       <div
         className={cn(
-          "absolute inset-x-0 bottom-0 flex flex-col bg-linear-to-t from-black/80 via-black/40 to-transparent px-4 pb-3 pt-10 transition-opacity duration-300 sm:px-5 sm:pb-4",
+          "july-player-controls absolute inset-x-0 bottom-0 flex flex-col bg-linear-to-t from-black/80 via-black/40 to-transparent px-4 pb-3 pt-10 transition-opacity duration-300 sm:px-5 sm:pb-4",
           isFullscreen && "px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-16 md:px-8",
           showControls || isSeeking ? "opacity-100" : "opacity-0 pointer-events-none",
         )}
       >
         <div
           ref={seekBarRef}
-          className="group/seek relative mb-2 h-1 cursor-pointer rounded-full bg-white/20"
+          className="group/seek july-player-seek relative mb-2 h-1 cursor-pointer rounded-full bg-white/20"
           onMouseDown={handleSeekMouseDown}
           onMouseMove={handleSeekHover}
           onMouseLeave={handleSeekLeave}
         >
           <div
-            className="absolute inset-y-0 left-0 w-full origin-left rounded-full bg-white/15"
+            className="july-player-seek-buffer absolute inset-y-0 left-0 w-full origin-left rounded-full bg-white/15"
             style={{ transform: `scaleX(${buffered})` }}
           />
           <div
-            className="absolute inset-y-0 left-0 w-full origin-left rounded-full bg-primary transition-transform duration-75"
+            className="july-player-seek-progress absolute inset-y-0 left-0 w-full origin-left rounded-full bg-primary transition-transform duration-75"
             style={{ transform: `scaleX(${progress / 100})` }}
           />
           <div
-            className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary opacity-0 shadow-md transition-opacity group-hover/seek:opacity-100"
+            className="july-player-seek-thumb absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary opacity-0 shadow-md transition-opacity group-hover/seek:opacity-100"
             style={{ left: `${progress}%` }}
           />
           <div className="absolute -inset-y-1 inset-x-0 group-hover/seek:-inset-y-0.5" />
           {seekPreviewTime !== null && (
             <div
-              className="absolute -top-8 -translate-x-1/2 rounded bg-black/90 px-1.5 py-0.5 font-mono text-[10px] text-white"
+              className="july-player-seek-preview absolute -top-8 -translate-x-1/2 rounded bg-black/90 px-1.5 py-0.5 font-mono text-[10px] text-white"
               style={{ left: `${seekPreviewX}px` }}
             >
               {formatVideoTime(seekPreviewTime)}
@@ -1766,8 +1806,8 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
           )}
         </div>
 
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="flex shrink-0 items-center gap-1">
+        <div className="july-player-control-row flex min-w-0 items-center gap-2">
+          <div className="july-player-control-cluster flex shrink-0 items-center gap-1">
             <ControlButton onClick={togglePlay} tooltip={`${isPlaying ? t.pause : t.play} (K)`}>
               {isPlaying ? (
                 <Pause className="size-5" weight="fill" />
@@ -1817,13 +1857,13 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
                   step={0.05}
                   value={isMuted ? 0 : volume}
                   onChange={handleVolumeChange}
-                  className="volume-slider h-1 w-full cursor-pointer appearance-none rounded-full bg-white/20 accent-primary [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
+                  className="volume-slider july-player-volume h-1 w-full cursor-pointer appearance-none rounded-full bg-white/20 accent-primary [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
                 />
               </div>
             </div>
           </div>
 
-          <span className="min-w-0 truncate whitespace-nowrap font-mono text-[11px] text-white/70 select-none">
+          <span className="july-player-time min-w-0 truncate whitespace-nowrap font-mono text-[11px] text-white/70 select-none">
             {formatVideoTime(videoTime)}
             {videoDuration > 0 && (
               <span className="text-white/40">
@@ -1833,7 +1873,7 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             )}
           </span>
 
-          <div className="ml-auto flex min-w-fit shrink-0 items-center gap-1">
+          <div className="july-player-control-cluster july-player-control-cluster-right ml-auto flex min-w-fit shrink-0 items-center gap-1">
             <ControlButton
               onClick={handleAiTranslateClick}
               tooltip={
@@ -2121,12 +2161,12 @@ function ControlButton({
       onClick={onClick}
       title={tooltip}
       className={cn(
-        "group/btn relative rounded-md p-1.5 transition-colors hover:bg-white/10",
+        "group/btn july-player-button relative rounded-md p-1.5 transition-colors hover:bg-white/10",
         active
-          ? "text-primary"
+          ? "july-player-button-active text-primary"
           : muted
-            ? "text-white/35 hover:text-white/60"
-            : "text-white/80 hover:text-white",
+            ? "july-player-button-muted text-white/35 hover:text-white/60"
+            : "july-player-button-normal text-white/80 hover:text-white",
       )}
     >
       {children}
@@ -2144,7 +2184,7 @@ function PopupMenu({
   return (
     <div
       className={cn(
-        "absolute bottom-full right-0 mb-2 rounded-lg border border-white/10 bg-black/90 p-1.5 shadow-xl backdrop-blur-md",
+        "july-player-popover absolute bottom-full right-0 mb-2 rounded-lg border border-white/10 bg-black/90 p-1.5 shadow-xl backdrop-blur-md",
         wide ? "min-w-44" : "min-w-28",
       )}
       onClick={(e) => e.stopPropagation()}
@@ -2186,9 +2226,9 @@ function SubSettingChip({
     <button
       onClick={onClick}
       className={cn(
-        "flex-1 rounded-md px-1 py-1 font-sans text-[10px] transition-colors hover:bg-white/10",
+        "july-player-sub-chip flex-1 rounded-md px-1 py-1 font-sans text-[10px] transition-colors hover:bg-white/10",
         active
-          ? "bg-white/10 font-semibold text-primary"
+          ? "july-player-sub-chip-active bg-white/10 font-semibold text-primary"
           : "text-white/60",
       )}
     >

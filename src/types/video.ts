@@ -1,5 +1,6 @@
 export interface VideoPlayerHandle {
   seekTo: (seconds: number) => void;
+  seekWhenReady: (seconds: number) => void;
   pause: () => void;
   prepareForSourceSwitch: () => void;
 }
