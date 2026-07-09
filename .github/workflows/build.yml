@@ -82,12 +82,11 @@ jobs:
           releaseName: '七月播放器 v__VERSION__'
           releaseBody: |
             七月播放器 v__VERSION__ 新增修改：
-            - 新增启动后自动静默检查远程更新，有新版本会在左下角主动显示更新入口。
-            - 新增应用重新聚焦补查和 6 小时周期检查，避免长期运行时错过远程版本。
-            - 左下角更新卡片支持发现更新、下载进度、安装完成重启和失败重试状态。
-            - 下载进度增加百分比与文件大小显示，优化“正在下载 0%”的反馈体验。
-            - 更新卡片自动避开侧边栏，折叠侧栏和窄屏场景下布局更稳定。
-            - 设置页检查更新按钮保留，并与全局左下角更新提示状态同步。
+            - 修复播放器底部进度条和控制栏遮挡视频内容的问题。
+            - 普通窗口下视频画面自动预留控制区，完整画面不再被底部进度条覆盖。
+            - 字幕、加载层、结束层和中心播放按钮同步避开底部控制区。
+            - 控制栏改为更轻的透明玻璃效果，降低观看时的视觉干扰。
+            - 优化移动端和窄窗口下控制区高度，避免画面内容被挤压或遮挡。
           includeUpdaterJson: true
           releaseDraft: true
           prerelease: false
@@ -170,12 +169,11 @@ jobs:
             version,
             notes: [
               `七月播放器 ${version} 新增修改：`,
-              "- 新增启动后自动静默检查远程更新，有新版本会在左下角主动显示更新入口。",
-              "- 新增应用重新聚焦补查和 6 小时周期检查，避免长期运行时错过远程版本。",
-              "- 左下角更新卡片支持发现更新、下载进度、安装完成重启和失败重试状态。",
-              "- 下载进度增加百分比与文件大小显示，优化正在下载 0% 的反馈体验。",
-              "- 更新卡片自动避开侧边栏，折叠侧栏和窄屏场景下布局更稳定。",
-              "- 设置页检查更新按钮保留，并与全局左下角更新提示状态同步。",
+              "- 修复播放器底部进度条和控制栏遮挡视频内容的问题。",
+              "- 普通窗口下视频画面自动预留控制区，完整画面不再被底部进度条覆盖。",
+              "- 字幕、加载层、结束层和中心播放按钮同步避开底部控制区。",
+              "- 控制栏改为更轻的透明玻璃效果，降低观看时的视觉干扰。",
+              "- 优化移动端和窄窗口下控制区高度，避免画面内容被挤压或遮挡。",
             ].join("\n"),
             pub_date: release.publishedAt,
             platforms: {
@@ -215,10 +213,20 @@ jobs:
             --pattern "*-setup.exe.sig" \
             --pattern "*.app.tar.gz" \
             --pattern "*.app.tar.gz.sig"
+          set +e
           npm run upload:release-artifacts -- \
             --release-dir release-artifacts \
             --version "${VERSION}" \
-            --notes "新增启动后自动检测远程更新，左下角显示发现更新、下载进度、安装完成重启和失败重试反馈；增加应用聚焦补查与 6 小时周期检查，优化正在下载 0% 的反馈，并同步设置页更新按钮状态。" \
+            --notes "修复播放器底部进度条和控制栏遮挡视频内容；普通窗口下视频画面自动预留控制区，字幕、加载层和中心播放按钮同步上移；控制栏改为更轻的透明玻璃效果，降低观看干扰。" \
             --panel-title "七月播放器 ${VERSION}" \
-            --panel-description "本次版本重点优化 <b>自动检测远程更新</b>、<b>左下角更新提示</b>、<b>下载进度反馈</b>、<b>失败重试</b> 与 <b>设置页状态同步</b>。" \
-            --require-complete
+            --panel-description "本次版本重点修复 <b>进度条遮挡视频内容</b>、<b>字幕被底部控制区影响</b>，并优化 <b>控制栏透明度</b> 与 <b>窄窗口布局</b>。" \
+            --require-complete 2>&1 | tee julyres-upload.log
+          upload_status=${PIPESTATUS[0]}
+          set -e
+          if [ "$upload_status" -ne 0 ]; then
+            if grep -Eiq "413|payload too large|player_package_too_large" julyres-upload.log; then
+              echo "::warning::JulyRes rejected the installer upload because the server upload limit is too small (HTTP 413). GitHub Release and latest.json were published successfully; increase the JulyRes/Nginx/PHP upload limit or add URL/chunk upload support before rerunning this step."
+            else
+              exit "$upload_status"
+            fi
+          fi
