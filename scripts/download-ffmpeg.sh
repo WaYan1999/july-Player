@@ -47,44 +47,58 @@ if [[ "$(uname)" == "Darwin" ]]; then
   done
 
 elif [[ "$(uname)" == "MINGW"* ]] || [[ "$(uname)" == "MSYS"* ]] || [[ "$(uname)" == *"NT"* ]]; then
-  FFMPEG_SRC="${FFMPEG_BIN:-}"
-  FFPROBE_SRC="${FFPROBE_BIN:-}"
-
-  if [[ -z "$FFMPEG_SRC" ]]; then
-    for CANDIDATE in /c/ProgramData/chocolatey/lib/ffmpeg/tools/ffmpeg/bin/ffmpeg.exe \
-                     /c/ProgramData/chocolatey/lib/ffmpeg*/tools/ffmpeg/bin/ffmpeg.exe; do
-      if [[ -f "$CANDIDATE" ]]; then
-        FFMPEG_SRC="$CANDIDATE"
-        break
+  pick_first_working_binary() {
+    local label="$1"
+    shift
+    local candidate=""
+    for candidate in "$@"; do
+      if [[ -n "$candidate" && -f "$candidate" ]] && "$candidate" -version >/dev/null 2>&1; then
+        echo "$candidate"
+        return 0
       fi
     done
-  fi
-  if [[ -z "$FFPROBE_SRC" ]]; then
-    for CANDIDATE in /c/ProgramData/chocolatey/lib/ffmpeg/tools/ffmpeg/bin/ffprobe.exe \
-                     /c/ProgramData/chocolatey/lib/ffmpeg*/tools/ffmpeg/bin/ffprobe.exe; do
-      if [[ -f "$CANDIDATE" ]]; then
-        FFPROBE_SRC="$CANDIDATE"
-        break
+    echo "Could not find a working $label binary." >&2
+    return 1
+  }
+
+  compact_windows_binary() {
+    local bin="$1"
+    if command -v upx >/dev/null 2>&1; then
+      local before
+      before=$(wc -c < "$bin" | tr -d ' ')
+      local backup="${bin}.before-upx"
+      cp "$bin" "$backup"
+      echo "Compressing $(basename "$bin") with UPX to keep the updater package below JulyRes upload limits..."
+      if upx --best --lzma "$bin" >/dev/null 2>&1 && "$bin" -version >/dev/null 2>&1; then
+        local after
+        after=$(wc -c < "$bin" | tr -d ' ')
+        echo "  $(basename "$bin"): ${before} -> ${after} bytes"
+        rm -f "$backup"
+      else
+        mv "$backup" "$bin"
+        echo "  UPX compression skipped/failed for $(basename "$bin"); restored the verified original." >&2
       fi
-    done
-  fi
+    fi
+  }
 
-  if [[ -z "$FFMPEG_SRC" ]] && command -v ffmpeg.exe >/dev/null 2>&1; then
-    FFMPEG_SRC="$(command -v ffmpeg.exe)"
-  fi
-  if [[ -z "$FFPROBE_SRC" ]] && command -v ffprobe.exe >/dev/null 2>&1; then
-    FFPROBE_SRC="$(command -v ffprobe.exe)"
-  fi
+  FFMPEG_SRC="$(pick_first_working_binary "ffmpeg" \
+    "${FFMPEG_BIN:-}" \
+    "$NM/ffmpeg-static/ffmpeg.exe" \
+    /c/ProgramData/chocolatey/lib/ffmpeg/tools/ffmpeg/bin/ffmpeg.exe \
+    /c/ProgramData/chocolatey/lib/ffmpeg*/tools/ffmpeg/bin/ffmpeg.exe \
+    "$(command -v ffmpeg.exe 2>/dev/null || true)")"
 
-  if [[ -z "$FFMPEG_SRC" ]]; then
-    FFMPEG_SRC="$NM/ffmpeg-static/ffmpeg.exe"
-  fi
-  if [[ -z "$FFPROBE_SRC" ]]; then
-    FFPROBE_SRC="$NM/ffprobe-static/bin/win32/x64/ffprobe.exe"
-  fi
+  FFPROBE_SRC="$(pick_first_working_binary "ffprobe" \
+    "${FFPROBE_BIN:-}" \
+    "$NM/ffprobe-static/bin/win32/x64/ffprobe.exe" \
+    /c/ProgramData/chocolatey/lib/ffmpeg/tools/ffmpeg/bin/ffprobe.exe \
+    /c/ProgramData/chocolatey/lib/ffmpeg*/tools/ffmpeg/bin/ffprobe.exe \
+    "$(command -v ffprobe.exe 2>/dev/null || true)")"
 
   cp "$FFPROBE_SRC" "$DEST/ffprobe-x86_64-pc-windows-msvc.exe"
   cp "$FFMPEG_SRC"  "$DEST/ffmpeg-x86_64-pc-windows-msvc.exe"
+  compact_windows_binary "$DEST/ffprobe-x86_64-pc-windows-msvc.exe"
+  compact_windows_binary "$DEST/ffmpeg-x86_64-pc-windows-msvc.exe"
   "$DEST/ffprobe-x86_64-pc-windows-msvc.exe" -version >/dev/null
   "$DEST/ffmpeg-x86_64-pc-windows-msvc.exe" -version >/dev/null
   echo "✓ $DEST/ffprobe-x86_64-pc-windows-msvc.exe"
