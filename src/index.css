@@ -1263,6 +1263,7 @@ textarea.july-heroui-field {
   --july-player-stroke-strong: rgb(255 255 255 / 0.22);
   --july-player-text-soft: rgb(246 248 252 / 0.72);
   --july-player-text-faint: rgb(246 248 252 / 0.45);
+  --july-player-controls-reserved: 4.8rem;
   isolation: isolate;
   background:
     radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--july-player-accent) 18%, transparent), transparent 34%),
@@ -1273,6 +1274,17 @@ textarea.july-heroui-field {
     inset 0 0 0 1px rgb(255 255 255 / 0.04);
   transform: translateZ(0);
   contain: layout paint;
+}
+
+.july-player-shell-reserved-controls {
+  padding-bottom: var(--july-player-controls-reserved);
+}
+
+.july-player-shell-reserved-controls .july-player-loading,
+.july-player-shell-reserved-controls .july-player-message-layer,
+.july-player-shell-reserved-controls .july-player-ended,
+.july-player-shell-reserved-controls .july-player-center-trigger {
+  bottom: var(--july-player-controls-reserved);
 }
 
 .july-player-shell::before,
@@ -1422,10 +1434,9 @@ textarea.july-heroui-field {
 
 .july-player-controls {
   z-index: 6;
-  gap: 0.75rem;
-  padding-top: 5rem;
-  background:
-    linear-gradient(180deg, transparent 0%, rgb(3 7 18 / 0.2) 26%, rgb(3 7 18 / 0.72) 72%, rgb(3 7 18 / 0.92) 100%);
+  gap: 0.42rem;
+  background: transparent;
+  filter: drop-shadow(0 10px 20px rgb(0 0 0 / 0.2));
   transform: translateZ(0);
   will-change: opacity;
 }
@@ -1437,16 +1448,16 @@ textarea.july-heroui-field {
   bottom: max(0.55rem, env(safe-area-inset-bottom));
   left: clamp(0.75rem, 2vw, 1.5rem);
   z-index: 0;
-  min-height: 3.65rem;
-  border: 1px solid var(--july-player-stroke);
-  border-radius: 1.25rem;
+  min-height: 3.05rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 0.95rem;
   background:
-    linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.04)),
-    var(--july-player-surface);
+    linear-gradient(180deg, rgb(255 255 255 / 0.085), rgb(255 255 255 / 0.025)),
+    rgb(8 13 22 / 0.44);
   box-shadow:
-    0 20px 54px rgb(0 0 0 / 0.36),
-    inset 0 1px 0 rgb(255 255 255 / 0.1);
-  backdrop-filter: blur(20px) saturate(1.18);
+    0 10px 22px rgb(0 0 0 / 0.18),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
+  backdrop-filter: blur(10px) saturate(1.08);
 }
 
 .july-player-controls > * {
@@ -1456,7 +1467,7 @@ textarea.july-heroui-field {
 
 .july-player-seek {
   height: 0.45rem;
-  margin: 0 clamp(0.1rem, 0.6vw, 0.65rem) 0.15rem;
+  margin: 0 clamp(0.85rem, 2.2vw, 1.55rem) 0.08rem;
   background: rgb(255 255 255 / 0.12);
   box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.38);
   transition:
@@ -1501,20 +1512,20 @@ textarea.july-heroui-field {
 .july-player-control-row {
   position: relative;
   align-items: center;
-  min-height: 2.6rem;
-  padding: 0 0.15rem;
+  min-height: 2.25rem;
+  padding: 0 clamp(0.85rem, 2.2vw, 1.55rem);
 }
 
 .july-player-control-cluster {
   align-items: center;
-  border: 1px solid rgb(255 255 255 / 0.08);
-  border-radius: 0.95rem;
-  background: rgb(255 255 255 / 0.055);
-  padding: 0.18rem;
+  border: 0;
+  border-radius: 0.85rem;
+  background: transparent;
+  padding: 0.1rem;
 }
 
 .july-player-control-cluster-right {
-  background: rgb(255 255 255 / 0.045);
+  background: transparent;
 }
 
 .july-player-button {
@@ -1562,8 +1573,8 @@ textarea.july-heroui-field {
 
 .july-player-time {
   border-radius: 0.75rem;
-  background: rgb(255 255 255 / 0.045);
-  padding: 0.4rem 0.55rem;
+  background: transparent;
+  padding: 0.32rem 0.45rem;
   color: var(--july-player-text-soft);
   font-variant-numeric: tabular-nums;
 }
@@ -1677,12 +1688,13 @@ textarea.july-heroui-field {
 
 @media (max-width: 48rem) {
   .july-player-shell {
+    --july-player-controls-reserved: 6.2rem;
     border-radius: 1rem;
   }
 
   .july-player-controls {
     padding-right: 0.75rem;
-    padding-bottom: 0.75rem;
+    padding-bottom: 0.6rem;
     padding-left: 0.75rem;
   }
 
@@ -1690,7 +1702,7 @@ textarea.july-heroui-field {
     right: 0.5rem;
     bottom: 0.5rem;
     left: 0.5rem;
-    min-height: 6.35rem;
+    min-height: 5.4rem;
   }
 
   .july-player-control-row {

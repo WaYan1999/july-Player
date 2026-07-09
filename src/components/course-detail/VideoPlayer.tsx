@@ -1567,6 +1567,7 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       ref={containerRef}
       className={cn(
         "group/player video-player-shell july-player-shell relative overflow-hidden rounded-xl border border-border bg-black",
+        !isFullscreen && "july-player-shell-reserved-controls",
         isFullscreen && "h-screen w-screen rounded-none border-0",
       )}
       onMouseMove={handleMouseMove}
@@ -1633,7 +1634,11 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       {displaySubtitleCueTexts.length > 0 && (
         <div
           className="july-player-subtitle-layer pointer-events-none absolute inset-x-0 flex flex-col items-center gap-1.5 px-8"
-          style={{ bottom: `${subStyle.bottomPct}%` }}
+          style={{
+            bottom: isFullscreen
+              ? `${subStyle.bottomPct}%`
+              : `calc(${subStyle.bottomPct}% + var(--july-player-controls-reserved, 0px))`,
+          }}
         >
           {displaySubtitleCueTexts.map((cueText, idx) => (
             <span
@@ -1771,8 +1776,8 @@ export const VideoPlayer = memo(forwardRef<VideoPlayerHandle, VideoPlayerProps>(
 
       <div
         className={cn(
-          "july-player-controls absolute inset-x-0 bottom-0 flex flex-col bg-linear-to-t from-black/80 via-black/40 to-transparent px-4 pb-3 pt-10 transition-opacity duration-300 sm:px-5 sm:pb-4",
-          isFullscreen && "px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-16 md:px-8",
+          "july-player-controls absolute inset-x-0 bottom-0 flex flex-col px-4 pb-3 pt-2 transition-opacity duration-300 sm:px-5 sm:pb-4",
+          isFullscreen && "px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 md:px-8",
           showControls || isSeeking ? "opacity-100" : "opacity-0 pointer-events-none",
         )}
       >
