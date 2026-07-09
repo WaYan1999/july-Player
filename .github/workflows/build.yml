@@ -86,9 +86,9 @@ jobs:
           releaseName: '七月播放器 v__VERSION__'
           releaseBody: |
             七月播放器 v__VERSION__ 新增修改：
-            - 修复 JulyRes 远程更新发布未同步的问题，降低 Windows 更新包体积，减少上传超限风险。
-            - Windows 构建优先选择可运行的精简 ffmpeg/ffprobe，并在 CI 使用 UPX 压缩二进制。
-            - 继续保留播放器底部控制区不遮挡视频内容、进度条更轻更细、窄窗口布局优化。
+            - 内置离线 ASR 改用 Whisper tiny 量化模型，保留离线语音识别能力，同时显著降低安装包体积。
+            - Windows 构建继续压缩 ffmpeg/ffprobe，进一步降低 JulyRes 上传超限风险。
+            - JulyRes 上传失败时 Actions 直接失败，避免出现 GitHub 已发布但网站 latest.json 未更新的误判。
           includeUpdaterJson: true
           releaseDraft: true
           prerelease: false
@@ -171,9 +171,9 @@ jobs:
             version,
             notes: [
               `七月播放器 ${version} 新增修改：`,
-              "- 修复 JulyRes 远程更新发布未同步的问题，降低 Windows 更新包体积，减少上传超限风险。",
-              "- Windows 构建优先选择可运行的精简 ffmpeg/ffprobe，并在 CI 使用 UPX 压缩二进制。",
-              "- 继续保留播放器底部控制区不遮挡视频内容、进度条更轻更细、窄窗口布局优化。",
+              "- 内置离线 ASR 改用 Whisper tiny 量化模型，保留离线语音识别能力，同时显著降低安装包体积。",
+              "- Windows 构建继续压缩 ffmpeg/ffprobe，进一步降低 JulyRes 上传超限风险。",
+              "- JulyRes 上传失败时 Actions 直接失败，避免出现 GitHub 已发布但网站 latest.json 未更新的误判。",
             ].join("\n"),
             pub_date: release.publishedAt,
             platforms: {
@@ -217,16 +217,15 @@ jobs:
           npm run upload:release-artifacts -- \
             --release-dir release-artifacts \
             --version "${VERSION}" \
-            --notes "修复 JulyRes 远程更新发布未同步问题：Windows 构建优先选择可运行的精简 ffmpeg/ffprobe，并在 CI 使用 UPX 压缩二进制，降低更新包体积，减少上传超限风险；同时保留底部控制区不遮挡视频内容的优化。" \
+            --notes "内置离线 ASR 改用 Whisper tiny 量化模型，保留离线语音识别能力，同时显著降低安装包体积；Windows 构建继续压缩 ffmpeg/ffprobe，并在 JulyRes 上传失败时直接让 Actions 失败，避免网站 latest.json 未更新却误判发布成功。" \
             --panel-title "七月播放器 ${VERSION}" \
-            --panel-description "本次版本重点修复 <b>远程更新发布同步</b> 与 <b>Windows 更新包体积过大</b>，降低 JulyRes 上传超限风险，并保留 <b>底部控制区不遮挡视频</b> 的播放体验优化。" \
+            --panel-description "本次版本重点优化 <b>离线 ASR 量化模型</b> 与 <b>安装包体积</b>，降低 JulyRes 上传超限风险，并修复 <b>网站 latest.json 未更新却误判发布成功</b> 的发布反馈问题。" \
             --require-complete 2>&1 | tee julyres-upload.log
           upload_status=${PIPESTATUS[0]}
           set -e
           if [ "$upload_status" -ne 0 ]; then
             if grep -Eiq "413|payload too large|player_package_too_large" julyres-upload.log; then
-              echo "::warning::JulyRes rejected the installer upload because the server upload limit is too small (HTTP 413). GitHub Release and latest.json were published successfully; increase the JulyRes/Nginx/PHP upload limit or add URL/chunk upload support before rerunning this step."
-            else
-              exit "$upload_status"
+              echo "::error::JulyRes rejected the installer upload because the server upload limit is too small (HTTP 413). The GitHub Release exists, but JulyRes latest.json was not published. Keep artifacts below the server limit or add URL/chunk upload support."
             fi
+            exit "$upload_status"
           fi

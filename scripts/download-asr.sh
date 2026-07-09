@@ -6,7 +6,14 @@ set -euo pipefail
 ASR_DIR="src-tauri/resources/asr"
 mkdir -p "$ASR_DIR"
 
-MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin"
+# Keep the offline ASR runtime bundled, but use the quantized tiny model so
+# Windows/macOS updater artifacts stay below common reverse-proxy upload limits
+# (Cloudflare and many Nginx/PHP deployments often reject files above 100 MB).
+# The file is intentionally saved as ggml-tiny.bin because the Rust runtime
+# expects that stable name.
+MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin"
+MODEL_PATH="$ASR_DIR/ggml-tiny.bin"
+LEGACY_MODEL_MAX_BYTES=$((40 * 1024 * 1024))
 WHISPER_VERSION="v1.8.6"
 WHISPER_ZIP_URL="https://github.com/ggml-org/whisper.cpp/releases/download/${WHISPER_VERSION}/whisper-bin-x64.zip"
 WHISPER_SRC_URL="https://github.com/ggml-org/whisper.cpp/archive/refs/tags/${WHISPER_VERSION}.tar.gz"
@@ -21,9 +28,17 @@ download() {
   fi
 }
 
-if [[ ! -s "$ASR_DIR/ggml-tiny.bin" ]]; then
-  echo "Downloading Whisper tiny ASR model..."
-  download "$MODEL_URL" "$ASR_DIR/ggml-tiny.bin"
+if [[ -s "$MODEL_PATH" ]]; then
+  MODEL_SIZE=$(wc -c < "$MODEL_PATH" | tr -d ' ')
+  if [[ "$MODEL_SIZE" -gt "$LEGACY_MODEL_MAX_BYTES" ]]; then
+    echo "Replacing legacy Whisper tiny ASR model (${MODEL_SIZE} bytes) with compact quantized model..."
+    rm -f "$MODEL_PATH"
+  fi
+fi
+
+if [[ ! -s "$MODEL_PATH" ]]; then
+  echo "Downloading compact Whisper tiny ASR model..."
+  download "$MODEL_URL" "$MODEL_PATH"
 fi
 
 case "$(uname -s)" in
