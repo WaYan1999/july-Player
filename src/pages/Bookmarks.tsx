@@ -13,6 +13,7 @@ import { Button } from "@heroui/react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/ui/ProgressBar";
+import { CourseCover } from "@/components/dashboard/CourseCover";
 import type { Course, FavoriteLesson } from "@/types";
 import {
   getBookmarkedCourses,
@@ -220,11 +221,6 @@ function formatLastWatched(
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function getCoverWord(title: string) {
-  const firstWord = title.trim().split(/\s+/)[0];
-  return firstWord || title.slice(0, 2) || "Course";
-}
-
 function BookmarkedCourseCard({
   course,
   index,
@@ -246,32 +242,18 @@ function BookmarkedCourseCard({
       style={{ animation: `card-in 350ms ${EASE_OUT} ${index * 50}ms both` }}
     >
       <article className="relative flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border/80 bg-card transition-[border-color,background-color,transform] duration-200 ease-out hover:-translate-y-0.5 hover:border-primary/35 hover:bg-secondary/70 md:min-h-44 md:flex-row">
-        <div
-          className="relative flex h-32 shrink-0 items-center justify-center overflow-hidden sm:h-36 md:h-auto md:w-64 lg:w-72"
-          style={{ backgroundColor: `${course.accentColor}14` }}
+        <CourseCover
+          thumbnailPath={course.thumbnailPath}
+          accentColor={course.accentColor}
+          title={course.title}
+          className="relative h-32 shrink-0 sm:h-36 md:h-auto md:w-64 lg:w-72"
         >
-          <div
-            className="absolute inset-x-0 top-0 h-1.5 md:inset-y-0 md:left-0 md:h-auto md:w-1.5"
-            style={{ backgroundColor: course.accentColor }}
-          />
-          <div
-            className="absolute inset-0 opacity-70"
-            style={{
-              background: `radial-gradient(circle at 50% 25%, ${course.accentColor}24, transparent 44%)`,
-            }}
-          />
-          <span
-            className="relative max-w-[70%] truncate font-heading text-2xl font-bold opacity-25 sm:text-3xl"
-            style={{ color: course.accentColor }}
-          >
-            {getCoverWord(course.title)}
-          </span>
           <BookmarkToggle
             bookmarked={course.bookmarked}
             courseId={course.id}
             onBookmarkChange={onBookmarkChange}
           />
-        </div>
+        </CourseCover>
 
         <div className="flex min-w-0 flex-1 px-5 py-5 sm:px-6">
           <div className="flex min-w-0 flex-1 flex-col gap-3">

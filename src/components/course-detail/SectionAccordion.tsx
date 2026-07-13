@@ -14,6 +14,7 @@ import { useI18n } from "@/hooks/useI18n";
 
 interface SectionAccordionProps {
   section: Section;
+  startLessonIndex: number;
   activeLessonId: number | undefined;
   switchingLessonId?: number | null;
   onSelectLesson: (lesson: Lesson) => void;
@@ -23,6 +24,7 @@ interface SectionAccordionProps {
 
 function SectionAccordionComponent({
   section,
+  startLessonIndex,
   activeLessonId,
   switchingLessonId,
   onSelectLesson,
@@ -84,9 +86,10 @@ function SectionAccordionComponent({
           className="flex flex-col gap-px px-2 pt-1 pb-2"
           style={{ animation: `fade-in 140ms ${EASE} both` }}
         >
-          {section.lessons.map((lesson) => {
+          {section.lessons.map((lesson, lessonIndex) => {
             const isActive = lesson.id === activeLessonId;
             const isSwitching = lesson.id === switchingLessonId;
+            const lessonNumber = startLessonIndex + lessonIndex + 1;
 
             return (
               <button
@@ -94,7 +97,7 @@ function SectionAccordionComponent({
                 key={lesson.id}
                 onClick={() => onSelectLesson(lesson)}
                 className={cn(
-                  "course-lesson-row group flex w-full items-center justify-start gap-3 rounded-lg border-0 px-3 py-2.5 text-left transition-colors duration-100 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                  "course-lesson-row group flex w-full items-center justify-start gap-2.5 rounded-lg border-0 px-3 py-2.5 text-left transition-colors duration-100 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
                   isActive && "is-active bg-primary/5",
                   isSwitching && "is-switching",
                 )}
@@ -128,7 +131,16 @@ function SectionAccordionComponent({
 
                 <span
                   className={cn(
-                    "flex-1 font-sans text-xs",
+                    "w-5 shrink-0 text-right font-mono text-[10px] font-semibold tabular-nums text-muted-foreground/65",
+                    isActive && "text-primary",
+                  )}
+                >
+                  {String(lessonNumber).padStart(2, "0")}
+                </span>
+
+                <span
+                  className={cn(
+                    "min-w-0 flex-1 truncate font-sans text-xs",
                     lesson.completed
                       ? "text-muted-foreground"
                       : "text-foreground",
@@ -176,6 +188,7 @@ export const SectionAccordion = memo(
   SectionAccordionComponent,
   (prev, next) => {
     if (prev.section !== next.section) return false;
+    if (prev.startLessonIndex !== next.startLessonIndex) return false;
     if (
       prev.onSelectLesson !== next.onSelectLesson ||
       prev.onToggleComplete !== next.onToggleComplete ||

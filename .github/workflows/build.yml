@@ -85,10 +85,12 @@ jobs:
           tagName: v__VERSION__
           releaseName: '七月播放器 v__VERSION__'
           releaseBody: |
-            七月播放器 v__VERSION__ 新增修改：
-            - 内置离线 ASR 改用 Whisper tiny 量化模型，保留离线语音识别能力，同时显著降低安装包体积。
-            - Windows 构建继续压缩 ffmpeg/ffprobe，进一步降低 JulyRes 上传超限风险。
-            - JulyRes 上传失败时 Actions 直接失败，避免出现 GitHub 已发布但网站 latest.json 未更新的误判。
+            七月播放器 v__VERSION__ 更新内容：
+            - 支持按 1.4、5.2、12.1 等层级编号自然排序导入课程，并清理标题中的编号前缀。
+            - 优化大型课程导入性能、结构预览布局、加载状态和按钮操作反馈。
+            - 新增统一默认课程封面，并在课程库、书签和导入预览中保持一致显示。
+            - 课程目录新增跨章节连续课程序号，长课程定位更清晰。
+            - 使用 Tauri 原生全屏，优化全屏布局、窗口边缘覆盖和 F11 切换体验。
           includeUpdaterJson: true
           releaseDraft: true
           prerelease: false
@@ -170,10 +172,11 @@ jobs:
           const latest = {
             version,
             notes: [
-              `七月播放器 ${version} 新增修改：`,
-              "- 内置离线 ASR 改用 Whisper tiny 量化模型，保留离线语音识别能力，同时显著降低安装包体积。",
-              "- Windows 构建继续压缩 ffmpeg/ffprobe，进一步降低 JulyRes 上传超限风险。",
-              "- JulyRes 上传失败时 Actions 直接失败，避免出现 GitHub 已发布但网站 latest.json 未更新的误判。",
+              `七月播放器 ${version} 更新内容：`,
+              "- 支持层级编号课程的自然排序和标题清理。",
+              "- 优化大型课程导入性能与操作反馈。",
+              "- 新增统一默认课程封面和连续课程序号。",
+              "- 修复并优化 Tauri 原生全屏布局与 F11 切换。",
             ].join("\n"),
             pub_date: release.publishedAt,
             platforms: {
@@ -217,9 +220,9 @@ jobs:
           npm run upload:release-artifacts -- \
             --release-dir release-artifacts \
             --version "${VERSION}" \
-            --notes "内置离线 ASR 改用 Whisper tiny 量化模型，保留离线语音识别能力，同时显著降低安装包体积；Windows 构建继续压缩 ffmpeg/ffprobe，并在 JulyRes 上传失败时直接让 Actions 失败，避免网站 latest.json 未更新却误判发布成功。" \
+            --notes "支持层级编号课程自然排序；优化大型课程导入性能与操作反馈；新增统一默认课程封面和连续课程序号；修复并优化原生全屏布局与 F11 切换。" \
             --panel-title "七月播放器 ${VERSION}" \
-            --panel-description "本次版本重点优化 <b>离线 ASR 量化模型</b> 与 <b>安装包体积</b>，降低 JulyRes 上传超限风险，并修复 <b>网站 latest.json 未更新却误判发布成功</b> 的发布反馈问题。" \
+            --panel-description "本次版本重点优化 <b>课程导入排序与性能</b>、<b>课程目录编号</b>、<b>默认课程封面</b>及 <b>原生全屏体验</b>。" \
             --require-complete 2>&1 | tee julyres-upload.log
           upload_status=${PIPESTATUS[0]}
           set -e

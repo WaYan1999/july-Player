@@ -137,7 +137,7 @@ struct FolderEntry {
 
 #[derive(Clone)]
 enum SortKey {
-    Numeric(u32),
+    Numeric(Vec<u32>),
     Alphabetic(String),
 }
 
@@ -219,6 +219,7 @@ pub fn parse_folder(folder_path: &Path) -> Result<ParsedCourse, String> {
     let mut sections: Vec<ParsedSection>;
     let mut course_resources: Vec<ParsedResource> = Vec::new();
     let mut used_positional_subtitle = false;
+    let mut used_numeric_order = false;
 
     // Collect subtitles from subtitle subfolders (Subs/, Subtitles/, etc.)
     let sub_folder_subs = collect_subtitle_folder_files(&root_folders);
@@ -241,9 +242,10 @@ pub fn parse_folder(folder_path: &Path) -> Result<ParsedCourse, String> {
 
     if has_root_videos && !has_subfolders {
         // Pattern 1: Flat
-        let (lessons, positional) =
+        let (lessons, positional, numeric_order) =
             build_lessons_from_files(&root_videos, &all_root_subtitles, &root_other, folder_path);
         used_positional_subtitle = positional;
+        used_numeric_order = numeric_order;
         sections = vec![ParsedSection {
             title: title.clone(),
             order: 0,
@@ -322,7 +324,7 @@ pub fn parse_folder(folder_path: &Path) -> Result<ParsedCourse, String> {
                         continue;
                     }
 
-                    let (lessons, positional) = build_lessons_from_files(
+                    let (lessons, positional, numeric_order) = build_lessons_from_files(
                         &ss_videos,
                         &ss_subtitles,
                         &ss_other,
@@ -330,6 +332,9 @@ pub fn parse_folder(folder_path: &Path) -> Result<ParsedCourse, String> {
                     );
                     if positional {
                         used_positional_subtitle = true;
+                    }
+                    if numeric_order {
+                        used_numeric_order = true;
                     }
 
                     let section_title = format!(
@@ -345,10 +350,13 @@ pub fn parse_folder(folder_path: &Path) -> Result<ParsedCourse, String> {
                 }
             } else if !sub_videos.is_empty() {
                 // Pattern 2: Direct section with videos
-                let (lessons, positional) =
+                let (lessons, positional, numeric_order) =
                     build_lessons_from_files(&sub_videos, &sub_subtitles, &sub_other, &folder.path);
                 if positional {
                     used_positional_subtitle = true;
+                }
+                if numeric_order {
+                    used_numeric_order = true;
                 }
 
                 // Collect resources from code/resource subfolders
@@ -380,10 +388,13 @@ pub fn parse_folder(folder_path: &Path) -> Result<ParsedCourse, String> {
         sections = Vec::new();
 
         // Root videos become a virtual section
-        let (root_lessons, positional) =
+        let (root_lessons, positional, numeric_order) =
             build_lessons_from_files(&root_videos, &all_root_subtitles, &root_other, folder_path);
         if positional {
             used_positional_subtitle = true;
+        }
+        if numeric_order {
+            used_numeric_order = true;
         }
         sections.push(ParsedSection {
             title: "Introduction".to_string(),
@@ -426,10 +437,13 @@ pub fn parse_folder(folder_path: &Path) -> Result<ParsedCourse, String> {
                 continue;
             }
 
-            let (lessons, positional) =
+            let (lessons, positional, numeric_order) =
                 build_lessons_from_files(&sub_videos, &sub_subtitles, &sub_other, &folder.path);
             if positional {
                 used_positional_subtitle = true;
+            }
+            if numeric_order {
+                used_numeric_order = true;
             }
 
             sections.push(ParsedSection {
@@ -477,14 +491,8 @@ pub fn parse_folder(folder_path: &Path) -> Result<ParsedCourse, String> {
         })
         .count();
 
-    let has_numbers = sections.iter().any(|s| {
-        s.lessons
-            .iter()
-            .any(|l| natural_order_number(&l.title).is_some())
-    });
-
-    if !has_numbers {
-        confidence_reasons.push("No numbered files — using alphabetical order".to_string());
+    if !used_numeric_order {
+        confidence_reasons.push("No numbered files - using alphabetical order".to_string());
     }
     if used_positional_subtitle {
         confidence_reasons.push("Some subtitles matched by position (uncertain)".to_string());
@@ -574,31 +582,18 @@ fn build_lessons_from_files(
     subtitles: &[&FileEntry],
     other_files: &[&FileEntry],
     _folder_path: &Path,
-) -> (Vec<ParsedLesson>, bool) {
+) -> (Vec<ParsedLesson>, bool, bool) {
     let mut sorted_videos: Vec<&&FileEntry> = videos.iter().collect();
 
-    // Determine if we have numbers (leading or embedded like "Lecture 3")
-    let has_leading = sorted_videos
+    // Detect hierarchical numbers such as 5.2, 12.1, and embedded forms like Lecture 3.
+    let has_numbers = sorted_videos
         .iter()
-        .any(|v| natural_order_number(&v.name).is_some());
-    let has_embedded = sorted_videos
-        .iter()
-        .any(|v| extract_embedded_number(&v.name).is_some());
-    let has_numbers = has_leading || has_embedded;
+        .any(|video| natural_order_parts(&video.name).is_some());
 
     if has_numbers {
         // Two-tier sort: unnumbered files first (intro/overview content),
         // then numbered files in numeric order
-        sorted_videos.sort_by(|a, b| {
-            let na = natural_order_number(&a.name);
-            let nb = natural_order_number(&b.name);
-            match (na, nb) {
-                (Some(a_num), Some(b_num)) => a_num.cmp(&b_num).then_with(|| a.name.cmp(&b.name)),
-                (None, Some(_)) => std::cmp::Ordering::Less, // unnumbered before numbered
-                (Some(_), None) => std::cmp::Ordering::Greater, // numbered after unnumbered
-                (None, None) => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-            }
-        });
+        sorted_videos.sort_by(|a, b| compare_natural_names(&a.name, &b.name));
     } else {
         sorted_videos.sort_by_key(|a| a.name.to_lowercase());
     }
@@ -613,16 +608,7 @@ fn build_lessons_from_files(
     // Sort subtitles the same way as videos for positional fallback
     let mut sorted_subtitles: Vec<&&FileEntry> = subtitles.iter().collect();
     if has_numbers {
-        sorted_subtitles.sort_by(|a, b| {
-            let na = natural_order_number(&a.name);
-            let nb = natural_order_number(&b.name);
-            match (na, nb) {
-                (Some(a_num), Some(b_num)) => a_num.cmp(&b_num).then_with(|| a.name.cmp(&b.name)),
-                (None, Some(_)) => std::cmp::Ordering::Less,
-                (Some(_), None) => std::cmp::Ordering::Greater,
-                (None, None) => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-            }
-        });
+        sorted_subtitles.sort_by(|a, b| compare_natural_names(&a.name, &b.name));
     } else {
         sorted_subtitles.sort_by_key(|a| a.name.to_lowercase());
     }
@@ -634,25 +620,32 @@ fn build_lessons_from_files(
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_else(|| "ffprobe".to_string());
 
-    // Probe durations and embedded subtitles in parallel using scoped threads
+    // Probe durations and embedded subtitles with bounded concurrency. Large flat
+    // courses can contain hundreds of files; spawning one ffprobe process per
+    // file at once causes severe CPU, memory, and disk contention.
     let video_paths: Vec<&Path> = sorted_videos.iter().map(|v| v.path.as_path()).collect();
-    let probe_results: Vec<(u64, Vec<ParsedSubtitle>)> = std::thread::scope(|scope| {
-        let handles: Vec<_> = video_paths
-            .iter()
-            .map(|path| {
-                let bin = &ffprobe_bin;
-                scope.spawn(move || {
-                    let duration = probe_video_duration(path);
-                    let embedded = probe_embedded_subtitles(path, bin);
-                    (duration, embedded)
+    let concurrency = std::thread::available_parallelism()
+        .map(|count| count.get())
+        .unwrap_or(4)
+        .clamp(2, 6);
+    let mut probe_results: Vec<(u64, Vec<ParsedSubtitle>)> = Vec::with_capacity(video_paths.len());
+
+    for chunk in video_paths.chunks(concurrency) {
+        let chunk_results = std::thread::scope(|scope| {
+            let handles: Vec<_> = chunk
+                .iter()
+                .map(|path| {
+                    let bin = &ffprobe_bin;
+                    scope.spawn(move || probe_video_metadata(path, bin))
                 })
-            })
-            .collect();
-        handles
-            .into_iter()
-            .map(|h| h.join().unwrap_or((0, Vec::new())))
-            .collect()
-    });
+                .collect();
+            handles
+                .into_iter()
+                .map(|handle| handle.join().unwrap_or((0, Vec::new())))
+                .collect::<Vec<_>>()
+        });
+        probe_results.extend(chunk_results);
+    }
 
     let mut lessons = Vec::new();
 
@@ -726,7 +719,7 @@ fn build_lessons_from_files(
         lesson.title = title;
     }
 
-    (lessons, used_positional)
+    (lessons, used_positional, has_numbers)
 }
 
 // --- File classification helpers ---
@@ -867,20 +860,35 @@ fn classify_resource_known(ext: &str, _name: &str) -> bool {
 // --- Name parsing ---
 
 fn extract_sort_key(name: &str) -> SortKey {
-    if let Some(num) = natural_order_number(name) {
-        SortKey::Numeric(num)
+    if let Some(parts) = natural_order_parts(name) {
+        SortKey::Numeric(parts)
     } else {
         SortKey::Alphabetic(name.to_lowercase())
     }
 }
 
 pub fn natural_order_number(name: &str) -> Option<u32> {
-    extract_leading_number(name)
-        .or_else(|| extract_chinese_ordinal_number(name))
-        .or_else(|| extract_embedded_number(name))
+    natural_order_parts(name).and_then(|parts| parts.first().copied())
 }
 
-fn extract_leading_number(name: &str) -> Option<u32> {
+fn natural_order_parts(name: &str) -> Option<Vec<u32>> {
+    extract_leading_number_parts(name)
+        .or_else(|| extract_chinese_ordinal_number(name).map(|number| vec![number]))
+        .or_else(|| extract_embedded_number(name).map(|number| vec![number]))
+}
+
+fn compare_natural_names(a: &str, b: &str) -> std::cmp::Ordering {
+    match (natural_order_parts(a), natural_order_parts(b)) {
+        (Some(a_parts), Some(b_parts)) => a_parts
+            .cmp(&b_parts)
+            .then_with(|| a.to_lowercase().cmp(&b.to_lowercase())),
+        (None, Some(_)) => std::cmp::Ordering::Less,
+        (Some(_), None) => std::cmp::Ordering::Greater,
+        (None, None) => a.to_lowercase().cmp(&b.to_lowercase()),
+    }
+}
+
+fn extract_leading_number_parts(name: &str) -> Option<Vec<u32>> {
     let s = name.trim();
 
     // Try to find a leading number, possibly surrounded by brackets/parens
@@ -910,14 +918,11 @@ fn extract_leading_number(name: &str) -> Option<u32> {
         .trim_start_matches('(')
         .trim_start();
 
-    // Extract digits
     let digits: String = start.chars().take_while(|c| c.is_ascii_digit()).collect();
 
     if digits.is_empty() {
         return None;
     }
-
-    let num: u32 = digits.parse().ok()?;
 
     // Check if it's a platform ID (6+ digits before underscore) — skip it
     if digits.len() >= 6 {
@@ -926,18 +931,49 @@ fn extract_leading_number(name: &str) -> Option<u32> {
         if rest.starts_with('_') {
             // This is likely a platform ID — try to find the real number after it
             let after_id = rest.trim_start_matches('_');
-            let real_digits: String = after_id
-                .chars()
-                .take_while(|c| c.is_ascii_digit())
-                .collect();
-            if !real_digits.is_empty() {
-                return real_digits.parse().ok();
-            }
-            return None;
+            return parse_numeric_sequence(after_id).map(|(parts, _)| parts);
         }
     }
 
-    Some(num)
+    parse_numeric_sequence(start).map(|(parts, _)| parts)
+}
+
+#[cfg(test)]
+fn extract_leading_number(name: &str) -> Option<u32> {
+    extract_leading_number_parts(name).and_then(|parts| parts.first().copied())
+}
+
+fn parse_numeric_sequence(input: &str) -> Option<(Vec<u32>, usize)> {
+    let bytes = input.as_bytes();
+    let mut cursor = 0usize;
+    let mut parts = Vec::new();
+
+    loop {
+        let number_start = cursor;
+        while cursor < bytes.len() && bytes[cursor].is_ascii_digit() {
+            cursor += 1;
+        }
+        if cursor == number_start {
+            break;
+        }
+
+        let number = input[number_start..cursor].parse::<u32>().ok()?;
+        parts.push(number);
+
+        if cursor >= bytes.len() || !matches!(bytes[cursor], b'.' | b'_') {
+            break;
+        }
+        if cursor + 1 >= bytes.len() || !bytes[cursor + 1].is_ascii_digit() {
+            break;
+        }
+        cursor += 1;
+    }
+
+    if parts.is_empty() {
+        None
+    } else {
+        Some((parts, cursor))
+    }
 }
 
 /// Search for keyword+number patterns anywhere in the name.
@@ -1309,12 +1345,13 @@ fn strip_leading_number(name: &str) -> String {
         return s.to_string();
     }
 
-    // Handle bracketed numbers: [01] or (01)
+    // Handle bracketed numbers: [01], (01), [5.2], or (12.1)
     if chars[0] == '[' || chars[0] == '(' {
         let close = if chars[0] == '[' { ']' } else { ')' };
         if let Some(close_pos) = chars.iter().position(|c| *c == close) {
             let inner: String = chars[1..close_pos].iter().collect();
-            if inner.chars().all(|c| c.is_ascii_digit()) {
+            let inner = inner.trim();
+            if parse_numeric_sequence(inner).is_some_and(|(_, consumed)| consumed == inner.len()) {
                 let rest: String = chars[close_pos + 1..].iter().collect();
                 let rest = rest.trim_start_matches([' ', '-', '.', '_']);
                 return rest.to_string();
@@ -1331,13 +1368,9 @@ fn strip_leading_number(name: &str) -> String {
         if lower.starts_with(prefix) {
             let rest = &s[prefix.len()..];
             let rest = rest.trim_start();
-            // Strip the number after the prefix
-            let digits: String = rest
-                .chars()
-                .take_while(|c| c.is_ascii_digit() || *c == '.')
-                .collect();
-            if !digits.is_empty() {
-                let after = &rest[digits.len()..];
+            // Strip the hierarchical number after the prefix.
+            if let Some((_, consumed)) = parse_numeric_sequence(rest) {
+                let after = &rest[consumed..];
                 let after = after.trim_start_matches([' ', '-', '.', '_', ':']);
                 if !after.is_empty() {
                     return after.to_string();
@@ -1346,11 +1379,9 @@ fn strip_leading_number(name: &str) -> String {
         }
     }
 
-    // Handle plain leading numbers
-    let digits: String = chars.iter().take_while(|c| c.is_ascii_digit()).collect();
-    if !digits.is_empty() {
-        let rest: String = chars[digits.len()..].iter().collect();
-        let rest = rest.trim_start_matches([' ', '-', '.', '_']);
+    // Handle plain and hierarchical leading numbers, such as 01, 5.2, or 12.1.
+    if let Some((_, consumed)) = parse_numeric_sequence(s) {
+        let rest = s[consumed..].trim_start_matches([' ', '-', '.', '_']);
         if !rest.is_empty() {
             return rest.to_string();
         }
@@ -1554,16 +1585,15 @@ pub fn find_bundled_bin(bin: &str) -> Option<PathBuf> {
     }
 }
 
-pub fn probe_embedded_subtitles(path: &Path, ffprobe_bin: &str) -> Vec<ParsedSubtitle> {
+fn probe_video_metadata(path: &Path, ffprobe_bin: &str) -> (u64, Vec<ParsedSubtitle>) {
     let mut cmd = std::process::Command::new(ffprobe_bin);
     cmd.args([
         "-v",
         "quiet",
         "-print_format",
         "json",
+        "-show_format",
         "-show_streams",
-        "-select_streams",
-        "s",
     ])
     .arg(path);
 
@@ -1575,23 +1605,36 @@ pub fn probe_embedded_subtitles(path: &Path, ffprobe_bin: &str) -> Vec<ParsedSub
 
     let output = match cmd.output() {
         Ok(o) if o.status.success() => o,
-        _ => return Vec::new(),
+        _ => return (fallback_video_duration(path), Vec::new()),
     };
 
     let json: serde_json::Value = match serde_json::from_slice(&output.stdout) {
         Ok(v) => v,
-        Err(_) => return Vec::new(),
+        Err(_) => return (fallback_video_duration(path), Vec::new()),
     };
+
+    let duration = json
+        .get("format")
+        .and_then(|format| format.get("duration"))
+        .and_then(|duration| duration.as_str())
+        .and_then(|duration| duration.parse::<f64>().ok())
+        .map(|duration| duration as u64)
+        .filter(|duration| *duration > 0)
+        .unwrap_or_else(|| fallback_video_duration(path));
 
     let streams = match json.get("streams").and_then(|s| s.as_array()) {
         Some(s) => s,
-        None => return Vec::new(),
+        None => return (duration, Vec::new()),
     };
 
     let video_path_str = path.to_string_lossy();
     let mut result = Vec::new();
 
     for stream in streams {
+        if stream.get("codec_type").and_then(|value| value.as_str()) != Some("subtitle") {
+            continue;
+        }
+
         let index = match stream.get("index").and_then(|i| i.as_u64()) {
             Some(i) => i,
             None => continue,
@@ -1623,19 +1666,10 @@ pub fn probe_embedded_subtitles(path: &Path, ffprobe_bin: &str) -> Vec<ParsedSub
         });
     }
 
-    result
+    (duration, result)
 }
 
-fn probe_video_duration(path: &Path) -> u64 {
-    // Try bundled ffprobe first, then fall back to system ffprobe
-    let ffprobe_bin = find_bundled_bin("ffprobe")
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "ffprobe".to_string());
-
-    if let Some(secs) = probe_with_ffprobe(path, &ffprobe_bin) {
-        return secs;
-    }
-    // Fallback: parse mp4 container directly
+fn fallback_video_duration(path: &Path) -> u64 {
     let ext = path
         .extension()
         .and_then(|e| e.to_str())
@@ -1647,35 +1681,6 @@ fn probe_video_duration(path: &Path) -> u64 {
         }
     }
     0
-}
-
-fn probe_with_ffprobe(path: &Path, ffprobe_bin: &str) -> Option<u64> {
-    let mut cmd = std::process::Command::new(ffprobe_bin);
-    cmd.args([
-        "-v",
-        "quiet",
-        "-show_entries",
-        "format=duration",
-        "-of",
-        "csv=p=0",
-    ])
-    .arg(path);
-
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    }
-
-    let output = cmd.output().ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-
-    let s = String::from_utf8_lossy(&output.stdout);
-    let secs: f64 = s.trim().parse().ok()?;
-    Some(secs as u64)
 }
 
 fn probe_mp4_duration(path: &Path) -> Option<u64> {
@@ -1919,14 +1924,108 @@ mod tests {
     #[test]
     fn sort_key_embedded_lecture() {
         let key = extract_sort_key("CS50x 2026 - Lecture 3 - Algorithms");
-        assert!(matches!(key, SortKey::Numeric(3)));
+        assert!(matches!(key, SortKey::Numeric(parts) if parts == vec![3]));
     }
 
     #[test]
     fn sort_key_leading_wins_over_embedded() {
         // "02 - Lecture 5" should use leading 2, not embedded 5
         let key = extract_sort_key("02 - Lecture 5 - Something");
-        assert!(matches!(key, SortKey::Numeric(2)));
+        assert!(matches!(key, SortKey::Numeric(parts) if parts == vec![2]));
+    }
+
+    #[test]
+    fn hierarchical_video_numbers_sort_by_chapter_and_lesson() {
+        let mut names = [
+            "5.2-网络安全基础-常见网站攻击方式概述.mp4",
+            "4.2-网络安全基础-木马.mp4",
+            "12.1-渗透测试必备工具-AWVS使用教程（上）.mp4",
+            "7.4-网络安全基础-web前端开发技术入门.mp4",
+            "13.4-渗透测试漏洞挖掘.mp4",
+            "6.5-网络安全基础-Web应用程序安全（下）.mp4",
+            "1.5-网络安全基础-网络安全法律法规.mp4",
+            "5.4-网络安全基础-常见网站攻击方式概述.mp4",
+            "11.4-渗透测试必备工具-AWVS工具安装（上）.mp4",
+            "2.3-网络安全基础-Linux内核与发行版.mp4",
+            "3.6-网络安全基础-VI编辑器.mp4",
+            "1.4-网络安全基础-安全常用术语.mp4",
+        ];
+
+        names.sort_by(|a, b| compare_natural_names(a, b));
+
+        assert_eq!(
+            names,
+            [
+                "1.4-网络安全基础-安全常用术语.mp4",
+                "1.5-网络安全基础-网络安全法律法规.mp4",
+                "2.3-网络安全基础-Linux内核与发行版.mp4",
+                "3.6-网络安全基础-VI编辑器.mp4",
+                "4.2-网络安全基础-木马.mp4",
+                "5.2-网络安全基础-常见网站攻击方式概述.mp4",
+                "5.4-网络安全基础-常见网站攻击方式概述.mp4",
+                "6.5-网络安全基础-Web应用程序安全（下）.mp4",
+                "7.4-网络安全基础-web前端开发技术入门.mp4",
+                "11.4-渗透测试必备工具-AWVS工具安装（上）.mp4",
+                "12.1-渗透测试必备工具-AWVS使用教程（上）.mp4",
+                "13.4-渗透测试漏洞挖掘.mp4",
+            ]
+        );
+        assert_eq!(natural_order_parts("12.1-课程.mp4"), Some(vec![12, 1]));
+    }
+
+    #[test]
+    fn clean_display_name_strips_hierarchical_number() {
+        let result = clean_display_name("12.1-渗透测试必备工具-AWVS使用教程（上）.mp4");
+        assert_eq!(result, "渗透测试必备工具 AWVS使用教程（上）");
+    }
+
+    #[test]
+    fn flat_hierarchical_course_import_keeps_natural_order() {
+        use std::fs;
+
+        let dir = std::env::temp_dir().join("ckourse_test_hierarchical_flat");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        for name in [
+            "12.1-Twelve One.mp4",
+            "5.2-Five Two.mp4",
+            "1.5-One Five.mp4",
+            "2.3-Two Three.mp4",
+            "1.4-One Four.mp4",
+        ] {
+            fs::write(dir.join(name), b"").unwrap();
+        }
+
+        let result = parse_folder(&dir).unwrap();
+        let ordered_files: Vec<String> = result.sections[0]
+            .lessons
+            .iter()
+            .map(|lesson| {
+                Path::new(&lesson.video_path)
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+
+        assert_eq!(
+            ordered_files,
+            [
+                "1.4-One Four.mp4",
+                "1.5-One Five.mp4",
+                "2.3-Two Three.mp4",
+                "5.2-Five Two.mp4",
+                "12.1-Twelve One.mp4",
+            ]
+        );
+        assert!(!result
+            .confidence_reasons
+            .iter()
+            .any(|reason| reason.contains("No numbered files")));
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -1957,7 +2056,7 @@ mod tests {
             "第二十课：METASPLOIT之渗透安卓实战",
             "第十一课：会话劫持",
         ];
-        names.sort_by(|a, b| extract_sort_key(a).cmp(&extract_sort_key(b)));
+        names.sort_by_key(|name| extract_sort_key(name));
 
         assert_eq!(names[0], "第一课：虚拟机介绍及KALI系统的安装");
         assert_eq!(names[1], "第五课：局域网断网攻击");

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FolderOpenIcon as FolderOpen,
@@ -8,11 +8,11 @@ import {
   CheckCircleIcon as CheckCircle,
   PaletteIcon as Palette,
   WarningIcon as Warning,
-  CaretDownIcon as CaretDown,
   CaretRightIcon as CaretRight,
   FileIcon as File,
   DotsSixVerticalIcon as DotsSixVertical,
   PencilSimpleIcon as PencilSimple,
+  SortAscendingIcon as SortAscending,
 } from "@phosphor-icons/react";
 import { Button, Input } from "@heroui/react";
 import {
@@ -35,6 +35,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
 import { SquircleButton } from "@/components/ui/SquircleButton";
 import { LoadingOrbit } from "@/components/ui/LoadingOrbit";
+import { CourseCover } from "@/components/dashboard/CourseCover";
 import type { CourseCategory, ParsedCourse, ParsedSection, ParsedLesson } from "@/types";
 import { selectCourseFolder, parseCourseFolder } from "@/lib/courseParser";
 import { importCourse, getCustomCategories, addCustomCategory, deleteCustomCategory } from "@/lib/store";
@@ -153,7 +154,7 @@ export function ImportCourse({ className }: ImportCourseProps) {
     }
   };
 
-  const reorderSections = (fromIdx: number, toIdx: number) => {
+  const reorderSections = useCallback((fromIdx: number, toIdx: number) => {
     if (fromIdx === toIdx) return;
     setParsedCourse((prev) => {
       if (!prev) return prev;
@@ -164,9 +165,9 @@ export function ImportCourse({ className }: ImportCourseProps) {
       sections: arrayMove(prev.sections, fromIdx, toIdx),
       lessons: arrayMove(prev.lessons, fromIdx, toIdx),
     }));
-  };
+  }, []);
 
-  const reorderLessons = (sectionIdx: number, fromIdx: number, toIdx: number) => {
+  const reorderLessons = useCallback((sectionIdx: number, fromIdx: number, toIdx: number) => {
     if (fromIdx === toIdx) return;
     setParsedCourse((prev) => {
       if (!prev) return prev;
@@ -181,17 +182,17 @@ export function ImportCourse({ className }: ImportCourseProps) {
       sections: prev.sections,
       lessons: prev.lessons.map((arr, i) => (i === sectionIdx ? arrayMove(arr, fromIdx, toIdx) : arr)),
     }));
-  };
+  }, []);
 
-  const renameSection = (sectionIdx: number, newTitle: string) => {
+  const renameSection = useCallback((sectionIdx: number, newTitle: string) => {
     setParsedCourse((prev) => {
       if (!prev) return prev;
       const sections = prev.sections.map((s, i) => (i === sectionIdx ? { ...s, title: newTitle } : s));
       return { ...prev, sections };
     });
-  };
+  }, []);
 
-  const renameLesson = (sectionIdx: number, lessonIdx: number, newTitle: string) => {
+  const renameLesson = useCallback((sectionIdx: number, lessonIdx: number, newTitle: string) => {
     setParsedCourse((prev) => {
       if (!prev) return prev;
       const sections = prev.sections.map((s, i) => {
@@ -201,7 +202,7 @@ export function ImportCourse({ className }: ImportCourseProps) {
       });
       return { ...prev, sections };
     });
-  };
+  }, []);
 
   const handleImport = async () => {
     if (!parsedCourse) return;
@@ -241,8 +242,9 @@ export function ImportCourse({ className }: ImportCourseProps) {
   return (
     <div className={cn("july-page", className)}>
       <button
+        type="button"
         onClick={() => (step === "configure" ? setStep("select") : navigate("/"))}
-        className="mb-6 flex items-center gap-1.5 font-sans text-sm text-muted-foreground transition-colors hover:text-foreground"
+        className="mb-6 flex items-center gap-1.5 rounded-md px-1.5 py-1 font-sans text-sm text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-secondary hover:text-foreground active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 motion-reduce:transition-none"
       >
         <CaretLeft className="size-4" />
         {step === "configure" ? t.importCourse.changeFolder : t.importCourse.backToLibrary}
@@ -320,12 +322,15 @@ function FolderSelectStep({
   const { t } = useI18n();
   return (
     <div style={{ animation: `card-in 350ms ${EASE_OUT} 50ms both` }}>
-      <div
+      <button
+        type="button"
+        disabled={isLoading}
+        aria-busy={isLoading}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
-        className="group relative cursor-pointer transition-colors"
-        onClick={isLoading ? undefined : onBrowse}
+        className="group relative block w-full cursor-pointer text-left transition-transform duration-200 ease-out hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 disabled:cursor-wait motion-reduce:transform-none motion-reduce:transition-none"
+        onClick={onBrowse}
       >
         <div
           className={cn(
@@ -386,7 +391,7 @@ function FolderSelectStep({
             </>
           )}
         </div>
-      </div>
+      </button>
 
       {error && (
         <div className="mt-4 flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-3">
@@ -443,21 +448,10 @@ function ConfigureStep({
   onImport: () => void;
 }) {
   const { t, formatMessage } = useI18n();
-  const totalLessons = course.sections.reduce((sum, s) => sum + s.lessons.length, 0);
-
-  const sectionSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  const totalLessons = useMemo(
+    () => course.sections.reduce((sum, section) => sum + section.lessons.length, 0),
+    [course.sections],
   );
-
-  const handleSectionDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const fromIdx = structureIds.sections.indexOf(String(active.id));
-    const toIdx = structureIds.sections.indexOf(String(over.id));
-    if (fromIdx === -1 || toIdx === -1) return;
-    onReorderSections(fromIdx, toIdx);
-  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -527,15 +521,30 @@ function ConfigureStep({
         </div>
       </div>
 
-      <div
-        className="flex flex-col gap-5"
-        style={{ animation: `card-in 350ms ${EASE_OUT} 100ms both` }}
-      >
-        <h3 className="font-heading text-base font-bold text-foreground">
-          {t.importCourse.courseDetails}
-        </h3>
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(19rem,0.82fr)_minmax(30rem,1.35fr)] xl:items-start">
+        <section
+          className="flex min-w-0 flex-col gap-5"
+          style={{ animation: `card-in 350ms ${EASE_OUT} 100ms both` }}
+        >
+          <h3 className="font-heading text-base font-bold text-foreground">
+            {t.importCourse.courseDetails}
+          </h3>
 
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <CourseCover
+            thumbnailPath={course.thumbnailPath}
+            accentColor={accentColor}
+            title={title || course.title}
+            eager
+            className="aspect-video w-full rounded-xl border border-border/80 bg-card"
+          >
+            <span className="absolute right-3 top-3 rounded-md bg-background/78 px-2.5 py-1 font-sans text-[11px] font-medium text-foreground backdrop-blur-sm">
+              {course.thumbnailPath
+                ? t.importCourse.detectedCover
+                : t.importCourse.defaultCover}
+            </span>
+          </CourseCover>
+
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
             <FieldGroup label={t.importCourse.titleLabel}>
               <Input
                 type="text"
@@ -557,7 +566,7 @@ function ConfigureStep({
             </FieldGroup>
           </div>
 
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
             <CategoryPicker
               category={category}
               onCategoryChange={onCategoryChange}
@@ -603,60 +612,35 @@ function ConfigureStep({
             </div>
           )}
 
-        {course.resources.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <label className="font-sans text-xs font-medium text-muted-foreground">
-              {t.importCourse.courseResources}
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {course.resources.map((r, i) => (
-                <span
-                  key={i}
-                  className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-secondary px-2.5 py-1 font-sans text-xs text-muted-foreground"
-                >
-                  <File className="size-3" />
-                  {r.title}
-                </span>
-              ))}
+          {course.resources.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <label className="font-sans text-xs font-medium text-muted-foreground">
+                {t.importCourse.courseResources}
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {course.resources.map((resource) => (
+                  <span
+                    key={resource.path}
+                    className="inline-flex max-w-full items-center gap-1 rounded-full border border-border/50 bg-secondary px-2.5 py-1 font-sans text-xs text-muted-foreground"
+                  >
+                    <File className="size-3 shrink-0" />
+                    <span className="truncate">{resource.title}</span>
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </section>
 
-      <div
-        className="flex flex-col gap-3"
-        style={{ animation: `card-in 350ms ${EASE_OUT} 150ms both` }}
-      >
-        <h3 className="font-heading text-base font-bold text-foreground">
-          {t.importCourse.courseStructure}
-        </h3>
-
-        <div className="h-90 overflow-y-scroll rounded-xl border border-border bg-card px-3 py-2">
-          <DndContext
-            sensors={sectionSensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleSectionDragEnd}
-          >
-            <SortableContext
-              items={structureIds.sections}
-              strategy={verticalListSortingStrategy}
-            >
-              {course.sections.map((section, si) => (
-                <SortableSection
-                  key={structureIds.sections[si]}
-                  id={structureIds.sections[si]}
-                  section={section}
-                  sectionIndex={si}
-                  lessonIds={structureIds.lessons[si] ?? []}
-                  defaultOpen={course.sections.length <= 3}
-                  onRenameSection={(t) => onRenameSection(si, t)}
-                  onRenameLesson={(li, t) => onRenameLesson(si, li, t)}
-                  onReorderLessons={(from, to) => onReorderLessons(si, from, to)}
-                />
-              ))}
-            </SortableContext>
-          </DndContext>
-        </div>
+        <CourseStructureEditor
+          sections={course.sections}
+          structureIds={structureIds}
+          totalLessons={totalLessons}
+          onReorderSections={onReorderSections}
+          onReorderLessons={onReorderLessons}
+          onRenameSection={onRenameSection}
+          onRenameLesson={onRenameLesson}
+        />
       </div>
 
       <div
@@ -678,6 +662,87 @@ function ConfigureStep({
     </div>
   );
 }
+
+const CourseStructureEditor = memo(function CourseStructureEditor({
+  sections,
+  structureIds,
+  totalLessons,
+  onReorderSections,
+  onReorderLessons,
+  onRenameSection,
+  onRenameLesson,
+}: {
+  sections: ParsedSection[];
+  structureIds: StructureIds;
+  totalLessons: number;
+  onReorderSections: (from: number, to: number) => void;
+  onReorderLessons: (sectionIdx: number, from: number, to: number) => void;
+  onRenameSection: (sectionIdx: number, newTitle: string) => void;
+  onRenameLesson: (sectionIdx: number, lessonIdx: number, newTitle: string) => void;
+}) {
+  const { t } = useI18n();
+  const sectionSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleSectionDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const fromIdx = structureIds.sections.indexOf(String(active.id));
+    const toIdx = structureIds.sections.indexOf(String(over.id));
+    if (fromIdx === -1 || toIdx === -1) return;
+    onReorderSections(fromIdx, toIdx);
+  }, [onReorderSections, structureIds.sections]);
+
+  return (
+    <section
+      className="flex min-w-0 flex-col gap-3"
+      style={{ animation: `card-in 350ms ${EASE_OUT} 150ms both` }}
+    >
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <h3 className="font-heading text-base font-bold text-foreground">
+          {t.importCourse.courseStructure}
+        </h3>
+        <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2.5 py-1 font-sans text-[11px] font-medium text-primary">
+          <SortAscending className="size-3.5" weight="bold" />
+          {t.importCourse.naturalSortApplied}
+        </span>
+      </div>
+
+      <div className="min-h-72 max-h-[min(62vh,42rem)] overflow-y-auto overscroll-contain rounded-xl border border-border bg-card/80 p-2 [scrollbar-gutter:stable]">
+        <DndContext
+          sensors={sectionSensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleSectionDragEnd}
+        >
+          <SortableContext
+            items={structureIds.sections}
+            strategy={verticalListSortingStrategy}
+          >
+            {sections.map((section, sectionIndex) => (
+              <SortableSection
+                key={structureIds.sections[sectionIndex]}
+                id={structureIds.sections[sectionIndex]}
+                section={section}
+                sectionIndex={sectionIndex}
+                lessonIds={structureIds.lessons[sectionIndex] ?? []}
+                defaultOpen={
+                  totalLessons <= 30
+                  && sections.length <= 3
+                  && section.lessons.length <= 20
+                }
+                onRenameSection={onRenameSection}
+                onRenameLesson={onRenameLesson}
+                onReorderLessons={onReorderLessons}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
+      </div>
+    </section>
+  );
+});
 
 function CategoryPicker({
   category,
@@ -831,7 +896,7 @@ function CategoryPicker({
   );
 }
 
-function SortableSection({
+const SortableSection = memo(function SortableSection({
   id,
   section,
   sectionIndex,
@@ -846,9 +911,9 @@ function SortableSection({
   sectionIndex: number;
   lessonIds: string[];
   defaultOpen: boolean;
-  onRenameSection: (newTitle: string) => void;
-  onRenameLesson: (lessonIdx: number, newTitle: string) => void;
-  onReorderLessons: (from: number, to: number) => void;
+  onRenameSection: (sectionIdx: number, newTitle: string) => void;
+  onRenameLesson: (sectionIdx: number, lessonIdx: number, newTitle: string) => void;
+  onReorderLessons: (sectionIdx: number, from: number, to: number) => void;
 }) {
   const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -866,13 +931,13 @@ function SortableSection({
     const fromIdx = lessonIds.indexOf(String(active.id));
     const toIdx = lessonIds.indexOf(String(over.id));
     if (fromIdx === -1 || toIdx === -1) return;
-    onReorderLessons(fromIdx, toIdx);
+    onReorderLessons(sectionIndex, fromIdx, toIdx);
   };
 
   const dragStyle: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.6 : 1,
+    opacity: isDragging ? 0.92 : 1,
     position: "relative",
     zIndex: isDragging ? 10 : undefined,
   };
@@ -881,48 +946,48 @@ function SortableSection({
     <div
       ref={setNodeRef}
       style={dragStyle}
-      {...attributes}
     >
       <div
-        style={{
-          animation: isDragging
-            ? undefined
-            : `card-in 250ms ${EASE_OUT} ${(sectionIndex + 2) * 40}ms both`,
-        }}
+        className={cn(
+          "rounded-lg transition-[background-color,box-shadow] duration-150",
+          isDragging && "bg-primary/10 shadow-sm ring-1 ring-primary/25",
+        )}
       >
         <div
           onClick={() => setIsOpen(!isOpen)}
-          className="group/section flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-2.5 transition-colors hover:bg-secondary"
+          className="group/section flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-2.5 transition-colors duration-150 hover:bg-secondary/85 active:bg-secondary focus-within:bg-secondary/65"
         >
           <button
             type="button"
+            {...attributes}
             {...listeners}
             onClick={(e) => e.stopPropagation()}
             aria-label={t.importCourse.dragSection}
-            className="flex size-5 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/40 transition-colors hover:text-foreground active:cursor-grabbing"
+            className="flex size-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/55 transition-[background-color,color,transform] duration-150 hover:bg-background hover:text-foreground active:scale-95 active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 motion-reduce:transition-none"
           >
             <DotsSixVertical className="size-4" weight="bold" />
           </button>
-          {isOpen ? (
-            <CaretDown className="size-3.5 shrink-0 text-muted-foreground" />
-          ) : (
-            <CaretRight className="size-3.5 shrink-0 text-muted-foreground" />
-          )}
+          <CaretRight
+            className={cn(
+              "size-3.5 shrink-0 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none",
+              isOpen && "rotate-90",
+            )}
+          />
           <EditableTitle
             value={section.title}
-            onSave={onRenameSection}
+            onSave={(newTitle) => onRenameSection(sectionIndex, newTitle)}
             ariaLabel={t.importCourse.editSectionTitle}
             title={t.importCourse.doubleClickEdit}
             className="flex-1 truncate text-left font-sans text-sm font-medium text-foreground"
             inputClassName="w-full min-w-0 flex-1 bg-transparent font-sans text-sm font-medium text-foreground focus:outline-none"
           />
           <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-            {section.lessons.length} {section.lessons.length === 1 ? "lesson" : "lessons"}
+            {section.lessons.length} {section.lessons.length === 1 ? t.common.lesson : t.common.lessons}
           </span>
         </div>
 
         {isOpen && (
-          <div className="ml-5 border-l border-border/50 pl-2">
+          <div className="ml-6 border-l border-border/50 pb-1 pl-2">
             <DndContext
               sensors={lessonSensors}
               collisionDetection={closestCenter}
@@ -935,7 +1000,8 @@ function SortableSection({
                     id={lessonIds[li]}
                     lesson={lesson}
                     index={li}
-                    onRename={(t) => onRenameLesson(li, t)}
+                    sectionIndex={sectionIndex}
+                    onRenameLesson={onRenameLesson}
                   />
                 ))}
               </SortableContext>
@@ -945,18 +1011,20 @@ function SortableSection({
       </div>
     </div>
   );
-}
+});
 
-function SortableLesson({
+const SortableLesson = memo(function SortableLesson({
   id,
   lesson,
   index,
-  onRename,
+  sectionIndex,
+  onRenameLesson,
 }: {
   id: string;
   lesson: ParsedLesson;
   index: number;
-  onRename: (newTitle: string) => void;
+  sectionIndex: number;
+  onRenameLesson: (sectionIdx: number, lessonIdx: number, newTitle: string) => void;
 }) {
   const { t } = useI18n();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -965,7 +1033,7 @@ function SortableLesson({
   const dragStyle: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.6 : 1,
+    opacity: isDragging ? 0.92 : 1,
     position: "relative",
     zIndex: isDragging ? 10 : undefined,
   };
@@ -974,14 +1042,17 @@ function SortableLesson({
     <div
       ref={setNodeRef}
       style={dragStyle}
-      {...attributes}
-      className="group flex items-center gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-secondary"
+      className={cn(
+        "group flex items-center gap-2 rounded-lg px-2 py-2 transition-[background-color,box-shadow] duration-150 hover:bg-secondary/85",
+        isDragging && "bg-primary/10 shadow-sm ring-1 ring-primary/25",
+      )}
     >
       <button
         type="button"
+        {...attributes}
         {...listeners}
         aria-label={t.importCourse.dragLesson}
-        className="flex size-5 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground/40 transition-colors hover:text-foreground active:cursor-grabbing"
+        className="flex size-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/55 transition-[background-color,color,transform] duration-150 hover:bg-background hover:text-foreground active:scale-95 active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 motion-reduce:transition-none"
       >
         <DotsSixVertical className="size-4" weight="bold" />
       </button>
@@ -991,7 +1062,7 @@ function SortableLesson({
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <EditableTitle
           value={lesson.title}
-          onSave={onRename}
+          onSave={(newTitle) => onRenameLesson(sectionIndex, index, newTitle)}
           ariaLabel={t.importCourse.editLessonTitle}
           title={t.importCourse.doubleClickEdit}
           className="min-w-0 flex-1 truncate font-sans text-xs text-foreground"
@@ -1005,7 +1076,7 @@ function SortableLesson({
       </div>
     </div>
   );
-}
+});
 
 function EditableTitle({
   value,

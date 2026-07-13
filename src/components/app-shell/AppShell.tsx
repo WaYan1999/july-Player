@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow, type Window as TauriWindow } from "@tauri-apps/api/window";
 import {
   SquareHalfIcon as SquareHalf,
   CornersOutIcon as CornersOut,
@@ -27,6 +28,9 @@ interface AppShellProps {
   children: ReactNode;
 }
 
+const isTauriRuntime = () =>
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
 export function AppShell({ children }: AppShellProps) {
   return (
     <CourseTitleProvider>
@@ -42,20 +46,91 @@ function AppShellInner({ children }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [isSmallScreen, setIsSmallScreen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const appWindow = useMemo<TauriWindow | null>(
+    () => (isTauriRuntime() ? getCurrentWindow() : null),
+    [],
+  );
 
-  const toggleFullscreen = useCallback(() => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-    } else {
-      document.exitFullscreen();
+  const syncFullscreen = useCallback(async () => {
+    if (!appWindow) {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+      return;
     }
-  }, []);
+
+    try {
+      const fullscreen = await appWindow.isFullscreen();
+      setIsFullscreen(fullscreen);
+      if (!fullscreen) {
+        await appWindow.setAlwaysOnTop(false).catch(() => {});
+      }
+    } catch {
+      setIsFullscreen(false);
+    }
+  }, [appWindow]);
+
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      if (appWindow) {
+        const nextFullscreen = !(await appWindow.isFullscreen());
+        if (nextFullscreen) {
+          await appWindow.setFullscreen(true);
+          await appWindow.setAlwaysOnTop(true);
+          await appWindow.setFocus();
+        } else {
+          await appWindow.setAlwaysOnTop(false);
+          await appWindow.setFullscreen(false);
+        }
+        await syncFullscreen();
+        return;
+      }
+
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch (error) {
+      if (appWindow) {
+        await appWindow.setAlwaysOnTop(false).catch(() => {});
+      }
+      console.warn("Fullscreen action failed", error);
+      await syncFullscreen();
+    }
+  }, [appWindow, syncFullscreen]);
 
   useEffect(() => {
-    const onFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", onFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
-  }, []);
+    if (!appWindow) {
+      const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+      document.addEventListener("fullscreenchange", onFullscreenChange);
+      return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+    }
+
+    void syncFullscreen();
+    let unlisten: (() => void) | undefined;
+    void appWindow.onResized(() => void syncFullscreen()).then((stopListening) => {
+      unlisten = stopListening;
+    });
+
+    return () => unlisten?.();
+  }, [appWindow, syncFullscreen]);
+
+  useEffect(() => {
+    const handleFullscreenShortcut = (event: KeyboardEvent) => {
+      if (event.key !== "F11" || event.repeat) return;
+      if (
+        document.fullscreenElement
+        && document.fullscreenElement !== document.documentElement
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      void toggleFullscreen();
+    };
+
+    window.addEventListener("keydown", handleFullscreenShortcut);
+    return () => window.removeEventListener("keydown", handleFullscreenShortcut);
+  }, [toggleFullscreen]);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 768px)");
@@ -142,10 +217,15 @@ function AppShellInner({ children }: AppShellProps) {
   }, [sidebarWidth]);
 
   return (
-    <div className="app-shell-root flex h-screen flex-col text-foreground">
+    <div
+      className={cn(
+        "app-shell-root flex h-screen flex-col text-foreground",
+        isFullscreen && "is-app-fullscreen",
+      )}
+    >
       <SquircleClipDefs />
 
-      <AppWindowTitleBar />
+      {!isFullscreen && <AppWindowTitleBar />}
 
       <header className="app-topbar flex h-15 shrink-0 items-center">
         <div
@@ -207,7 +287,7 @@ function AppShellInner({ children }: AppShellProps) {
 
             <Button
               type="button"
-              onClick={toggleFullscreen}
+              onClick={() => void toggleFullscreen()}
               variant="ghost"
               isIconOnly
               className="july-heroui-button july-heroui-icon-button text-muted-foreground hover:bg-secondary hover:text-foreground"

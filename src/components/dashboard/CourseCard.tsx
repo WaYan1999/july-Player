@@ -14,6 +14,7 @@ import type { Course } from "@/types";
 import { toggleBookmark } from "@/lib/store";
 import { useI18n } from "@/hooks/useI18n";
 import type { AppTranslations } from "@/lib/i18n";
+import { CourseCover } from "@/components/dashboard/CourseCover";
 
 function getStatusBadge(status: Course["status"], t: AppTranslations) {
   switch (status) {
@@ -44,10 +45,6 @@ function formatLastWatched(
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function getCourseInitial(title: string): string {
-  return title.trim().split(/[\s._-]+/)[0]?.slice(0, 10) || "Course";
-}
-
 export function CourseCard({
   course,
   onBookmarkChange,
@@ -67,30 +64,12 @@ export function CourseCard({
       className="block h-full"
     >
       <div className="course-card group relative flex h-full flex-col overflow-hidden">
-        <div className="course-card-cover relative overflow-hidden">
-          <div
-            className="relative flex h-24 items-center justify-center px-4"
-            style={{
-              background:
-                `linear-gradient(135deg, ${course.accentColor}24, transparent 58%), color-mix(in srgb, var(--secondary) 54%, transparent)`,
-            }}
-          >
-            <div
-              className="absolute left-4 top-4 h-2 w-14 rounded-full opacity-90"
-              style={{ backgroundColor: course.accentColor }}
-            />
-            <div
-              className="absolute right-4 top-4 size-12 rounded-full blur-2xl"
-              style={{ backgroundColor: `${course.accentColor}40` }}
-            />
-            <span
-              className="max-w-full truncate font-heading text-2xl font-bold opacity-30"
-              style={{ color: course.accentColor }}
-            >
-              {getCourseInitial(course.title)}
-            </span>
-          </div>
-        </div>
+        <CourseCover
+          thumbnailPath={course.thumbnailPath}
+          accentColor={course.accentColor}
+          title={course.title}
+          className="course-card-cover aspect-[16/7] w-full"
+        />
 
         <BookmarkButton
           bookmarked={course.bookmarked}

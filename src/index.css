@@ -258,6 +258,14 @@ body {
     margin-inline: auto;
   }
 
+  .july-page-course {
+    width: min(100%, 96rem);
+  }
+
+  .app-shell-root.is-app-fullscreen .july-page-course {
+    width: min(100%, 112rem);
+  }
+
   .july-page-pets {
     width: min(100%, 96rem);
   }
@@ -1754,6 +1762,35 @@ textarea.july-heroui-field {
     radial-gradient(circle at 100% 16%, color-mix(in srgb, var(--info) 10%, transparent), transparent 24rem),
     linear-gradient(180deg, color-mix(in srgb, var(--foreground) 2.5%, transparent), transparent 18rem),
     var(--sidebar);
+}
+
+.app-shell-root.is-app-fullscreen,
+html:fullscreen .app-shell-root {
+  width: 100vw;
+  height: 100dvh;
+  min-height: 100dvh;
+  border-radius: 0;
+}
+
+.app-shell-root.is-app-fullscreen .app-main,
+html:fullscreen .app-main {
+  border-radius: 0;
+}
+
+.app-shell-root.is-app-fullscreen .course-curriculum-panel,
+html:fullscreen .course-curriculum-panel {
+  height: calc(100dvh - 9.5rem);
+  max-height: calc(100dvh - 9.5rem);
+}
+
+html:fullscreen,
+html:fullscreen body,
+html:fullscreen #root {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  overflow: hidden;
+  background: var(--sidebar);
 }
 
 .app-shell-root::before {

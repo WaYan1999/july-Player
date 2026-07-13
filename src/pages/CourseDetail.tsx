@@ -236,6 +236,17 @@ function CourseDetailInner({
     () => new Map(allLessons.map((lesson, index) => [lesson.id, index] as const)),
     [allLessons],
   );
+  const sectionStartIndexById = useMemo(() => {
+    const starts = new Map<number, number>();
+    let lessonOffset = 0;
+
+    for (const section of courseData.sections) {
+      starts.set(section.id, lessonOffset);
+      lessonOffset += section.lessons.length;
+    }
+
+    return starts;
+  }, [courseData.sections]);
 
   useEffect(() => {
     setBreadcrumbTitle(course.id, course.title);
@@ -784,7 +795,7 @@ function CourseDetailInner({
     (lessonIndexById.get(playerLesson.id) ?? -1) < allLessons.length - 1;
 
   return (
-    <div className={cn("july-page", className)}>
+    <div className={cn("july-page july-page-course", className)}>
       <div
         className="course-detail-header mb-5 flex flex-wrap items-center justify-between gap-3 px-3.5 py-3"
         style={{
@@ -1055,7 +1066,7 @@ function CourseDetailInner({
           }}
         >
           <div
-            className="course-curriculum-panel flex h-[min(85vh,720px)] w-full flex-col overflow-hidden lg:w-80"
+            className="course-curriculum-panel flex h-[min(82dvh,52rem)] w-full flex-col overflow-hidden lg:w-80"
           >
             <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
               <h2 className="font-heading text-sm font-bold text-foreground">
@@ -1070,6 +1081,7 @@ function CourseDetailInner({
                 <SectionAccordion
                   key={section.id}
                   section={section}
+                  startLessonIndex={sectionStartIndexById.get(section.id) ?? 0}
                   activeLessonId={activeLesson?.id}
                   switchingLessonId={switchingLessonId}
                   onSelectLesson={handleSelectLesson}
